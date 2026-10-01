@@ -16,7 +16,7 @@ jobs:
     
     steps:
       - name: 📥 Checkout code
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
 
       - name: 🔧 Setup Node.js
         uses: actions/setup-node@v6
@@ -55,7 +55,7 @@ jobs:
     
     steps:
       - name: 📥 Checkout code
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
 
       - name: 🔧 Setup Node.js
         uses: actions/setup-node@v6
@@ -99,7 +99,7 @@ jobs:
     
     steps:
       - name: 📥 Checkout code
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
 
       - name: 🔧 Setup Node.js
         uses: actions/setup-node@v6
@@ -130,7 +130,7 @@ jobs:
     
     steps:
       - name: 📥 Checkout code
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
 
       - name: 🔧 Setup Node.js
         uses: actions/setup-node@v6
@@ -170,7 +170,7 @@ jobs:
     
     steps:
       - name: 📥 Checkout code
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
 
       - name: 🚀 Deploy Frontend to Vercel
         uses: amondnet/vercel-action@v25
@@ -197,7 +197,7 @@ jobs:
     
     steps:
       - name: 📥 Checkout code
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
 
       - name: 🔍 Deploy Preview to Vercel
         uses: amondnet/vercel-action@v25
@@ -228,7 +228,7 @@ jobs:
     
     steps:
       - name: 📥 Checkout code
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
 
       - name: 🔧 Setup Node.js
         uses: actions/setup-node@v6
