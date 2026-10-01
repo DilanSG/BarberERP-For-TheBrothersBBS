@@ -3,12 +3,12 @@ import printerService from '../../services/printerService.js';
 import invoiceService from '../../services/invoiceService.js';
 import emailService from '../../services/emailService.js';
 import Sale from '../../core/domain/entities/Sale.js';
+import Barber from '../../core/domain/entities/Barber.js';
 import { asyncHandler } from '../middleware/index.js';
 import { logger } from '../../shared/utils/logger.js';
 import { AppError } from '../../shared/utils/errors.js';
 import { getPrinterConfig, getBusinessInfo } from '../../../config/printer.config.js';
 import { formatShort, formatInColombiaTime } from '../../shared/utils/dateUtils.js';
-import { Logger } from 'winston';
 
 /**
  * @desc    Generar factura desde una venta
@@ -97,6 +97,15 @@ export const getInvoice = asyncHandler(async (req, res) => {
   const { invoiceId } = req.params;
 
   const invoice = await InvoiceUseCases.getInvoiceById(invoiceId);
+
+  // Barbero: solo puede ver sus propias facturas
+  if (req.user.role === 'barber') {
+    const barber = await Barber.findOne({ user: req.user._id });
+    const invoiceBarberId = invoice?.barber?.id;
+    if (!barber || String(invoiceBarberId) !== String(barber._id)) {
+      throw new AppError('No tienes permiso para ver esta factura', 403);
+    }
+  }
 
   res.status(200).json({
     success: true,

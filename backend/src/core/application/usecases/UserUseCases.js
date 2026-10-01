@@ -2,10 +2,11 @@ import { User, Barber } from '../../domain/entities/index.js';
 import { AppError, logger } from '../../../barrel.js';
 import DIContainer from '../../../shared/container/index.js';
 
-/**
- * UserUseCases - Casos de uso para gestión de usuarios
- */
+// UserUseCases - Casos de uso para gestión de usuarios
+// CRUD de usuarios con Repository Pattern (DI), borrado lógico y permanente
+// (transaccional, arrastrando el perfil de barbero) y estadísticas de roles.
 class UserUseCases {
+  // Resuelve los repositorios de usuarios y barberos desde el contenedor DI.
   constructor() {
     // Obtener repositorios del contenedor DI
     this.userRepository = DIContainer.get('UserRepository');
@@ -17,10 +18,10 @@ class UserUseCases {
     return new UserUseCases();
   }
 
-  /**
-   * Obtener todos los usuarios
-   * Usa Repository Pattern con filtros y paginación
-   */
+  // Obtener todos los usuarios
+  // Usa Repository Pattern con filtros y paginación
+  // Por defecto excluye usuarios con isActive:false y no devuelve password;
+  // acepta limit/page dentro de filters (100 y 1 por defecto).
   
   async getAllUsers(filters = {}, select = '-password') {
     try {
@@ -30,7 +31,7 @@ class UserUseCases {
         ...filters 
       };
       
-      logger.debug('UserUseCases: Obteniendo lista de usuarios con filtros:', query);
+      logger.debug('UserUseCases: Obteniendo lista de usuarios', { query });
       
       const result = await this.userRepository.findAll({ 
         filter: query,
@@ -48,10 +49,9 @@ class UserUseCases {
     }
   }
 
-  /**
-   * Obtener usuario por ID
-   * Usa Repository Pattern con validación mejorada
-   */
+  // Obtener usuario por ID
+  // Usa Repository Pattern con validación mejorada
+  // Lanza 404 si no existe.
   async getUserById(userId, select = '-password') {
     try {
       logger.debug(`UserUseCases: Buscando usuario por ID: ${userId}`);
@@ -70,10 +70,10 @@ class UserUseCases {
     }
   }
 
-  /**
-   * Actualizar usuario
-   * Usa Repository Pattern con validación mejorada
-   */
+  // Actualizar usuario
+  // Usa Repository Pattern con validación mejorada
+  // Whitelist de campos: los comunes siempre; role/isActive solo si adminAction.
+  // Si no queda ningún campo válido retorna el usuario sin cambios.
   async updateUser(userId, updateData, adminAction = false) {
     try {
       logger.debug(`UserUseCases: Iniciando actualización de usuario ${userId}`);
@@ -97,7 +97,7 @@ class UserUseCases {
         }
       });
 
-      logger.info(`UserUseCases: Campos a actualizar: ${Object.keys(updates).join(', ')}`);
+      logger.debug(`UserUseCases: Campos a actualizar: ${Object.keys(updates).join(', ')}`);
 
       // Validar que hay actualizaciones
       if (Object.keys(updates).length === 0) {
@@ -110,7 +110,7 @@ class UserUseCases {
       const updatedUser = await this.userRepository.update(userId, updates);
       const duration = Date.now() - startTime;
       
-      logger.info(`UserUseCases: Usuario actualizado exitosamente - ID: ${updatedUser._id}, Duración: ${duration}ms`);
+      logger.debug(`UserUseCases: Usuario actualizado exitosamente - ID: ${updatedUser._id}, Duración: ${duration}ms`);
       
       return updatedUser;
     } catch (error) {
@@ -120,10 +120,10 @@ class UserUseCases {
     }
   }
 
-  /**
-   * Eliminar usuario (soft delete - desactivación)
-   * Usa Repository Pattern para desactivación
-   */
+  // Eliminar usuario (soft delete - desactivación)
+  // Usa Repository Pattern para desactivación
+  // Marca isActive:false + deactivatedAt y, si el usuario es barbero, también
+  // desactiva su perfil de barbero.
   async deleteUser(userId) {
     try {
       logger.debug(`UserUseCases: Desactivando usuario ${userId} (soft delete)`);
@@ -145,7 +145,7 @@ class UserUseCases {
         await this.deactivateBarberProfile(userId);
       }
 
-      logger.info(`UserUseCases: Usuario desactivado (soft delete): ${userId}`);
+      logger.debug(`UserUseCases: Usuario desactivado (soft delete): ${userId}`);
       return {
         message: 'Usuario desactivado correctamente',
         user: deactivatedUser
@@ -157,11 +157,11 @@ class UserUseCases {
     }
   }
 
-  /**
-   * Eliminar usuario permanentemente (hard delete)
-   * Elimina el usuario, su perfil de barbero y todos los datos relacionados
-   * Esta acción es irreversible
-   */
+  // Eliminar usuario permanentemente (hard delete)
+  // Elimina el usuario, su perfil de barbero y todos los datos relacionados
+  // Esta acción es irreversible
+  // Todo ocurre dentro de una transacción de Mongo: si algo falla se aborta y
+  // el perfil de barbero propaga el error para forzar el rollback.
   async hardDeleteUser(userId) {
     const session = await User.startSession();
     session.startTransaction();
@@ -204,10 +204,10 @@ class UserUseCases {
     }
   }
 
-  /**
-   * Cambiar contraseña
-   * Usa Repository Pattern para actualización, modelo para validación
-   */
+  // Cambiar contraseña
+  // Usa Repository Pattern para actualización, modelo para validación
+  // Valida la contraseña actual con userRepository.validatePassword (400 si no
+  // coincide) y persiste la nueva a través del repositorio.
   async changePassword(userId, currentPassword, newPassword) {
     try {
       logger.debug(`UserUseCases: Cambiando contraseña para usuario ${userId}`);
@@ -227,7 +227,7 @@ class UserUseCases {
       // Actualizar la contraseña usando repository
       await this.userRepository.update(userId, { password: newPassword });
 
-      logger.info(`UserUseCases: Contraseña actualizada para usuario ${userId}`);
+      logger.debug(`UserUseCases: Contraseña actualizada para usuario ${userId}`);
       return true;
     } catch (error) {
       if (error instanceof AppError) throw error;
@@ -236,10 +236,10 @@ class UserUseCases {
     }
   }
 
-  /**
-   * Obtener estadísticas de usuarios
-   * Usa Repository Pattern donde es posible, agregaciones directas donde es necesario
-   */
+  // Obtener estadísticas de usuarios
+  // Usa Repository Pattern donde es posible, agregaciones directas donde es necesario
+  // Calcula: total (no desactivados), activos en los últimos 30 días por
+  // lastActivity, y el conteo agrupado por rol con una agregación directa.
   async getUserStats() {
     try {
       logger.debug('UserUseCases: Obteniendo estadísticas de usuarios');
@@ -286,6 +286,7 @@ class UserUseCases {
 
   // ========================================================================
   // ADAPTADORES DE COMPATIBILIDAD HACIA ATRÁS
+  // Wrappers estáticos que delegan en una instancia creada con DI.
   // ========================================================================
 
   static async getAllUsers(filters = {}, select = '-password') {
@@ -323,10 +324,10 @@ class UserUseCases {
     return await instance.getUserStats();
   }
 
-  /**
-   * Desactivar perfil de barbero (soft delete)
-   * Usa BarberRepository para desactivación
-   */
+  // Desactivar perfil de barbero (soft delete)
+  // Usa BarberRepository para desactivación
+  // Busca el perfil por user y lo marca isActive:false; los errores se tragan
+  // a propósito para no bloquear la desactivación del usuario.
   async deactivateBarberProfile(userId) {
     try {
       logger.debug(`UserUseCases: Desactivando perfil de barbero para usuario ${userId}`);
@@ -344,7 +345,7 @@ class UserUseCases {
           deactivatedAt: new Date()
         });
         
-        logger.info(`UserUseCases: Perfil de barbero desactivado para usuario ${userId}`);
+        logger.debug(`UserUseCases: Perfil de barbero desactivado para usuario ${userId}`);
       }
     } catch (error) {
       logger.error(`UserUseCases: Error desactivando perfil de barbero para usuario ${userId}:`, error);
@@ -352,11 +353,12 @@ class UserUseCases {
     }
   }
 
-  /**
-   * Eliminar permanentemente perfil de barbero (hard delete)
-   * Elimina el perfil de barbero y actualiza/elimina datos relacionados
-   * ADVERTENCIA: Esta acción es irreversible
-   */
+  // Eliminar permanentemente perfil de barbero (hard delete)
+  // Elimina el perfil de barbero y actualiza/elimina datos relacionados
+  // ADVERTENCIA: Esta acción es irreversible
+  // Conserva ventas (las marca canceladas con nota), cancela citas, desvincula
+  // reseñas (barber:null) y borra el perfil. Recibe una sesión de transacción y
+  // relanza errores para provocar el rollback del borrado del usuario.
   async hardDeleteBarberProfile(userId, session = null) {
     try {
       logger.warn(`UserUseCases: ELIMINACIÓN PERMANENTE de perfil de barbero para usuario ${userId}`);
@@ -371,7 +373,7 @@ class UserUseCases {
         const barber = barbers.data[0];
         const barberId = barber._id;
         
-        logger.info(`UserUseCases: Eliminando datos relacionados del barbero ${barberId}...`);
+        logger.debug(`UserUseCases: Eliminando datos relacionados del barbero ${barberId}...`);
         
         // Importar modelos necesarios
         const Sale = (await import('../../domain/entities/Sale.js')).default;
@@ -432,9 +434,9 @@ class UserUseCases {
         await Barber.findByIdAndDelete(barberId).session(session);
         
         logger.warn(`UserUseCases: Perfil de barbero ${barberId} ELIMINADO PERMANENTEMENTE`);
-        logger.info(`  - ${salesCount} ventas marcadas como canceladas`);
-        logger.info(`  - ${appointmentsCount} citas canceladas`);
-        logger.info(`  - ${reviewsCount} reseñas desvinculadas`);
+        logger.debug(`  - ${salesCount} ventas marcadas como canceladas`);
+        logger.debug(`  - ${appointmentsCount} citas canceladas`);
+        logger.debug(`  - ${reviewsCount} reseñas desvinculadas`);
       } else {
         logger.debug(`UserUseCases: No se encontró perfil de barbero para usuario ${userId}`);
       }
@@ -444,13 +446,13 @@ class UserUseCases {
     }
   }
 
-  /**
-   * Crear perfil de barbero
-   * Crea un perfil de barbero para un usuario
-   */
+  // Crear perfil de barbero
+  // Crea un perfil de barbero para un usuario
+  // Si ya existe un perfil lo reactiva (isActive:true, limpia deactivatedAt);
+  // si no, crea uno con especialidad genérica y horario por defecto.
   async createBarberProfile(user) {
     try {
-      logger.info(`UserUseCases: Creando perfil de barbero para usuario ${user._id}`);
+      logger.debug(`UserUseCases: Creando perfil de barbero para usuario ${user._id}`);
       
       // Verificar que el usuario existe
       const existingUser = await this.userRepository.findById(user._id);
@@ -471,7 +473,7 @@ class UserUseCases {
           isActive: true,
           deactivatedAt: null
         });
-        logger.info(`UserUseCases: Perfil de barbero reactivado para usuario ${user._id}`);
+        logger.debug(`UserUseCases: Perfil de barbero reactivado para usuario ${user._id}`);
         return reactivatedBarber;
       }
 
@@ -500,7 +502,7 @@ class UserUseCases {
         totalRevenue: 0
       });
 
-      logger.info(`UserUseCases: Perfil de barbero creado exitosamente - Barber ID: ${newBarber._id}, User ID: ${user._id}`);
+      logger.debug(`UserUseCases: Perfil de barbero creado exitosamente - Barber ID: ${newBarber._id}, User ID: ${user._id}`);
       return newBarber;
     } catch (error) {
       logger.error(`UserUseCases: Error creando perfil de barbero para usuario ${user._id}:`, error);

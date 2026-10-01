@@ -2,9 +2,9 @@ import monitoringService from '../../core/application/usecases/MonitoringUseCase
 import { performance } from 'perf_hooks';
 import { logger } from '../../barrel.js';
 
-/**
- * Middleware para monitoreo de métricas de la aplicación
- */
+// Middleware para monitoreo de métricas de la aplicación
+// Mide la duración real de cada request y al finalizar registra éxito o error
+// en monitoringService, además de loguear los errores con detalle.
 const monitoringMiddleware = (req, res, next) => {
   // Marca de tiempo al inicio de la request
   const startTime = process.hrtime();
@@ -43,17 +43,16 @@ const monitoringMiddleware = (req, res, next) => {
   next();
 };
 
-/**
- * Middleware para endpoints de monitoreo
- */
+// Middleware para endpoints de monitoreo
+// Devuelve el snapshot completo de métricas recolectadas.
 const metricsEndpoint = (req, res) => {
   const metrics = monitoringService.getMetrics();
   res.json(metrics);
 };
 
-/**
- * Middleware para health check
- */
+// Middleware para health check
+// Resume uptime, memoria, CPU, errores y tasas de éxito; marca el estado como
+// 'degraded' o 'unhealthy' cuando se superan los umbrales críticos.
 const healthCheck = (req, res) => {
   const metrics = monitoringService.getMetrics();
   const health = {

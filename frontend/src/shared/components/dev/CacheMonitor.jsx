@@ -2,15 +2,14 @@ import { useState, useEffect } from 'react';
 import { Monitor, RefreshCw, Trash2, BarChart3, Clock, Database } from 'lucide-react';
 import { useNavigationCache, cacheUtils } from '../../hooks/useNavigationCache';
 
-/**
- * Componente de desarrollo para monitorear el estado del caché
- * Solo visible en modo desarrollo
- */
+// Monitor de desarrollo del caché de navegación: entradas, accesos y antigüedad.
+// Solo visible en desarrollo (se activa con Ctrl+Shift+C); refresca cada segundo.
 const CacheMonitor = ({ isVisible, onToggle }) => {
   const { getCacheStats, clearCache } = useNavigationCache();
   const [stats, setStats] = useState({});
   const [debugInfo, setDebugInfo] = useState({});
 
+  // Refresca las estadísticas cada segundo mientras el monitor está visible.
   useEffect(() => {
     if (!isVisible) return;
 
@@ -28,6 +27,7 @@ const CacheMonitor = ({ isVisible, onToggle }) => {
     return () => clearInterval(interval);
   }, [isVisible, getCacheStats]);
 
+  // Limpia todo el caché de navegación (con confirmación).
   const handleClearCache = () => {
     if (window.confirm('¿Limpiar todo el caché de navegación?')) {
       clearCache();
@@ -36,6 +36,7 @@ const CacheMonitor = ({ isVisible, onToggle }) => {
     }
   };
 
+  // Formatea milisegundos a un texto legible (h/m/s).
   const formatAge = (ms) => {
     if (!ms) return 'N/A';
     const seconds = Math.floor(ms / 1000);
@@ -85,10 +86,10 @@ const CacheMonitor = ({ isVisible, onToggle }) => {
             <span className="text-white font-bold text-lg">{stats.totalItems || 0}</span>
           </div>
 
-          <div className="bg-green-500/10 rounded p-2 border border-green-500/20">
+          <div className="bg-emerald-500/10 rounded p-2 border border-emerald-500/20">
             <div className="flex items-center space-x-1 mb-1">
-              <RefreshCw className="w-3 h-3 text-green-400" />
-              <span className="text-green-300 font-medium">Accesses</span>
+              <RefreshCw className="w-3 h-3 text-emerald-400" />
+              <span className="text-emerald-300 font-medium">Accesses</span>
             </div>
             <span className="text-white font-bold text-lg">{stats.totalAccesses || 0}</span>
           </div>
@@ -96,10 +97,10 @@ const CacheMonitor = ({ isVisible, onToggle }) => {
 
         {/* Edad promedio */}
         {stats.averageAge && (
-          <div className="bg-purple-500/10 rounded p-2 border border-purple-500/20">
+          <div className="bg-brand-400/10 rounded p-2 border border-brand-400/20">
             <div className="flex items-center space-x-1 mb-1">
-              <Clock className="w-3 h-3 text-purple-400" />
-              <span className="text-purple-300 font-medium">Avg. Age</span>
+              <Clock className="w-3 h-3 text-brand-300" />
+              <span className="text-brand-200 font-medium">Avg. Age</span>
             </div>
             <span className="text-white font-semibold">{formatAge(stats.averageAge)}</span>
           </div>
@@ -107,12 +108,12 @@ const CacheMonitor = ({ isVisible, onToggle }) => {
 
         {/* Entrada más accedida */}
         {stats.mostAccessed && (
-          <div className="bg-orange-500/10 rounded p-2 border border-orange-500/20">
-            <div className="text-orange-300 font-medium mb-1">Most Accessed</div>
+          <div className="bg-amber-500/10 rounded p-2 border border-amber-500/20">
+            <div className="text-amber-300 font-medium mb-1">Most Accessed</div>
             <div className="text-white font-semibold truncate">
               {debugInfo.cacheEntries?.find(key => key.includes('services')) || 'N/A'}
             </div>
-            <div className="text-orange-200 text-xs">
+            <div className="text-amber-200 text-xs">
               {stats.mostAccessed.accessCount} accesses
             </div>
           </div>
@@ -140,9 +141,8 @@ const CacheMonitor = ({ isVisible, onToggle }) => {
   );
 };
 
-/**
- * Hook para controlar el monitor de caché
- */
+// Hook que expone visibilidad, toggle y el componente del monitor.
+// Registra el atajo Ctrl+Shift+C solo cuando NODE_ENV es 'development'.
 export const useCacheMonitor = () => {
   const [isVisible, setIsVisible] = useState(false);
 

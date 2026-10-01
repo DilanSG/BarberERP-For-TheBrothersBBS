@@ -1,9 +1,15 @@
+// Servicio de autenticación: registro, login/logout, verificación de email,
+// recuperación de contraseña y refresco de token.
 import { api, cacheHelper } from './api.js';
 
 const API_URL = import.meta.env.VITE_API_URL;
+// Versión enviada en la cabecera X-Client-Version
 const APP_VERSION = import.meta.env.VITE_APP_VERSION || '1.0.0';
 
 // Sistema de reintentos específico para auth (menos intentos, más rápido)
+// Añade cabeceras de monitoreo, parsea la respuesta (JSON o texto) y
+// reintenta en 429 y en errores de red con backoff exponencial.
+// Devuelve { response, data }; lanza Error con status/details/errors del backend.
 const authFetchWithRetry = async (url, options, retries = 2, backoff = 500) => {
   try {
     // Añadir headers de monitoreo
@@ -38,20 +44,12 @@ const authFetchWithRetry = async (url, options, retries = 2, backoff = 500) => {
     }
 
     if (!response.ok) {
-      // Mejorar manejo de errores específicos de auth
-      if (data.errors && Array.isArray(data.errors)) {
-        throw new Error(data.errors.map(err => err.msg).join('\n'));
-      }
-      
-      if (response.status === 401) {
-        throw new Error('Credenciales inválidas');
-      }
-      
-      if (response.status === 403) {
-        throw new Error('No tienes permiso para realizar esta acción');
-      }
-      
-      throw new Error(data.message || 'Error en la autenticación');
+      // Crear error con details del backend para que el frontend pueda mostrarlos
+      const error = new Error(data.message || 'Error en la autenticación');
+      error.status = response.status;
+      error.details = data.details || null;
+      error.errors = data.errors || null;
+      throw error;
     }
 
     return { response, data };
@@ -65,6 +63,8 @@ const authFetchWithRetry = async (url, options, retries = 2, backoff = 500) => {
 };
 
 export const authService = {
+  // Registro de usuario. Devuelve los datos del backend y conserva
+  // `details`/`errors` en el Error para que Register.jsx los muestre.
   register: async (userData) => {
     try {
       const { data } = await authFetchWithRetry(`${API_URL}/auth/register`, {
@@ -76,14 +76,13 @@ export const authService = {
       return data;
     } catch (error) {
       console.error('Error en el registro:', error);
-      throw new Error(
-        error.message.includes('429')
-          ? 'Demasiados intentos. Por favor, espera un momento.'
-          : error.message
-      );
+      // Re-lanzar con details preservados para que Register.jsx pueda mostrarlos
+      throw error;
     }
   },
 
+  // Login: guarda token y usuario en localStorage y limpia la caché para no
+  // mezclar datos de sesiones anteriores. Traduce 401/429/red a mensajes claros.
   login: async (credentials) => {
     try {
       const { data, response } = await authFetchWithRetry(`${API_URL}/auth/login`, {
@@ -122,6 +121,8 @@ export const authService = {
     }
   },
 
+  // Cierra sesión en el servidor (si hay token) y siempre limpia el estado local
+  // y la caché, incluso si la petición falla.
   logout: async () => {
     try {
       const token = localStorage.getItem('token');
@@ -147,6 +148,7 @@ export const authService = {
     }
   },
 
+  // Verifica el email con el token recibido por correo
   verifyEmail: async (token) => {
     try {
       const { data } = await authFetchWithRetry(`${API_URL}/auth/verify-email/${token}`, {
@@ -159,6 +161,7 @@ export const authService = {
     }
   },
 
+  // Solicita el correo de recuperación de contraseña (mensaje especial en 429)
   requestPasswordReset: async (email) => {
     try {
       const { data } = await authFetchWithRetry(`${API_URL}/auth/forgot-password`, {
@@ -177,6 +180,7 @@ export const authService = {
     }
   },
 
+  // Restablece la contraseña con el token del correo
   resetPassword: async (token, newPassword) => {
     try {
       const { data } = await authFetchWithRetry(`${API_URL}/auth/reset-password`, {
@@ -191,27 +195,38 @@ export const authService = {
     }
   },
 
+  // Refresca el token con el actual; guarda el nuevo token/usuario.
+  // Si falla, cierra sesión y lanza error de sesión expirada.
   refreshToken: async () => {
     try {
       const token = localStorage.getItem('token');
       if (!token) throw new Error('No hay token para refrescar');
 
-      // NOTA: El endpoint de refresh-token no está implementado en el backend
-      // Por ahora, solo verificamos que el token exista y devolvemos los datos actuales
-      const user = authService.getCurrentUser();
-      if (!user) {
-        throw new Error('No hay usuario autenticado');
+      const { data } = await authFetchWithRetry(`${API_URL}/auth/refresh-token`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ token })
+      });
+
+      if (data.token) {
+        localStorage.setItem('token', data.token);
+        if (data.user) {
+          localStorage.setItem('user', JSON.stringify(data.user));
+        }
       }
 
-      return { token, user };
+      return { token: data.token, user: data.user };
     } catch (error) {
       console.error('Error refreshing token:', error);
-      // Si hay error refrescando el token, hacer logout
       await authService.logout();
       throw new Error('Tu sesión ha expirado. Por favor, inicia sesión nuevamente.');
     }
   },
 
+  // Usuario guardado en localStorage (o null); no consulta al backend
   getCurrentUser: () => {
     const user = localStorage.getItem('user');
     return user ? JSON.parse(user) : null;

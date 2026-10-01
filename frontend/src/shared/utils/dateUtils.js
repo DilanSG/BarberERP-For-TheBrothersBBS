@@ -1,11 +1,10 @@
-/**
- * Utilidades para manejo de fechas en zona horaria de Colombia
- * Todas las funciones respetan la zona horaria de Bogotá
- */
+// Utilidades para manejo de fechas en zona horaria de Colombia
+// Todas las funciones respetan la zona horaria de Bogotá
 
-/**
- * Obtiene la fecha actual en formato YYYY-MM-DD en zona horaria de Colombia
- */
+// Utilidades para manejo de fechas en zona horaria de Colombia.
+// Todas las funciones respetan la zona horaria de Bogotá (UTC-5); el patrón
+// toLocaleString + new Date permite "mover" el instante a esa zona.
+// Retorna string 'YYYY-MM-DD'.
 export const getCurrentDateColombia = () => {
   const now = new Date();
   // Convertir a zona horaria de Colombia (UTC-5)
@@ -18,9 +17,8 @@ export const getCurrentDateColombia = () => {
   return `${year}-${month}-${day}`;
 };
 
-/**
- * Obtiene la fecha de ayer en formato YYYY-MM-DD en zona horaria de Colombia
- */
+// Obtiene la fecha de ayer en formato YYYY-MM-DD en zona horaria de Colombia
+// (resta 24h al instante ya convertido a hora Colombia)
 export const getYesterdayDateColombia = () => {
   const now = new Date();
   // Convertir a zona horaria de Colombia
@@ -35,9 +33,7 @@ export const getYesterdayDateColombia = () => {
   return `${year}-${month}-${day}`;
 };
 
-/**
- * Formatea una fecha para mostrar en Colombia (dd/mm/yyyy)
- */
+// Formatea una fecha para mostrar en Colombia (dd/mm/yyyy)
 export const formatDateForColombia = (dateString) => {
   try {
     const date = new Date(dateString + 'T12:00:00.000Z'); // Agregar hora para evitar timezone issues
@@ -53,9 +49,7 @@ export const formatDateForColombia = (dateString) => {
   }
 };
 
-/**
- * Convierte una fecha de Colombia a UTC para enviar al backend
- */
+// Convierte una fecha de Colombia a UTC para enviar al backend
 export const convertColombiaDateToUTC = (dateString) => {
   try {
     // Crear fecha asumiendo que es en zona horaria de Colombia
@@ -70,9 +64,8 @@ export const convertColombiaDateToUTC = (dateString) => {
   }
 };
 
-/**
- * Verifica si una fecha está disponible en el array de fechas disponibles
- */
+// Comprueba si dateString está en availableDates, comparando solo 'YYYY-MM-DD'
+// (ignora la parte de hora/ISO). Retorna boolean.
 export const isDateAvailable = (dateString, availableDates = []) => {
   if (!dateString || !Array.isArray(availableDates)) return false;
   
@@ -84,9 +77,8 @@ export const isDateAvailable = (dateString, availableDates = []) => {
   });
 };
 
-/**
- * Obtiene el rango de fechas para un preset específico
- */
+// Obtiene el rango de fechas para un preset ('all' | 'today' | 'yesterday').
+// Devuelve { startDate, endDate, preset }; cualquier preset desconocido cae a 'all'.
 export const getDateRangeForPreset = (preset) => {
   const today = getCurrentDateColombia();
   const yesterday = getYesterdayDateColombia();
@@ -122,9 +114,7 @@ export const getDateRangeForPreset = (preset) => {
   }
 };
 
-/**
- * Formatea un rango de fechas para mostrar al usuario
- */
+// Formatea un rango de fechas para mostrar al usuario
 export const formatDateRange = (startDate, endDate, preset) => {
   const today = getCurrentDateColombia();
   const yesterday = getYesterdayDateColombia();

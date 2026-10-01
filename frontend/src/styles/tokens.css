@@ -1,0 +1,82 @@
+/* Boutique Premium tokens — Fase 0 */
+:root {
+  --app-bg: #111318;
+  --surface: #111318;
+  --surface-muted: #161920;
+  --surface-elevated: #1c2030;
+  --surface-border: rgba(255,255,255,0.08);
+  --text-primary: #F8FAFC;
+  --text-muted: #94A3B8;
+  --text-dim: #64748B;
+  --brand: #C6A664;
+  --brand-soft: rgba(198,166,100,0.15);
+  --fluid-pad: clamp(1rem, 4vw, 3rem);
+  --fluid-gap: clamp(0.75rem, 2vw, 1.5rem);
+  --radius-xl: 1rem;
+  --radius-2xl: 1.25rem;
+}
+
+/* Tema claro (clase aplicada por ThemeContext en <html>) */
+html.light {
+  --app-bg: #f5f6f8;
+  --surface: #ffffff;
+  --surface-muted: #f2f4f7;
+  --surface-elevated: #ffffff;
+  --surface-border: rgba(18,22,28,0.08);
+  --text-primary: #1f2329;
+  --text-muted: #5b6470;
+  --text-dim: #8a9199;
+  --brand-soft: rgba(198,166,100,0.22);
+}
+
+/* Fondo base de la app (capa fija del AppLayout) */
+.app-bg-layer {
+  background-color: var(--app-bg);
+  background-image: linear-gradient(to bottom, #1a1020, #13151b 45%, #111318);
+}
+html.light .app-bg-layer {
+  background-image: linear-gradient(180deg, #f7f9fc 0%, #eceff5 55%, #e6eaf1 100%);
+}
+
+html {
+  scroll-behavior: smooth;
+  /* Mismo color base que el body: evita zonas sin fondo (overscroll, modales, páginas cortas) */
+  background-color: var(--app-bg);
+}
+body {
+  font-family: 'Inter', system-ui, sans-serif;
+  background: var(--app-bg);
+  color: var(--text-primary);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* Utilidad fluido: ocupa ancho, estira grillas */
+.fluid-container {
+  width: 100%;
+  max-width: none;
+  padding-inline: var(--fluid-pad);
+}
+.fluid-grid {
+  display: grid;
+  gap: var(--fluid-gap);
+  grid-template-columns: repeat(auto-fit, minmax(min(320px, 100%), 1fr));
+}
+.fluid-grid-sm {
+  display: grid;
+  gap: var(--fluid-gap);
+  grid-template-columns: repeat(auto-fit, minmax(min(260px, 100%), 1fr));
+}
+
+/* Reduce old shadow dominance */
+.shadow-soft { box-shadow: 0 8px 30px rgba(0,0,0,0.35); }
+.shadow-glow { box-shadow: 0 0 40px var(--brand-soft); }
+
+/* Respect motion */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

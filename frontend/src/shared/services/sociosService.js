@@ -1,3 +1,4 @@
+// Servicio de socios (admins con subrol y porcentaje de participación).
 import { api } from './api';
 
 export const sociosService = {
@@ -7,7 +8,7 @@ export const sociosService = {
     return response; // api.get ya devuelve los datos procesados
   },
 
-  // Obtener distribución de ganancias
+  // Obtener distribución de ganancias para un monto dado
   getDistribucion: async (gananciaTotal) => {
     const response = await api.get(`/socios/distribucion?gananciaTotal=${gananciaTotal}`);
     return response;

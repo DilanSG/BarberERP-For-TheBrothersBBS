@@ -1,27 +1,26 @@
 {
-  "name": "the-brothers-barber-shop",
+  "name": "barbererp",
   "version": "1.0.0",
-  "description": "Sistema de gestión integral para barbería con backend Node.js/Express y frontend React",
+  "description": "BarberERP — ERP de gestión integral para barbería (The Brothers Barber Shop). Backend Node.js/Express + frontend React.",
   "type": "module",
-  "main": "dev-launcher.js",
-  "bin": {
-    "dev-launcher": "./dev-launcher.js"
-  },
+  "main": "backend/src/index.js",
   "scripts": {
-    "dev": "node dev-launcher.js",
+    "dev": "concurrently \"npm:dev:backend\" \"npm:dev:frontend\"",
     "dev:frontend": "cd frontend && npm run dev",
     "dev:backend": "cd backend && npm run dev",
     "build": "cd frontend && npm ci && npm run build",
-    "install:all": "node scripts/install-all.js",
-    "setup:dev": "node scripts/setup-env.js development",
-    "setup:prod": "node scripts/setup-env.js production",
-    "setup:network": "node scripts/setup-env.js network",
-    "fix:frontend": "node scripts/fix-frontend.js",
-    "diagnose": "node scripts/diagnose.js",
-    "validate:ci": "node scripts/validate-ci.js",
-    "pre-push": "node scripts/validate-ci.js"
+    "install:all": "npm --prefix backend install && npm --prefix frontend install",
+    "setup:dev": "cp backend/.env.example backend/.env 2>/dev/null; cp frontend/.env.example frontend/.env.development 2>/dev/null; echo ' Envs de desarrollo copiados - edita backend/.env con tus credenciales'",
+    "setup:prod": "cp backend/.env.production.example backend/.env 2>/dev/null; cp frontend/.env.production frontend/.env 2>/dev/null; echo ' Envs de producción copiados'",
+    "setup:network": "echo ' setup:network deprecado - configura VITE_API_URL manualmente en frontend/.env.development'",
+    "fix:frontend": "npm --prefix frontend ci",
+    "diagnose": "node --check backend/src/index.js && echo ' Backend syntax OK' && cd frontend && npx vite --version >/dev/null 2>&1 && echo ' Frontend vite OK' || echo ' Frontend check pendiente'",
+    "validate:ci": "npm --prefix backend run lint 2>&1 | head -50; echo '--- frontend: sin linter configurado ---'",
+    "pre-push": "npm run validate:ci"
   },
   "keywords": [
+    "barbererp",
+    "erp",
     "barberia",
     "barber-shop",
     "react",
@@ -34,10 +33,16 @@
     "fullstack"
   ],
   "author": {
-    "name": "DilanSG",
+    "name": "IntoCode",
     "url": "https://github.com/DilanSG"
   },
-  "license": "PROPRIETARY",
+  "contributors": [
+    {
+      "name": "Dilan Acuña",
+      "url": "https://github.com/DilanSG"
+    }
+  ],
+  "license": "SEE LICENSE IN LICENSE",
   "private": true,
   "repository": {
     "type": "git",

@@ -1,3 +1,7 @@
+// Punto de entrada del frontend (Vite + React 18).
+// Monta la aplicación en #root dentro del árbol de providers globales
+// (tema, autenticación y notificaciones) y configura los servicios de Vercel
+// (Speed Insights, Analytics) y el error tracking con Sentry.
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { BrowserRouter } from 'react-router-dom';
@@ -8,10 +12,15 @@ import App from './app.jsx';
 import './index.css';
 import { AuthProvider } from './shared/contexts/AuthContext.jsx';
 import { NotificationProvider } from './shared/contexts/NotificationContext.jsx';
+import { ThemeProvider } from './shared/contexts/ThemeContext.jsx';
 
 // 🐛 Configurar Sentry para error tracking (Vercel)
 const sentryDsn = import.meta.env.VITE_SENTRY_DSN_FRONTEND;
-if (sentryDsn) {
+// Validar que el DSN sea real (evita inicializar con placeholders tipo "your-sentry-dsn")
+const isRealSentryDsn = Boolean(sentryDsn) && /^https:\/\/[0-9a-f]+@[^/]+\/\d+$/i.test(sentryDsn);
+
+// Inicialización condicional: solo si hay un DSN válido configurado
+if (isRealSentryDsn) {
   Sentry.init({
     dsn: sentryDsn,
     environment: import.meta.env.MODE || 'development',
@@ -40,12 +49,14 @@ if (sentryDsn) {
   });
   console.log('✅ Sentry inicializado en frontend (Vercel)');
 } else {
-  console.log('ℹ️  Sentry deshabilitado (VITE_SENTRY_DSN_FRONTEND no configurado)');
+  console.log('ℹ️  Sentry deshabilitado (VITE_SENTRY_DSN_FRONTEND no configurado o es placeholder)');
 }
 
 // Obtener la base URL del entorno o usar un valor por defecto
 const baseUrl = import.meta.env.BASE_URL || '/';
 
+// Montaje de la app: BrowserRouter (con basename del entorno) envuelve a los
+// providers globales; App y los servicios de Vercel comparten el árbol.
 ReactDOM.createRoot(document.getElementById('root')).render(
 	<BrowserRouter 
 		basename={baseUrl}
@@ -54,12 +65,14 @@ ReactDOM.createRoot(document.getElementById('root')).render(
 			v7_relativeSplatPath: true
 		}}
 	>
-		<AuthProvider>
-			<NotificationProvider>
-				<App />
-				<SpeedInsights />
-				<Analytics />
-			</NotificationProvider>
-		</AuthProvider>
+		<ThemeProvider>
+			<AuthProvider>
+				<NotificationProvider>
+					<App />
+					<SpeedInsights />
+					<Analytics />
+				</NotificationProvider>
+			</AuthProvider>
+		</ThemeProvider>
 	</BrowserRouter>
 );

@@ -2,10 +2,10 @@
 import { useLocation } from 'react-router-dom';
 
 import logger from '../utils/logger';
-/**
- * Sistema de caché inteligente para navegación
- * Evita recargas innecesarias y mejora la performance
- */
+// Sistema de caché inteligente para navegación.
+// Evita recargas innecesarias y mejora la performance.
+// Caché en memoria con TTL (5 min por defecto) y tamaño máximo de 10 entradas;
+// al llenarse descarta la entrada más antigua (orden de inserción).
 class NavigationCache {
   constructor() {
     this.cache = new Map();
@@ -13,6 +13,7 @@ class NavigationCache {
     this.defaultTTL = 5 * 60 * 1000; // 5 minutos por defecto
   }
 
+  // Guarda datos para una clave con TTL; si está lleno, descarta la más antigua
   set(key, data, ttl = this.defaultTTL) {
     // Si el caché está lleno, eliminar el más antiguo
     if (this.cache.size >= this.maxSize) {
@@ -32,6 +33,8 @@ class NavigationCache {
     logger.debug(`🗄️ Cached navigation data for: ${key}`);
   }
 
+  // Devuelve los datos si la entrada sigue vigente; null si no existe o expiró.
+  // Actualiza contadores de acceso (accessCount, lastAccessed) para getStats.
   get(key) {
     const item = this.cache.get(key);
     
@@ -112,9 +115,8 @@ class NavigationCache {
 // Instancia singleton del caché
 const navigationCache = new NavigationCache();
 
-/**
- * Hook para gestión de caché de navegación
- */
+// Hook de caché de navegación: claves por ruta + query params, invalidación por
+// patrón y sincronización entre pestañas vía evento `storage`.
 export const useNavigationCache = () => {
   const location = useLocation();
   const currentRouteRef = useRef(location.pathname);
@@ -201,9 +203,9 @@ export const useNavigationCache = () => {
   };
 };
 
-/**
- * HOC para componentes que necesitan caché automático
- */
+// HOC para componentes que necesitan caché automático.
+// Inyecta cacheRouteData(data), getCachedData() y hasCachedData() usando la ruta
+// actual (o cacheConfig.cacheKey) y un TTL configurable.
 export const withNavigationCache = (WrappedComponent, cacheConfig = {}) => {
   return function CachedComponent(props) {
     const { 
@@ -229,9 +231,7 @@ export const withNavigationCache = (WrappedComponent, cacheConfig = {}) => {
   };
 };
 
-/**
- * Hook especializado para datos de formularios
- */
+// Hook especializado para datos de formularios (TTL 30 min, clave form_<id>)
 export const useFormCache = (formId) => {
   const { cacheRouteData, getCachedRouteData, invalidateRoute } = useNavigationCache();
   
@@ -257,9 +257,7 @@ export const useFormCache = (formId) => {
   };
 };
 
-/**
- * Utilidades de caché para casos específicos
- */
+// Utilidades de caché para casos específicos
 export const cacheUtils = {
   // Precargar datos para una ruta
   preloadRouteData: async (path, dataLoader, ttl) => {

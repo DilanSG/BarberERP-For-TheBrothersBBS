@@ -1,13 +1,15 @@
 {
-  "name": "the-brothers-barbershop-backend",
+  "name": "barbererp-backend",
   "version": "1.0.0",
   "type": "module",
-  "description": "Backend para The Brothers Barber Shop",
+  "description": "BarberERP — Backend (API REST) para The Brothers Barber Shop",
   "main": "src/index.js",
   "scripts": {
     "dev": "nodemon --exec \"dotenv -e .env -- node\" src/index.js",
     "start": "NODE_ENV=production node src/index.js",
     "start:prod": "NODE_ENV=production node src/index.js",
+    "seed:init": "dotenv -e .env -- node scripts/seed-init.js",
+    "seed:init:fresh": "dotenv -e .env -- node scripts/seed-init.js --fresh",
     "seed:master": "dotenv -e .env -- node scripts/master-population.js",
     "seed:inventory": "dotenv -e .env -- node scripts/seedInventoryProducts.js",
     "init:fundador": "dotenv -e .env -- node scripts/inicializar-socio-fundador.js",
@@ -26,9 +28,15 @@
     "test:integration": "cross-env NODE_ENV=test node --experimental-vm-modules node_modules/jest/bin/jest.js tests/integration",
     "lint": "eslint src --ext .js"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
+  "keywords": [
+    "barbererp",
+    "erp",
+    "api",
+    "express",
+    "mongodb"
+  ],
+  "author": "IntoCode",
+  "license": "SEE LICENSE IN LICENSE",
   "dependencies": {
     "@mongodb-js/saslprep": "^1.3.0",
     "@sendgrid/mail": "8.1.6",
@@ -61,6 +69,7 @@
     "node-cron": "4.2.1",
     "node-thermal-printer": "4.5.0",
     "nodemailer": "7.0.9",
+    "socket.io": "4.8.3",
     "swagger-jsdoc": "^6.2.8",
     "swagger-ui-express": "^4.6.3",
     "winston": "^3.17.0",
@@ -78,6 +87,7 @@
     "eslint": "^8.57.0",
     "glob": "11.0.3",
     "jest": "^29.7.0",
+    "nodemon": "3.1.14",
     "supertest": "6.3.4"
   },
   "engines": {

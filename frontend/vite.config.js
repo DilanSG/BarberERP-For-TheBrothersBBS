@@ -1,5 +1,6 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
+import path from 'path'
 
 // https://vitejs.dev/config/
 export default defineConfig({
@@ -15,13 +16,16 @@ export default defineConfig({
     emptyOutDir: true,
     copyPublicDir: true,
     sourcemap: false,
+    // exceljs (~939KB) se carga lazy solo al exportar Excel; el resto de chunks son < 500KB
+    chunkSizeWarningLimit: 1000,
     rollupOptions: {
       output: {
         manualChunks: {
           react: ['react', 'react-dom'],
           router: ['react-router-dom'],
           ui: ['lucide-react', 'react-toastify'],
-          utils: ['date-fns', 'exceljs']
+          utils: ['date-fns'],
+          // exceljs se carga dinámico via import() en Inventory — chunk separado (Fase 5)
         },
         assetFileNames: (assetInfo) => {
           const info = assetInfo.name.split('.');
@@ -65,7 +69,7 @@ export default defineConfig({
   
   // Configuración de dependencias optimizada para Vite 4.x
   optimizeDeps: {
-    force: true,
+    force: false,
     include: [
       'react',
       'react-dom',
@@ -75,21 +79,23 @@ export default defineConfig({
       'react-toastify',
       'react-calendar',
       'react-day-picker',
-      'exceljs'
+      'exceljs',
+      'gsap',
+      '@gsap/react'
     ]
   },
   
-  // Configuración de resolución
+  // Configuración de resolución — fluido: path.resolve evita /src absoluto roto en CI/Docker
   resolve: {
     alias: {
-      '@': '/src',
-      '@shared': '/src/shared',
-      '@utils': '/src/shared/utils',
-      '@components': '/src/shared/components',
-      '@hooks': '/src/shared/hooks',
-      '@services': '/src/shared/services',
-      '@contexts': '/src/shared/contexts',
-      '@recurring-expenses': '/shared/recurring-expenses'
+      '@': path.resolve(__dirname, './src'),
+      '@shared': path.resolve(__dirname, './src/shared'),
+      '@utils': path.resolve(__dirname, './src/shared/utils'),
+      '@components': path.resolve(__dirname, './src/shared/components'),
+      '@hooks': path.resolve(__dirname, './src/shared/hooks'),
+      '@services': path.resolve(__dirname, './src/shared/services'),
+      '@contexts': path.resolve(__dirname, './src/shared/contexts'),
+      '@recurring-expenses': path.resolve(__dirname, './src/shared/recurring-expenses')
     }
   },
   

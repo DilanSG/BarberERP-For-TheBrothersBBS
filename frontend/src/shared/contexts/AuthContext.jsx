@@ -1,9 +1,15 @@
-import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
+// Contexto de autenticación: expone usuario, token, login/logout, perfil de
+// barbero y refresco automático del token por rol.
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { authService } from '../services/authService';
-import { barberService } from '../services/api';
+import { barberService } from '../services/barberService';
 
 const AuthContext = createContext();
 
+// Provider de sesión. Lee el usuario/token iniciales de localStorage, carga el
+// perfil de barbero cuando aplica y programa el refresco del token.
+// Valor expuesto: user, token, login, logout, setUser, barberProfile,
+// setBarberProfile, checkAndCreateBarberProfile, loading, error y refreshToken.
 export function AuthProvider({ children }) {
   const [user, setUserState] = useState(() => authService.getCurrentUser());
   const [token, setToken] = useState(() => localStorage.getItem('token'));
@@ -12,7 +18,7 @@ export function AuthProvider({ children }) {
   const [error, setError] = useState(null);
   const [refreshTimer, setRefreshTimer] = useState(null);
 
-  // Función para actualizar el usuario
+  // Actualiza el usuario en estado y en localStorage (null lo elimina)
   const setUser = (newUser) => {
     setUserState(newUser);
     if (newUser) {
@@ -22,7 +28,9 @@ export function AuthProvider({ children }) {
     }
   };
 
-  // Función para manejar el refresh del token
+  // Programa el refresco del token con un intervalo según el rol (siempre antes
+  // de que expire): user 5.5h, barber 7.5h, admin 3.5h. Si el refresh falla,
+  // cierra la sesión. Devuelve una función de limpieza.
   const setupTokenRefresh = useCallback(() => {
     if (refreshTimer) clearInterval(refreshTimer);
     
@@ -51,7 +59,8 @@ export function AuthProvider({ children }) {
     return () => clearInterval(timer);
   }, [user?.role]); // Dependencia añadida para recalcular si cambia el rol
 
-  // Cargar perfil de barbero si es necesario
+  // Carga el perfil de barbero del usuario autenticado (solo rol barber).
+  // Al terminar marca loading=false aunque falle, para no bloquear la app.
   useEffect(() => {
     const loadBarberProfile = async () => {
       if (user?.role === 'barber' && token && user._id) {
@@ -69,7 +78,7 @@ export function AuthProvider({ children }) {
     loadBarberProfile();
   }, [user?._id, token]);
 
-  // Setup del refresh token
+  // (Re)programa el refresh del token cada vez que cambia el token
   useEffect(() => {
     if (token) {
       const cleanup = setupTokenRefresh();
@@ -80,7 +89,8 @@ export function AuthProvider({ children }) {
     }
   }, [token]);
 
-  // Verificar y/o crear perfil de barbero
+  // Verifica si existe el perfil de barbero y lo crea si falta.
+  // Lo guarda en barberProfile y devuelve la respuesta del backend.
   const checkAndCreateBarberProfile = async (userId) => {
     try {
       let profile = await barberService.getBarberByUserId(userId);
@@ -98,7 +108,8 @@ export function AuthProvider({ children }) {
     }
   };
 
-  // Login mejorado
+  // Login: guarda usuario y token, normaliza _id/photo, verifica el perfil de
+  // barbero si aplica y programa el refresco. Devuelve true/false.
   const handleLogin = async (email, password) => {
     try {
       setLoading(true);
@@ -144,7 +155,8 @@ export function AuthProvider({ children }) {
     }
   };
 
-  // Logout mejorado
+  // Logout: notifica al backend (tolerante a fallos), limpia estado local,
+  // cancela el timer de refresco y el perfil de barbero.
   const handleLogout = async () => {
     try {
       setLoading(true);
@@ -181,6 +193,7 @@ export function AuthProvider({ children }) {
   );
 }
 
+// Hook de acceso al contexto; lanza error si se usa fuera de AuthProvider
 export function useAuth() {
   const context = useContext(AuthContext);
   if (!context) {

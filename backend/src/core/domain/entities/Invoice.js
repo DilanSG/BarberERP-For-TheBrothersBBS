@@ -1,10 +1,8 @@
 import mongoose from 'mongoose';
 
-/**
- * Schema de Factura/Invoice
- * Generado automáticamente desde ventas
- * Compatible con impresoras térmicas (formato 80mm)
- */
+// Schema de Factura/Invoice
+// Generado automáticamente desde ventas
+// Compatible con impresoras térmicas (formato 80mm)
 const invoiceSchema = new mongoose.Schema({
   // Numeración de factura (secuencial)
   invoiceNumber: {
@@ -176,16 +174,20 @@ const invoiceSchema = new mongoose.Schema({
 });
 
 // Índices compuestos
+// Optimizan facturas por barbero, por estado y el listado cronológico general.
 invoiceSchema.index({ 'barber.id': 1, createdAt: -1 });
 invoiceSchema.index({ status: 1, createdAt: -1 });
 invoiceSchema.index({ createdAt: -1 });
 
 // Virtual para formato de factura
+// Usa el consecutivo real o un respaldo derivado de los últimos 6 dígitos del _id.
 invoiceSchema.virtual('formattedNumber').get(function() {
   return this.invoiceNumber || `FAC-${this._id.toString().slice(-6).toUpperCase()}`;
 });
 
 // Método para generar número de factura
+// Busca la última factura del año actual por prefijo FAC-<año>- y devuelve el
+// siguiente consecutivo rellenado a 5 dígitos. Si no hay ninguna, empieza en 1.
 invoiceSchema.statics.generateInvoiceNumber = async function() {
   const year = new Date().getFullYear();
   const prefix = `FAC-${year}`;
@@ -205,6 +207,8 @@ invoiceSchema.statics.generateInvoiceNumber = async function() {
 };
 
 // Método para marcar como impresa
+// Efecto secundario: actualiza printInfo (fechas, contador y usuario), pasa el
+// estado 'pending' a 'printed' y persiste el documento (retorna la promesa de save).
 invoiceSchema.methods.markAsPrinted = function(userId) {
   this.printInfo.printed = true;
   this.printInfo.printedAt = this.printInfo.printedAt || new Date();
@@ -223,6 +227,7 @@ invoiceSchema.methods.markAsPrinted = function(userId) {
 };
 
 // Método para formatear para impresión
+// Proyecta solo los campos necesarios para el ticket térmico (sin datos internos).
 invoiceSchema.methods.formatForPrint = function() {
   return {
     invoiceNumber: this.formattedNumber,
@@ -244,6 +249,7 @@ invoiceSchema.methods.formatForPrint = function() {
 };
 
 // Método para cancelar factura
+// Efecto secundario: cambia status a 'cancelled', anexa el motivo a notes y persiste.
 invoiceSchema.methods.cancel = function(reason) {
   this.status = 'cancelled';
   this.notes = (this.notes ? this.notes + '\n' : '') + `Cancelada: ${reason}`;
@@ -251,6 +257,8 @@ invoiceSchema.methods.cancel = function(reason) {
 };
 
 // Pre-save hook para calcular totales
+// Solo recalcula cuando items cambió: subtotal por ítem = cantidad * precio
+// unitario; subtotal general = suma; total = subtotal + impuestos - descuento.
 invoiceSchema.pre('save', function(next) {
   if (this.isModified('items')) {
     // Calcular subtotal desde items
@@ -266,6 +274,7 @@ invoiceSchema.pre('save', function(next) {
 });
 
 // Método toJSON personalizado
+// Expone virtuals, renombra _id a id y oculta _id/__v en las respuestas JSON.
 invoiceSchema.set('toJSON', {
   virtuals: true,
   transform: (doc, ret) => {

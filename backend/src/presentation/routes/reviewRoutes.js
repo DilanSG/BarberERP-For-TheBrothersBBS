@@ -11,8 +11,15 @@ import {
 import { protect, adminAuth } from '../middleware/auth.js';
 import { body } from 'express-validator';
 import { handleValidationErrors } from '../middleware/validation.js';
+import { cacheMiddleware, invalidateCacheMiddleware } from '../middleware/cache.js';
 
 const router = express.Router();
+
+// Cache patterns para invalidación (reseñas afectan rating de barberos)
+const CACHE_PATTERNS = [
+  '^/api/v1/reviews',
+  '^/api/v1/barbers'
+];
 
 // Validaciones
 const createReviewValidation = [
@@ -44,16 +51,16 @@ const updateReviewValidation = [
 ];
 
 // Rutas públicas
-router.get('/barber/:barberId', getBarberReviews);
+router.get('/barber/:barberId', cacheMiddleware(300), getBarberReviews);
 router.get('/barber/:barberId/stats', getBarberRatingStats);
 
 // Rutas privadas (usuarios autenticados)
-router.post('/', protect, createReviewValidation, createReview);
+router.post('/', protect, createReviewValidation, invalidateCacheMiddleware(CACHE_PATTERNS), createReview);
 router.get('/check/:appointmentId', protect, checkReviewEligibility);
 router.get('/my-reviews', protect, getMyReviews);
-router.put('/:id', protect, updateReviewValidation, updateReview);
+router.put('/:id', protect, updateReviewValidation, invalidateCacheMiddleware(CACHE_PATTERNS), updateReview);
 
 // Rutas de admin
-router.delete('/:id', protect, adminAuth, deleteReview);
+router.delete('/:id', protect, adminAuth, invalidateCacheMiddleware(CACHE_PATTERNS), deleteReview);
 
 export default router;

@@ -1,7 +1,5 @@
 import { useState } from 'react';
 import { 
-  X, 
-  Plus, 
   DollarSign, 
   Calendar, 
   Tag, 
@@ -10,13 +8,15 @@ import {
   Repeat,
   AlertCircle,
   Save,
-  Trash2
+  Trash2,
+  Receipt
 } from 'lucide-react';
 import GradientButton from '../ui/GradientButton';
+import Modal from '../ui/Modal';
+import ToggleSwitch from '../ui/ToggleSwitch';
 
-/**
- * Modal para crear/editar gastos únicos y recurrentes
- */
+// Modal para crear o editar gastos únicos y recurrentes.
+// Valida campos básicos y, si es recurrente, exige día de la semana o del mes.
 export const ExpenseModal = ({
   isOpen,
   onClose,
@@ -27,6 +27,7 @@ export const ExpenseModal = ({
   onSave,
   loading = false
 }) => {
+  // Datos del formulario, incluida la configuración de recurrencia.
   const [formData, setFormData] = useState(() => ({
     description: expense?.description || '',
     amount: expense?.amount || '',
@@ -48,8 +49,10 @@ export const ExpenseModal = ({
 
   const [errors, setErrors] = useState({});
 
+  // No renderiza si el modal está cerrado.
   if (!isOpen) return null;
 
+  // Valida el formulario y envía el gasto conservando su tipo y recurrencia.
   const handleSubmit = async (e) => {
     e.preventDefault();
     
@@ -72,6 +75,7 @@ export const ExpenseModal = ({
       newErrors.paymentMethod = 'El método de pago es requerido';
     }
 
+    // Reglas adicionales cuando el gasto es recurrente.
     if (formData.isRecurring) {
       if (formData.recurringConfig.frequency === 'weekly' && !formData.recurringConfig.dayOfWeek) {
         newErrors.dayOfWeek = 'Debe seleccionar el día de la semana';
@@ -95,6 +99,7 @@ export const ExpenseModal = ({
     }
   };
 
+  // Actualiza un campo y limpia su error al escribir.
   const updateField = (field, value) => {
     setFormData(prev => ({
       ...prev,
@@ -110,6 +115,7 @@ export const ExpenseModal = ({
     }
   };
 
+  // Actualiza un campo de la configuración de recurrencia.
   const updateRecurringConfig = (field, value) => {
     setFormData(prev => ({
       ...prev,
@@ -120,26 +126,48 @@ export const ExpenseModal = ({
     }));
   };
 
+  // Vista: campos básicos del gasto y configuración de recurrencia opcional.
   return (
-    <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-[10001] p-4">
-      <div className="relative w-full max-w-2xl mx-auto max-h-[90vh] overflow-y-auto">
-        <div className="relative bg-white/10 backdrop-blur-md border border-white/20 rounded-2xl p-6 shadow-2xl">
-          <div className="relative z-10">
-            {/* Header */}
-            <div className="flex items-center justify-between mb-6">
-              <h2 className="text-2xl font-bold text-white">
-                {expense ? 'Editar Gasto' : 'Nuevo Gasto'}
-              </h2>
-              <button
-                onClick={onClose}
-                className="p-2 bg-red-500/20 hover:bg-red-500/30 border border-red-500/30 rounded-lg text-red-400 transition-colors"
-              >
-                <X className="w-5 h-5" />
-              </button>
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      color="amber"
+      title={expense ? 'Editar Gasto' : 'Nuevo Gasto'}
+      subtitle="Gastos únicos y recurrentes"
+      icon={Receipt}
+      size="2xl"
+      zIndex="top"
+      footer={
+        <div className="flex flex-col-reverse sm:flex-row gap-3 sm:justify-end">
+          <button
+            type="button"
+            onClick={onClose}
+            className="px-4 py-2.5 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.08] text-gray-300 hover:text-white text-sm font-medium transition-colors"
+          >
+            Cancelar
+          </button>
+          <GradientButton
+            type="submit"
+            form="expense-form"
+            variant="primary"
+            size="md"
+            disabled={loading}
+            className="shadow-xl shadow-soft"
+          >
+            <div className="flex items-center gap-2">
+              {loading ? (
+                <div className="animate-spin rounded-full h-4 w-4 border-t-2 border-b-2 border-white"></div>
+              ) : (
+                <Save className="w-4 h-4" />
+              )}
+              <span>{expense ? 'Actualizar' : 'Crear'} Gasto</span>
             </div>
-
-            {/* Formulario */}
-            <form onSubmit={handleSubmit} className="space-y-6">
+          </GradientButton>
+        </div>
+      }
+    >
+      {/* Formulario */}
+      <form id="expense-form" onSubmit={handleSubmit} className="space-y-6">
               {/* Información básica */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {/* Descripción */}
@@ -153,7 +181,7 @@ export const ExpenseModal = ({
                     value={formData.description}
                     onChange={(e) => updateField('description', e.target.value)}
                     placeholder="Descripción del gasto..."
-                    className={`glassmorphism-input w-full shadow-xl shadow-blue-500/20 ${
+                    className={`glassmorphism-input w-full shadow-xl shadow-soft ${
                       errors.description ? 'border-red-500/50' : ''
                     }`}
                   />
@@ -178,7 +206,7 @@ export const ExpenseModal = ({
                     value={formData.amount}
                     onChange={(e) => updateField('amount', e.target.value)}
                     placeholder="0"
-                    className={`glassmorphism-input w-full shadow-xl shadow-blue-500/20 ${
+                    className={`glassmorphism-input w-full shadow-xl shadow-soft ${
                       errors.amount ? 'border-red-500/50' : ''
                     }`}
                   />
@@ -200,7 +228,7 @@ export const ExpenseModal = ({
                     type="date"
                     value={formData.date}
                     onChange={(e) => updateField('date', e.target.value)}
-                    className="glassmorphism-input w-full shadow-xl shadow-blue-500/20"
+                    className="glassmorphism-input w-full shadow-xl shadow-soft"
                   />
                 </div>
 
@@ -212,7 +240,7 @@ export const ExpenseModal = ({
                   <select
                     value={formData.category}
                     onChange={(e) => updateField('category', e.target.value)}
-                    className={`glassmorphism-select w-full shadow-xl shadow-blue-500/20 ${
+                    className={`glassmorphism-select w-full shadow-xl shadow-soft ${
                       errors.category ? 'border-red-500/50' : ''
                     }`}
                   >
@@ -240,7 +268,7 @@ export const ExpenseModal = ({
                   <select
                     value={formData.paymentMethod}
                     onChange={(e) => updateField('paymentMethod', e.target.value)}
-                    className={`glassmorphism-select w-full shadow-xl shadow-blue-500/20 ${
+                    className={`glassmorphism-select w-full shadow-xl shadow-soft ${
                       errors.paymentMethod ? 'border-red-500/50' : ''
                     }`}
                   >
@@ -262,22 +290,20 @@ export const ExpenseModal = ({
 
               {/* Configuración de gasto recurrente */}
               <div className="border-t border-white/10 pt-6">
-                <div className="flex items-center gap-3 mb-4">
-                  <input
-                    type="checkbox"
+                <div className="mb-4">
+                  <ToggleSwitch
                     id="isRecurring"
                     checked={formData.isRecurring}
-                    onChange={(e) => updateField('isRecurring', e.target.checked)}
-                    className="w-4 h-4 text-blue-600 bg-gray-800 border-gray-600 rounded focus:ring-blue-500 focus:ring-2"
+                    onChange={(checked) => updateField('isRecurring', checked)}
+                    label="Gasto Recurrente"
+                    description="Se repite según una frecuencia"
+                    icon={Repeat}
+                    color="blue"
                   />
-                  <label htmlFor="isRecurring" className="text-sm font-medium text-gray-300 flex items-center gap-2">
-                    <Repeat className="w-4 h-4" />
-                    Gasto Recurrente
-                  </label>
                 </div>
 
                 {formData.isRecurring && (
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-4 bg-blue-500/5 border border-blue-500/20 rounded-lg">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 rounded-xl border border-white/[0.08] bg-white/[0.02] p-4">
                     {/* Frecuencia */}
                     <div>
                       <label className="block text-sm font-medium text-gray-300 mb-2">
@@ -287,7 +313,7 @@ export const ExpenseModal = ({
                       <select
                         value={formData.recurringConfig.frequency}
                         onChange={(e) => updateRecurringConfig('frequency', e.target.value)}
-                        className="glassmorphism-select w-full shadow-xl shadow-blue-500/20"
+                        className="glassmorphism-select w-full shadow-xl shadow-soft"
                       >
                         {frequencies.map((freq) => (
                           <option key={freq.value} value={freq.value}>
@@ -307,7 +333,7 @@ export const ExpenseModal = ({
                         min="1"
                         value={formData.recurringConfig.interval}
                         onChange={(e) => updateRecurringConfig('interval', parseInt(e.target.value))}
-                        className="glassmorphism-input w-full shadow-xl shadow-blue-500/20"
+                        className="glassmorphism-input w-full shadow-xl shadow-soft"
                       />
                     </div>
 
@@ -320,7 +346,7 @@ export const ExpenseModal = ({
                         type="date"
                         value={formData.recurringConfig.endDate}
                         onChange={(e) => updateRecurringConfig('endDate', e.target.value)}
-                        className="glassmorphism-input w-full shadow-xl shadow-blue-500/20"
+                        className="glassmorphism-input w-full shadow-xl shadow-soft"
                       />
                     </div>
 
@@ -333,7 +359,7 @@ export const ExpenseModal = ({
                         <select
                           value={formData.recurringConfig.dayOfWeek}
                           onChange={(e) => updateRecurringConfig('dayOfWeek', e.target.value)}
-                          className={`glassmorphism-select w-full shadow-xl shadow-blue-500/20 ${
+                          className={`glassmorphism-select w-full shadow-xl shadow-soft ${
                             errors.dayOfWeek ? 'border-red-500/50' : ''
                           }`}
                         >
@@ -363,7 +389,7 @@ export const ExpenseModal = ({
                         <select
                           value={formData.recurringConfig.dayOfMonth}
                           onChange={(e) => updateRecurringConfig('dayOfMonth', e.target.value)}
-                          className={`glassmorphism-select w-full shadow-xl shadow-blue-500/20 ${
+                          className={`glassmorphism-select w-full shadow-xl shadow-soft ${
                             errors.dayOfMonth ? 'border-red-500/50' : ''
                           }`}
                         >
@@ -385,45 +411,13 @@ export const ExpenseModal = ({
                   </div>
                 )}
               </div>
-
-              {/* Botones de acción */}
-              <div className="flex justify-end gap-3 pt-6 border-t border-white/10">
-                <button
-                  type="button"
-                  onClick={onClose}
-                  className="px-6 py-2 bg-gray-600/20 hover:bg-gray-600/30 border border-gray-500/30 rounded-lg text-gray-300 transition-colors"
-                >
-                  Cancelar
-                </button>
-                
-                <GradientButton
-                  type="submit"
-                  variant="primary"
-                  size="md"
-                  disabled={loading}
-                  className="shadow-xl shadow-blue-500/20"
-                >
-                  <div className="flex items-center gap-2">
-                    {loading ? (
-                      <div className="animate-spin rounded-full h-4 w-4 border-t-2 border-b-2 border-white"></div>
-                    ) : (
-                      <Save className="w-4 h-4" />
-                    )}
-                    <span>{expense ? 'Actualizar' : 'Crear'} Gasto</span>
-                  </div>
-                </GradientButton>
-              </div>
             </form>
-          </div>
-        </div>
-      </div>
-    </div>
+    </Modal>
   );
 };
 
-/**
- * Lista de gastos recurrentes con controles
- */
+// Lista de gastos recurrentes con controles para activar, editar y eliminar.
+// Recibe los gastos y callbacks de acción; muestra esqueleto o estado vacío si aplica.
 export const RecurringExpensesList = ({
   expenses,
   onEdit,
@@ -434,6 +428,7 @@ export const RecurringExpensesList = ({
   loading = false,
   className = ''
 }) => {
+  // Describe la frecuencia con su intervalo ('cada 2 semanas', etc.).
   const getFrequencyText = (config) => {
     const freqMap = {
       daily: 'diario',
@@ -446,6 +441,7 @@ export const RecurringExpensesList = ({
     return config.interval === 1 ? freq : `cada ${config.interval} ${freq}`;
   };
 
+  // Indica el día concreto de la recurrencia semanal o mensual.
   const getDayText = (config) => {
     if (config.frequency === 'weekly' && config.dayOfWeek !== null) {
       const days = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
@@ -459,6 +455,7 @@ export const RecurringExpensesList = ({
     return '';
   };
 
+  // Esqueleto de carga de la lista.
   if (loading) {
     return (
       <div className={`space-y-4 ${className}`}>
@@ -469,6 +466,7 @@ export const RecurringExpensesList = ({
     );
   }
 
+  // Estado vacío cuando no hay gastos recurrentes.
   if (expenses.length === 0) {
     return (
       <div className={`text-center py-8 ${className}`}>
@@ -478,12 +476,13 @@ export const RecurringExpensesList = ({
     );
   }
 
+  // Vista: tarjetas de cada gasto con monto, frecuencia y acciones.
   return (
     <div className={`space-y-4 ${className}`}>
       {expenses.map((expense) => (
         <div
           key={expense._id}
-          className="group relative bg-white/5 border border-white/10 rounded-lg p-4 backdrop-blur-sm shadow-xl shadow-blue-500/20 hover:bg-white/10 transition-all duration-300 overflow-hidden"
+          className="group relative bg-white/5 border border-white/10 rounded-lg p-4 backdrop-blur-sm shadow-xl shadow-soft hover:bg-white/10 transition-all duration-300 overflow-hidden"
         >
           {/* Efecto de brillo */}
           <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/[2.5%] to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-1000 ease-out rounded-lg"></div>
@@ -491,10 +490,10 @@ export const RecurringExpensesList = ({
           <div className="relative flex items-center justify-between">
             <div className="flex-1">
               <div className="flex items-center gap-3 mb-2">
-                <h4 className="font-semibold text-white">{expense.description}</h4>
+                <h4 className="font-semibold text-amber-200">{expense.description}</h4>
                 <span className={`px-2 py-1 rounded-full text-xs font-medium ${
                   expense.recurringConfig.isActive
-                    ? 'bg-green-500/20 text-green-300 border border-green-500/30'
+                    ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
                     : 'bg-gray-500/20 text-gray-300 border border-gray-500/30'
                 }`}>
                   {expense.recurringConfig.isActive ? 'Activo' : 'Inactivo'}
@@ -519,8 +518,8 @@ export const RecurringExpensesList = ({
                 onClick={() => onToggle(expense._id, !expense.recurringConfig.isActive)}
                 className={`p-2 rounded-lg border transition-colors ${
                   expense.recurringConfig.isActive
-                    ? 'bg-yellow-500/20 border-yellow-500/30 text-yellow-400 hover:bg-yellow-500/30'
-                    : 'bg-green-500/20 border-green-500/30 text-green-400 hover:bg-green-500/30'
+                    ? 'bg-amber-500/20 border-amber-500/30 text-amber-400 hover:bg-amber-500/30'
+                    : 'bg-emerald-500/20 border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/30'
                 }`}
                 title={expense.recurringConfig.isActive ? 'Desactivar' : 'Activar'}
               >

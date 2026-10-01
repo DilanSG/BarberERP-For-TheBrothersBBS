@@ -1,5 +1,12 @@
+// Hook de dashboard de barberos: carga los barberos (y usuarios con rol barbero
+// sin perfil), las fechas con datos y sus estadísticas, con caché + batching.
+// Expone estados de carga/filtros, filtros con debounce, reportes diarios y
+// utilidades de diagnóstico de rendimiento.
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
-import { barberService, salesService, appointmentsService } from '../services/api';
+import { api } from '../services/api';
+import { barberService } from '../services/barberService';
+import { salesService } from '../services/salesService';
+import { appointmentsService } from '../services/appointmentsService';
 import { availableDatesService } from '../services/availableDatesService';
 import { useNotification } from '../contexts/NotificationContext';
 import { getCurrentDateColombia } from '../utils/dateUtils';
@@ -17,10 +24,8 @@ const debugLog = (message, ...args) => {
   }
 };
 
-/**
- * Hook optimizado para manejar estad�sticas y datos de barberos
- * INCLUYE: Cache local, batching, debounce, precarga inteligente
- */
+// Hook optimizado para manejar estad�sticas y datos de barberos
+// INCLUYE: Cache local, batching, debounce, precarga inteligente
 export const useBarberStats = () => {
   const { showError, showSuccess } = useNotification();
   
@@ -56,6 +61,12 @@ export const useBarberStats = () => {
   }, [allAvailableDates]);
 
   // Funci�n optimizada para cargar estad�sticas con cache y batching
+  // Carga las estadísticas de todos los barberos para el filtro indicado.
+  // 1) Normaliza dateFilter a filterTypeKey ('Hoy', '7 días', ..., 'General')
+  // 2) Obtiene stats de ventas y citas en batch (2 requests para N barberos)
+  // 3) Delega en batchProcessingService, que aplica caché y lotes
+  // Actualiza `statistics` (General) o `filteredStats` (filtro específico).
+  // Parámetros: barbersData (array de barberos), dateFilter ({ date } o { startDate, endDate }).
   const loadStatistics = useCallback(async (barbersData, dateFilter = {}) => {
     // Verificar que barbersData sea v�lido
     if (!barbersData || !Array.isArray(barbersData) || barbersData.length === 0) {
@@ -112,35 +123,78 @@ export const useBarberStats = () => {
     logger.debug('?? endDate:', endDate);
     logger.debug('?????? ============================================');
 
-    // Funci�n para fetch individual de barbero
+    // Query params compartidos (fecha o rango)
+    const queryParams = {};
+    if (dateFilter.date) {
+      queryParams.date = dateFilter.date;
+    } else if (dateFilter.startDate && dateFilter.endDate) {
+      queryParams.startDate = dateFilter.startDate;
+      queryParams.endDate = dateFilter.endDate;
+    }
+
+    // Carga batch: 2 peticiones para todos los barberos (evita 2×N requests).
+    // Excluye los "barberos" que en realidad son usuarios sin perfil (_fromUser)
+    // porque no tienen ventas/citas registradas.
+    const realBarberIds = (barbersData || [])
+      .filter((barber) => barber?._id && !barber._fromUser)
+      .map((barber) => barber._id);
+
+    let batchSales = {};
+    let batchAppointments = {};
+
+    // Stats de ventas y citas de todos los barberos en paralelo (batch)
+    if (realBarberIds.length > 0) {
+      try {
+        const [salesBatchRes, appointmentsBatchRes] = await Promise.all([
+          salesService.getBarbersSalesStats(realBarberIds, queryParams),
+          appointmentsService.getBarbersAppointmentStats(realBarberIds, queryParams)
+        ]);
+        batchSales = salesBatchRes?.data || {};
+        batchAppointments = appointmentsBatchRes?.data || {};
+        debugLog(`📊 Stats batch: ${Object.keys(batchSales).length} barberos con ventas, ${Object.keys(batchAppointments).length} con citas`);
+      } catch (batchError) {
+        console.error('❌ Error cargando stats batch:', batchError);
+      }
+    }
+
+    // Normaliza la respuesta del batch al shape interno del hook.
+    // Usuarios sin perfil devuelven todo en cero; ante datos incompletos se
+    // aplica validación defensiva (arrays vacíos y totales en 0).
+    // Función para fetch individual de barbero
     const fetchBarberData = async (barber) => {
       const barberId = barber._id;
       const barberName = barber.user?.name || barberId;
       
+      // Usuario con rol barbero sin perfil de barbero: no tiene ventas/citas registradas
+      if (barber._fromUser) {
+        debugLog(`ℹ️ ${barberName} sin perfil de barbero, stats vacías`);
+        return {
+          salesArray: [],
+          appointmentsArray: [],
+          walkInsArray: [],
+          sales: { total: 0, count: 0, totalQuantity: 0 },
+          appointments: { total: 0, completed: 0, count: 0 },
+          cortes: { total: 0, count: 0, totalQuantity: 0 },
+          totals: {
+            sales: 0,
+            appointments: 0,
+            walkIns: 0,
+            salesCount: 0,
+            appointmentsCount: 0,
+            walkInsCount: 0
+          }
+        };
+      }
+      
       try {
-        const queryParams = {};
-        if (dateFilter.date) {
-          queryParams.date = dateFilter.date;
-          logger.debug('?? QueryParams (Hoy):', queryParams);
-        } else if (dateFilter.startDate && dateFilter.endDate) {
-          queryParams.startDate = dateFilter.startDate;
-          queryParams.endDate = dateFilter.endDate;
-          logger.debug('?????? ============================================');
-          logger.debug('?? QueryParams (RANGO) para', barberName);
-          logger.debug('?? startDate:', queryParams.startDate);
-          logger.debug('?? endDate:', queryParams.endDate);
-          logger.debug('?? QueryParams completo:', JSON.stringify(queryParams, null, 2));
-          logger.debug('?????? ============================================');
-        } else {
-          logger.debug('?? QueryParams (General - SIN FILTRO):', queryParams);
-        }
+        debugLog(`📊 Usando stats batch para ${barberName}`);
 
-        debugLog(`?? Fetching para ${barberName}:`, queryParams);
-
-        const [salesResponse, appointmentsResponse] = await Promise.all([
-          salesService.getBarberSalesStats(barberId, queryParams),
-          appointmentsService.getBarberAppointmentStats(barberId, queryParams)
-        ]);
+        const salesResponse = {
+          data: batchSales[barberId] || { ventas: [], cortes: [], total: 0, count: 0, totalQuantity: 0, averageSale: 0 }
+        };
+        const appointmentsResponse = {
+          data: batchAppointments[barberId] || { completed: 0, total: 0, revenue: 0, cancelled: 0, pending: 0 }
+        };
 
         // 🔍 DEBUG: Ver respuestas crudas de la API
         console.log(`🔍 [${barberName}] salesResponse:`, JSON.stringify(salesResponse, null, 2));
@@ -288,6 +342,8 @@ export const useBarberStats = () => {
   }, [showError, showSuccess]);
 
   // Funci�n debounced para aplicar filtros
+  // Envuelve applyFilter con 300ms de debounce para agrupar cambios rápidos
+  // de filtro y evitar ráfagas de peticiones.
   const applyFilterDebounced = useCallback((type, date, barbersOverride = null, customStartDate = null) => {
     if (debounceTimeoutRef.current) {
       clearTimeout(debounceTimeoutRef.current);
@@ -299,6 +355,10 @@ export const useBarberStats = () => {
   }, []);
 
   // Funci�n principal para aplicar filtros
+  // Construye el dateFilter según el tipo de filtro y recarga las estadísticas.
+  // 'Hoy' usa una sola fecha; 'Personalizado' usa customStartDate + date;
+  // '7/15/30 días' calcula el rango hacia atrás desde `date`.
+  // Devuelve una función debounced al exterior (applyFilterDebounced).
   const applyFilter = async (type, date, barbersOverride = null, customStartDate = null) => {
     logger.debug('?????? ============================================');
     logger.debug('???? [useBarberStats] INICIO applyFilter');
@@ -342,6 +402,7 @@ export const useBarberStats = () => {
         logger.debug('?????? ============================================');
       } else if (type !== 'General' && date) {
         logger.debug('?? Configurando filtro de rango predefinido:', type);
+        // El rango termina en `date` y empieza N-1 días antes (7, 15 o 30 días)
         const endDate = new Date(date + 'T12:00:00');
         const startDate = new Date(endDate);
         
@@ -389,6 +450,11 @@ export const useBarberStats = () => {
   };
 
   // Cargar datos iniciales
+  // Carga inicial del hook (se ejecuta al montar):
+  // - barberos, usuarios y fechas disponibles en paralelo
+  // - timeout de seguridad de 45s para no dejar el spinner colgado
+  // - añade usuarios con rol barbero sin perfil (marcados _fromUser)
+  // - carga estadísticas generales (sin filtro de fecha)
   const loadData = async () => {
     setLoading(true);
     setError('');
@@ -399,39 +465,74 @@ export const useBarberStats = () => {
       setLoading(false);
       
       setError('La carga de datos tardó demasiado tiempo');
-    }, 20000);
+    }, 45000);
 
     try {
       debugLog('?? Cargando datos iniciales...');
       
-      // Cargar barberos y fechas disponibles en paralelo
-      const [barbersResponse, datesResponse] = await Promise.all([
+      // Cargar barberos, usuarios con rol barbero, y fechas disponibles en paralelo
+      const [barbersResponse, usersResponse, datesResponse] = await Promise.all([
         barberService.getAllBarbers(),
+        api.get('/users', true, 300000).catch(() => ({ data: [] })),
         availableDatesService.getAllAvailableDates()
       ]);
 
-      // Validaci�n defensiva: asegurar que barbersData sea un array
+      // Validación defensiva: asegurar que barbersData sea un array
       let barbersData = barbersResponse.data || [];
       if (!Array.isArray(barbersData)) {
-        // Si data es un objeto con una propiedad que contiene el array (ej: { barbers: [...] })
         barbersData = barbersData.barbers || barbersData.data || [];
       }
-      // Si a�n no es array, usar array vac�o
       if (!Array.isArray(barbersData)) {
-        debugLog('?? barbersResponse.data NO es array:', barbersData);
         barbersData = [];
       }
+
+      // Obtener usuarios con rol barbero que no tengan perfil de barbero
+      let usersData = usersResponse.data || [];
+      if (!Array.isArray(usersData)) {
+        usersData = usersData.data || usersData.users || [];
+      }
+      if (!Array.isArray(usersData)) {
+        usersData = [];
+      }
+
+      const barberUserIds = new Set(
+        barbersData
+          .filter(b => b.user?._id || b.user)
+          .map(b => typeof b.user === 'object' ? b.user._id : b.user)
+      );
+
+      const barbersFromUsers = usersData
+        .filter(u => u.role === 'barber' && u.isActive !== false && !barberUserIds.has(u._id))
+        .map(u => ({
+          _id: u._id,
+          user: {
+            _id: u._id,
+            name: u.name,
+            email: u.email,
+            phone: u.phone,
+            profilePicture: u.profilePicture,
+            role: u.role,
+            isActive: u.isActive
+          },
+          specialty: 'Barbero',
+          isActive: u.isActive !== false,
+          isMainBarber: false,
+          services: [],
+          _fromUser: true
+        }));
+
+      const mergedBarbers = [...barbersData, ...barbersFromUsers];
       
       const datesData = datesResponse; // El servicio devuelve directamente el array, no .data
       
       debugLog('?? FECHAS RECIBIDAS:', { datesResponse, datesData: datesData?.length || 0 });
 
-      setBarbers(barbersData);
+      setBarbers(mergedBarbers);
       setAllAvailableDates(datesData);
 
-      if (barbersData.length > 0) {
-        // Cargar estad�sticas generales (sin filtro de fecha)
-        await loadStatistics(barbersData);
+      if (mergedBarbers.length > 0) {
+        // Cargar estadísticas generales (sin filtro de fecha)
+        await loadStatistics(mergedBarbers);
 
         // PRECARGA DESACTIVADA TEMPORALMENTE para evitar rate limiting
         // setTimeout(() => {
@@ -467,6 +568,8 @@ export const useBarberStats = () => {
   };
 
   // Funci�n para generar reportes
+  // Genera el reporte diario de un barbero (hoy por defecto) y lo guarda en
+  // reportData; devuelve true/false según el resultado.
   const generateReport = async (barberId, date = null) => {
     setLoadingReport(true);
     setSelectedBarber(barberId);
@@ -501,12 +604,14 @@ export const useBarberStats = () => {
   };
 
   // Funci�n para limpiar cache
+  // Vacía la caché local del dashboard y notifica al usuario
   const clearCache = useCallback(() => {
     cacheService.clear();
     showSuccess('Cache limpiado');
   }, [showSuccess]);
 
   // Funci�n para obtener estad�sticas de rendimiento
+  // Devuelve métricas de caché y de procesamiento por lotes para diagnóstico
   const getPerformanceStats = useCallback(() => {
     return {
       cache: cacheService.getStats(),
@@ -515,6 +620,7 @@ export const useBarberStats = () => {
   }, []);
 
   // Inicializar datos al montar el hook
+  // Carga inicial al montar; cancela el debounce pendiente al desmontar
   useEffect(() => {
     loadData();
     

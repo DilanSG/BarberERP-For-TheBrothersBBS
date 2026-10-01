@@ -1,6 +1,5 @@
 import React from 'react';
 import { 
-  X, 
   TrendingDown, 
   Calendar, 
   DollarSign,
@@ -8,15 +7,15 @@ import {
   CreditCard,
   ArrowDownRight,
   AlertTriangle,
-  RotateCcw
+  RotateCcw,
+  Receipt
 } from 'lucide-react';
-import useBodyScrollLock from '../../hooks/useBodyScrollLock';
+import Modal from '../ui/Modal';
 import { calculator as RecurringExpenseCalculator } from '../../recurring-expenses';
 import { getCategoryLabel } from '../../utils/categoryTranslations';
 
-/**
- * Modal para mostrar desglose detallado de gastos con lógica de filtros
- */
+// Modal de desglose de gastos por categoría, separando recurrentes y únicos.
+// En modo general usa totales proyectados; en modo específico calcula localmente.
 export const ExpensesBreakdownModal = ({ 
   isOpen, 
   onClose, 
@@ -29,18 +28,18 @@ export const ExpensesBreakdownModal = ({
   paymentMethods = [],
   salesData = [] // Agregar datos de ventas
 }) => {
-  // Bloquear scroll del body usando hook personalizado
-  useBodyScrollLock(isOpen);
-
   // Helper para identificar tipos recurrentes en el nuevo esquema
+  // Considera recurrentes los tipos 'recurring', 'recurring-template' y 'recurring-instance'.
   const isRecurringType = (type) => ['recurring', 'recurring-template', 'recurring-instance'].includes(type);
   
   // Función auxiliar para calcular monto diario con ajustes usando el calculador
+  // Monto diario de un template recurrente aplicando sus ajustes.
   const calculateDailyAmountWithAdjustments = (template, date) => {
     return RecurringExpenseCalculator.getDailyAdjustedAmount(template, date);
   };
   
   // Función para formatear la frecuencia de gastos recurrentes
+  // Convierte la configuración de frecuencia a texto legible.
   const formatFrequency = (frequency) => {
     if (!frequency) return 'Recurrente';
     
@@ -64,11 +63,14 @@ export const ExpensesBreakdownModal = ({
     return 'Recurrente';
   };
 
+  // No renderiza si el modal está cerrado.
   if (!isOpen) return null;
 
+  // Resumen financiero recibido desde el dashboard.
   const { summary } = data || {};
   
   // Determinar si es un filtro general o específico
+  // Detecta el filtro general (rango por defecto desde 2020 hasta 2025 o más).
   const isGeneralFilter = dateRange?.startDate === '2020-01-01' && 
                          new Date(dateRange?.endDate).getFullYear() >= 2025;
   
@@ -93,11 +95,13 @@ export const ExpensesBreakdownModal = ({
     console.log('  - Summary Total:', summary?.totalExpenses);
   }
   
+  // Acumuladores de totales y agrupación por categoría.
   let finalOneTimeTotal = 0;
   let finalRecurringTotal = 0;
   let expensesByCategory = {};
   let totalExpenses = summary?.totalExpenses || 0;
   
+  // Modo GENERAL: usa los totales proyectados del backend y los templates.
   if (isGeneralFilter) {
     // ========================================
     // MODO GENERAL: Usar totales del backend directamente
@@ -105,9 +109,11 @@ export const ExpensesBreakdownModal = ({
     // MODO GENERAL: Mostrando totales reales del backend
     
     // ✅ MODO GENERAL: Usar misma lógica que las tarjetas exitosas
+    // Gastos únicos del período.
     const allOneTimeExpenses = (expenses || []).filter(expense => expense.type === 'one-time');
     
     // Para gastos recurrentes, usar templates y calcular mensual
+    // Templates recurrentes, o lista vacía si no se reciben.
     const recurringTemplates = Array.isArray(recurringExpenses) && recurringExpenses.length > 0
       ? recurringExpenses
       : [];
@@ -119,6 +125,7 @@ export const ExpensesBreakdownModal = ({
     );
     
     finalOneTimeTotal = allOneTimeExpenses.reduce((sum, e) => sum + (e.amount || 0), 0);
+    // Suma el monto mensual de los recurrentes activos.
     finalRecurringTotal = activeRecurringExpenses.reduce((sum, exp) => {
       try {
         return sum + RecurringExpenseCalculator.calculateMonthlyAmount(exp);
@@ -131,6 +138,7 @@ export const ExpensesBreakdownModal = ({
     // Totales calculados: One-time y Recurring
     
     // Procesar gastos one-time
+    // Agrupa los gastos únicos por categoría.
     allOneTimeExpenses.forEach(expense => {
       const category = expense.category || 'sin-categoria';
       if (!expensesByCategory[category]) {
@@ -153,6 +161,7 @@ export const ExpensesBreakdownModal = ({
     });
     
     // Procesar gastos recurrentes usando templates y cálculo mensual
+    // Agrupa los recurrentes por categoría usando su monto mensual.
     activeRecurringExpenses.forEach(template => {
       const category = template.category || 'sin-categoria';
       if (!expensesByCategory[category]) {
@@ -177,6 +186,7 @@ export const ExpensesBreakdownModal = ({
       });
     });
     
+  // Modo ESPECÍFICO: calcula los totales localmente mes a mes.
   } else {
     // ========================================
     // MODO ESPECÍFICO: Usar total recurrente autorizado del summary (evitar sobre proyección)
@@ -189,7 +199,7 @@ export const ExpensesBreakdownModal = ({
       : (expenses || []).filter(e => isRecurringType(e.type));
 
     if (recurringTemplates.length === 0) {
-      // No hay templates recurrentes explícitos
+    // No hay templates recurrentes explícitos
     }
 
     // ✅ CALCULAR GASTOS RECURRENTES CORRECTAMENTE
@@ -220,6 +230,7 @@ export const ExpensesBreakdownModal = ({
     });
 
     // Construir categorías para gastos one-time reales
+    // Agrupa los gastos únicos reales del rango por categoría.
     pureOneTimeExpenses.forEach(expense => {
       const category = expense.category || 'sin-categoria';
       if (!expensesByCategory[category]) {
@@ -245,6 +256,7 @@ export const ExpensesBreakdownModal = ({
         activeCount: activeRecurringExpenses.length, 
         finalRecurringTotal 
       });
+      // Distribuye los recurrentes activos por categoría con su valor mensual.
       activeRecurringExpenses.forEach(template => {
         const category = template.category || 'sin-categoria';
         if (!expensesByCategory[category]) {
@@ -269,6 +281,7 @@ export const ExpensesBreakdownModal = ({
           note: 'Valor mensual completo'
         });
       });
+    // Sin templates disponibles: crea una categoría sintética con el total recurrente.
     } else if (finalRecurringTotal > 0 && activeRecurringExpenses.length === 0) {
       // No tenemos desglose por categoría, crear categoría sintética
       expensesByCategory['recurrentes'] = {
@@ -288,10 +301,11 @@ export const ExpensesBreakdownModal = ({
       };
     }
 
-    // Totales calculados: One-time y Recurring
+  // Totales calculados: One-time y Recurring
   }
 
   // Calcular el total real basado en lo que calculó el modal
+  // Total calculado del modal (único + recurrente).
   const calculatedTotal = finalOneTimeTotal + finalRecurringTotal;
   console.log(`💰 RESUMEN FINAL:`);
   console.log(`  - One-time: $${finalOneTimeTotal.toLocaleString()}`);
@@ -300,6 +314,7 @@ export const ExpensesBreakdownModal = ({
   console.log(`  - Total del backend: $${totalExpenses.toLocaleString()}`);
 
   // Convertir a array y ordenar por total
+  // Desglose ordenado por categoría con su porcentaje sobre el total.
   const categoryBreakdown = Object.entries(expensesByCategory)
     .map(([category, data]) => ({
       category,
@@ -312,6 +327,7 @@ export const ExpensesBreakdownModal = ({
   // const getCategoryName = ... REMOVIDO - usar getCategoryLabel importado
 
   // Obtener icono de categoría
+  // Icono asociado a cada categoría de gasto.
   const getCategoryIcon = (categoryId) => {
     const iconMap = {
       'rent': ArrowDownRight,
@@ -333,204 +349,194 @@ export const ExpensesBreakdownModal = ({
     return iconMap[categoryId] || Tag;
   };
 
+  // Vista: tarjetas resumen y desglose por categoría con sus gastos.
   return (
-    <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-[9999] p-4 sm:p-6 lg:p-8">
-      <div className="relative w-full max-w-sm sm:max-w-md lg:max-w-3xl mx-auto h-[90vh] sm:h-[85vh] lg:h-[80vh] flex flex-col">
-        <div className="relative bg-red-500/5 backdrop-blur-md border border-red-500/20 rounded-2xl shadow-2xl shadow-red-500/20 h-full flex flex-col overflow-hidden">
-          {/* Header fijo */}
-          <div className="relative z-10 flex-shrink-0 p-4 sm:p-6 border-b border-red-500/20">
-            <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center gap-2 sm:gap-3">
-                <div className="p-1.5 sm:p-2 rounded-lg bg-red-500/20 border border-red-500/30">
-                  <TrendingDown className="w-4 h-4 sm:w-5 sm:h-5 text-red-400" />
-                </div>
-                <div>
-                  <h3 className="text-base sm:text-lg font-semibold text-white">
-                    Desglose de Gastos {isGeneralFilter ? '(General)' : '(Específico)'}
-                  </h3>
-                  <p className="text-xs sm:text-sm text-red-300">
-                    {dateRange ? `${dateRange.startDate} - ${dateRange.endDate}` : 'Período seleccionado'}
-                  </p>
-                </div>
-              </div>
-              <button 
-                onClick={onClose}
-                className="p-1 text-gray-400 hover:text-white transition-colors duration-200"
-              >
-                <X className="w-4 h-4 sm:w-5 sm:h-5" />
-              </button>
-            </div>
-
-            {/* Resumen total */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3">
-              <div className="p-2 sm:p-3 bg-red-500/10 border border-red-500/30 rounded-lg">
-                <p className="text-xs text-red-300 mb-1">Total gastos</p>
-                <p className="text-xs sm:text-sm font-bold text-red-400">{formatCurrency(calculatedTotal)}</p>
-              </div>
-              <div className="p-2 sm:p-3 bg-orange-500/10 border border-orange-500/30 rounded-lg">
-                <div className="flex items-center gap-1 mb-1">
-                  <RotateCcw className="w-3 h-3 text-orange-300" />
-                  <p className="text-xs text-orange-300">Recurrentes</p>
-                </div>
-                <p className="text-xs sm:text-sm font-bold text-orange-400">{formatCurrency(finalRecurringTotal)}</p>
-              </div>
-              <div className="p-2 sm:p-3 bg-blue-500/10 border border-blue-500/30 rounded-lg">
-                <p className="text-xs text-blue-300 mb-1">Una vez</p>
-                <p className="text-xs sm:text-sm font-bold text-blue-400">{formatCurrency(finalOneTimeTotal)}</p>
-              </div>
-              <div className="p-2 sm:p-3 bg-green-500/10 border border-green-500/30 rounded-lg">
-                <p className="text-xs text-gray-300 mb-1">Categorías</p>
-                <p className="text-xs sm:text-sm font-bold text-white">{categoryBreakdown.length}</p>
-              </div>
-            </div>
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      color="amber"
+      title={`Desglose de Gastos ${isGeneralFilter ? '(General)' : '(Específico)'}`}
+      subtitle={dateRange ? `${dateRange.startDate} - ${dateRange.endDate}` : 'Período seleccionado'}
+      icon={Receipt}
+      size="3xl"
+      footer={
+        <div className="flex justify-end">
+          <button
+            onClick={onClose}
+            className="px-4 py-2.5 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.08] text-gray-300 hover:text-white text-sm font-medium transition-colors"
+          >
+            Cerrar
+          </button>
+        </div>
+      }
+    >
+      {/* Resumen total */}
+      <div className="mb-4 grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3">
+        <div className="p-2 sm:p-3 bg-amber-500/10 border border-amber-500/30 rounded-lg">
+          <p className="text-xs text-amber-300 mb-1">Total gastos</p>
+          <p className="text-xs sm:text-sm font-bold text-amber-400">{formatCurrency(calculatedTotal)}</p>
+        </div>
+        <div className="p-2 sm:p-3 bg-amber-500/10 border border-amber-500/30 rounded-lg">
+          <div className="flex items-center gap-1 mb-1">
+            <RotateCcw className="w-3 h-3 text-amber-300" />
+            <p className="text-xs text-amber-300">Recurrentes</p>
           </div>
+          <p className="text-xs sm:text-sm font-bold text-amber-400">{formatCurrency(finalRecurringTotal)}</p>
+        </div>
+        <div className="p-2 sm:p-3 bg-blue-500/10 border border-blue-500/30 rounded-lg">
+          <p className="text-xs text-blue-300 mb-1">Una vez</p>
+          <p className="text-xs sm:text-sm font-bold text-blue-400">{formatCurrency(finalOneTimeTotal)}</p>
+        </div>
+        <div className="p-2 sm:p-3 bg-emerald-500/10 border border-emerald-500/30 rounded-lg">
+          <p className="text-xs text-gray-300 mb-1">Categorías</p>
+          <p className="text-xs sm:text-sm font-bold text-amber-300">{categoryBreakdown.length}</p>
+        </div>
+      </div>
 
-          {/* Contenido scrolleable */}
-          <div className="flex-1 overflow-y-auto overflow-x-hidden custom-scrollbar px-4 sm:px-6 pb-4 sm:pb-6">
-            {categoryBreakdown.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-8 text-center">
-                <div className="p-4 rounded-full bg-red-500/10 border border-red-500/20 mb-4">
-                  <TrendingDown className="w-8 h-8 text-red-400" />
+      {/* Contenido */}
+      {categoryBreakdown.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-8 text-center">
+          <div className="p-4 rounded-full bg-amber-500/10 border border-amber-500/20 mb-4">
+            <TrendingDown className="w-8 h-8 text-amber-400" />
+          </div>
+          <p className="text-gray-400">No hay gastos registrados en este período</p>
+        </div>
+      ) : (
+        <div className="space-y-4">
+          {categoryBreakdown.map((categoryData, index) => {
+            // Icono y banderas de recurrencia y de gasto único de la categoría.
+            const IconComponent = getCategoryIcon(categoryData.category);
+            const hasRecurring = categoryData.recurringTotal > 0;
+            const hasOneTime = categoryData.oneTimeTotal > 0;
+            
+            return (
+              <div key={index} className="space-y-3">
+                {/* Encabezado de categoría */}
+                <div className="p-4 bg-amber-500/5 border border-amber-500/20 rounded-xl hover:scale-[1.02] transition-all duration-300">
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-3">
+                      <div className="p-2 rounded-lg bg-amber-500/20 border border-amber-500/30">
+                        <IconComponent className="w-4 h-4 sm:w-5 sm:h-5 text-amber-400" />
+                      </div>
+                      <div>
+                        <h4 className="font-medium text-amber-200 text-sm sm:text-base">
+                          {getCategoryLabel(categoryData.category)} {/* ✅ Usar función centralizada */}
+                        </h4>
+                        <p className="text-xs text-gray-400">
+                          {categoryData.count} gasto{categoryData.count !== 1 ? 's' : ''}
+                          {hasRecurring && hasOneTime && ' (mixtos)'}
+                          {hasRecurring && !hasOneTime && ' (recurrentes)'}
+                          {hasOneTime && !hasRecurring && ' (únicos)'}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-lg font-bold text-amber-400">
+                        {formatCurrency(categoryData.total)}
+                      </p>
+                      <p className="text-xs text-gray-400">
+                        {categoryData.percentage.toFixed(1)}% del total
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Barra de progreso */}
+                  <div className="w-full bg-gray-700 rounded-full h-2">
+                    <div 
+                      className="h-2 rounded-full bg-amber-400"
+                      style={{ width: `${Math.min(categoryData.percentage, 100)}%` }}
+                    ></div>
+                  </div>
                 </div>
-                <p className="text-gray-400">No hay gastos registrados en este período</p>
-              </div>
-            ) : (
-              <div className="space-y-4 pt-4">
-                {categoryBreakdown.map((categoryData, index) => {
-                  const IconComponent = getCategoryIcon(categoryData.category);
-                  const hasRecurring = categoryData.recurringTotal > 0;
-                  const hasOneTime = categoryData.oneTimeTotal > 0;
-                  
-                  return (
-                    <div key={index} className="space-y-3">
-                      {/* Encabezado de categoría */}
-                      <div className="p-4 bg-red-500/5 border border-red-500/20 rounded-xl hover:scale-[1.02] transition-all duration-300">
-                        <div className="flex items-center justify-between mb-3">
-                          <div className="flex items-center gap-3">
-                            <div className="p-2 rounded-lg bg-red-500/20 border border-red-500/30">
-                              <IconComponent className="w-4 h-4 sm:w-5 sm:h-5 text-red-400" />
-                            </div>
+
+                {/* Lista de gastos de la categoría */}
+                <div className="ml-4 space-y-2">
+                  {categoryData.expenses.slice(0, 3).map((expense, expenseIndex) => {
+                    const isRecurring = expense.displayType === 'recurring';
+                    // Monto a mostrar: proyectado mensual para recurrentes, directo para únicos.
+                    const displayAmount = isRecurring ? 
+                      (expense.projectedAmount || expense.instancesTotal || expense.amount) : 
+                      expense.amount;
+                    
+                    return (
+                      <div key={expenseIndex} className={`p-3 border rounded-lg hover:scale-[1.01] transition-all duration-300 ${
+                        isRecurring 
+                          ? 'bg-amber-500/5 border-amber-500/10 hover:bg-amber-500/10' 
+                          : 'bg-white/[0.02] border-white/[0.08] hover:bg-white/[0.04]'
+                      }`}>
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <div className={`w-2 h-2 rounded-full ${
+                              isRecurring ? 'bg-amber-400' : 'bg-red-400'
+                            }`}></div>
                             <div>
-                              <h4 className="font-medium text-white text-sm sm:text-base">
-                                {getCategoryLabel(categoryData.category)} {/* ✅ Usar función centralizada */}
-                              </h4>
+                              <div className="flex items-center gap-2">
+                                <p className="text-sm text-amber-200 font-medium">
+                                  {expense.description || 'Sin descripción'}
+                                </p>
+                                {isRecurring && (
+                                  <div className="flex items-center gap-1 px-1.5 py-0.5 bg-amber-500/20 border border-amber-500/40 rounded text-xs">
+                                    <RotateCcw className="w-2.5 h-2.5 text-amber-300" />
+                                    <span className="text-amber-300">
+                                      {formatFrequency(expense.recurringConfig)}
+                                    </span>
+                                  </div>
+                                )}
+                              </div>
                               <p className="text-xs text-gray-400">
-                                {categoryData.count} gasto{categoryData.count !== 1 ? 's' : ''}
-                                {hasRecurring && hasOneTime && ' (mixtos)'}
-                                {hasRecurring && !hasOneTime && ' (recurrentes)'}
-                                {hasOneTime && !hasRecurring && ' (únicos)'}
+                                {new Date(expense.date).toLocaleDateString('es-ES', {
+                                  day: '2-digit',
+                                  month: 'short',
+                                  year: 'numeric'
+                                })}
+                                {isRecurring && expense.workedDaysCount && (
+                                  <span className="ml-2 text-amber-300">
+                                    • {expense.workedDaysCount} días trabajados
+                                  </span>
+                                )}
+                                {isRecurring && expense.instancesCount && (
+                                  <span className="ml-2 text-amber-300">
+                                    • {expense.instancesCount} instancia{expense.instancesCount !== 1 ? 's' : ''}
+                                  </span>
+                                )}
                               </p>
                             </div>
                           </div>
                           <div className="text-right">
-                            <p className="text-lg font-bold text-red-400">
-                              {formatCurrency(categoryData.total)}
-                            </p>
-                            <p className="text-xs text-gray-400">
-                              {categoryData.percentage.toFixed(1)}% del total
-                            </p>
-                          </div>
-                        </div>
-
-                        {/* Barra de progreso */}
-                        <div className="w-full bg-gray-700 rounded-full h-2">
-                          <div 
-                            className="h-2 rounded-full bg-red-400"
-                            style={{ width: `${Math.min(categoryData.percentage, 100)}%` }}
-                          ></div>
-                        </div>
-                      </div>
-
-                      {/* Lista de gastos de la categoría */}
-                      <div className="ml-4 space-y-2">
-                        {categoryData.expenses.slice(0, 3).map((expense, expenseIndex) => {
-                          const isRecurring = expense.displayType === 'recurring';
-                          const displayAmount = isRecurring ? 
-                            (expense.projectedAmount || expense.instancesTotal || expense.amount) : 
-                            expense.amount;
-                          
-                          return (
-                            <div key={expenseIndex} className={`p-3 border rounded-lg hover:scale-[1.01] transition-all duration-300 ${
-                              isRecurring 
-                                ? 'bg-orange-500/5 border-orange-500/10 hover:bg-orange-500/10' 
-                                : 'bg-red-500/5 border-red-500/10 hover:bg-red-500/10'
+                            <p className={`text-sm font-semibold ${
+                              isRecurring ? 'text-amber-400' : 'text-red-400'
                             }`}>
-                              <div className="flex items-center justify-between">
-                                <div className="flex items-center gap-2">
-                                  <div className={`w-2 h-2 rounded-full ${
-                                    isRecurring ? 'bg-orange-400' : 'bg-red-400'
-                                  }`}></div>
-                                  <div>
-                                    <div className="flex items-center gap-2">
-                                      <p className="text-sm text-white font-medium">
-                                        {expense.description || 'Sin descripción'}
-                                      </p>
-                                      {isRecurring && (
-                                        <div className="flex items-center gap-1 px-1.5 py-0.5 bg-orange-500/20 border border-orange-500/40 rounded text-xs">
-                                          <RotateCcw className="w-2.5 h-2.5 text-orange-300" />
-                                          <span className="text-orange-300">
-                                            {formatFrequency(expense.recurringConfig)}
-                                          </span>
-                                        </div>
-                                      )}
-                                    </div>
-                                    <p className="text-xs text-gray-400">
-                                      {new Date(expense.date).toLocaleDateString('es-ES', {
-                                        day: '2-digit',
-                                        month: 'short',
-                                        year: 'numeric'
-                                      })}
-                                      {isRecurring && expense.workedDaysCount && (
-                                        <span className="ml-2 text-orange-300">
-                                          • {expense.workedDaysCount} días trabajados
-                                        </span>
-                                      )}
-                                      {isRecurring && expense.instancesCount && (
-                                        <span className="ml-2 text-orange-300">
-                                          • {expense.instancesCount} instancia{expense.instancesCount !== 1 ? 's' : ''}
-                                        </span>
-                                      )}
-                                    </p>
-                                  </div>
-                                </div>
-                                <div className="text-right">
-                                  <p className={`text-sm font-semibold ${
-                                    isRecurring ? 'text-orange-400' : 'text-red-400'
-                                  }`}>
-                                    {formatCurrency(displayAmount)}
-                                  </p>
-                                  {isRecurring && !isGeneralFilter && (
-                                    <p className="text-xs text-orange-300">
-                                      proyectado
-                                    </p>
-                                  )}
-                                  {isRecurring && isGeneralFilter && (
-                                    <p className="text-xs text-orange-300">
-                                      en período
-                                    </p>
-                                  )}
-                                </div>
-                              </div>
-                            </div>
-                          );
-                        })}
-
-                        {/* Mostrar enlace si hay más gastos */}
-                        {categoryData.expenses.length > 3 && (
-                          <div className="ml-4 px-3 py-2 text-xs text-gray-400 border-l border-gray-600">
-                            +{categoryData.expenses.length - 3} gasto{categoryData.expenses.length - 3 !== 1 ? 's' : ''} más
+                              {formatCurrency(displayAmount)}
+                            </p>
+                            {isRecurring && !isGeneralFilter && (
+                              <p className="text-xs text-amber-300">
+                                proyectado
+                              </p>
+                            )}
+                            {isRecurring && isGeneralFilter && (
+                              <p className="text-xs text-amber-300">
+                                en período
+                              </p>
+                            )}
                           </div>
-                        )}
+                        </div>
                       </div>
+                    );
+                  })}
+
+                  {/* Mostrar enlace si hay más gastos */}
+                  {categoryData.expenses.length > 3 && (
+                    <div className="ml-4 px-3 py-2 text-xs text-gray-400 border-l border-gray-600">
+                      +{categoryData.expenses.length - 3} gasto{categoryData.expenses.length - 3 !== 1 ? 's' : ''} más
                     </div>
-                  );
-                })}
+                  )}
+                </div>
               </div>
-            )}
-          </div>
+            );
+          })}
         </div>
-      </div>
-    </div>
+      )}
+    </Modal>
   );
 };
 

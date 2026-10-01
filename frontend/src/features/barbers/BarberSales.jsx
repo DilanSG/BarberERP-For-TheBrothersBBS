@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect } from 'react';
+﻿import React, { useState, useEffect, useRef } from 'react';
 import { 
   ShoppingCart, 
   Scissors, 
@@ -21,10 +21,14 @@ import {
 import { useAuth } from '@contexts/AuthContext';
 import { useNotification } from '@contexts/NotificationContext';
 import { PageContainer } from '@components/layout/PageContainer';
-import GradientText from '@components/ui/GradientText';
+import { BarberSalesSkeleton, Skeleton } from '@components/ui/Skeleton';
 import RefundSaleModal from '@components/common/RefundSaleModal';
 import InvoiceDataModal from '@components/modals/InvoiceDataModal';
-import { inventoryService, salesService, serviceService, barberService } from '@services/api';
+import Modal from '@components/ui/Modal';
+import { inventoryService } from '@services/inventoryService';
+import { salesService } from '@services/salesService';
+import { serviceService } from '@services/serviceService';
+import { barberService } from '@services/barberService';
 import { useInventoryRefresh } from '@contexts/InventoryContext';
 import { usePaymentMethodsContext } from '@contexts/PaymentMethodsContext';
 import { useNavigate } from 'react-router-dom';
@@ -35,44 +39,14 @@ import {
   PAYMENT_METHOD_LABELS 
 } from '@shared/constants/salesConstants';
 
+import { getPaymentMethodPalette } from '@utils/formatters';
 import logger from '@utils/logger';
 
-// Función para obtener colores por método de pago - Estilo AdminBarbers
-const getPaymentMethodColor = (methodId) => {
-  const colors = {
-    cash: { bg: 'bg-green-500/10', border: 'border-green-500/30', text: 'text-green-300', dot: 'bg-green-400' },
-    efectivo: { bg: 'bg-green-500/10', border: 'border-green-500/30', text: 'text-green-300', dot: 'bg-green-400' }, // Alias para cash
-    nequi: { bg: 'bg-pink-500/10', border: 'border-pink-500/30', text: 'text-pink-300', dot: 'bg-pink-400' },
-    nu: { bg: 'bg-purple-500/10', border: 'border-purple-500/30', text: 'text-purple-300', dot: 'bg-purple-400' },
-    daviplata: { bg: 'bg-red-500/10', border: 'border-red-500/30', text: 'text-red-300', dot: 'bg-red-400' },
-    debit: { bg: 'bg-blue-500/10', border: 'border-blue-500/30', text: 'text-blue-300', dot: 'bg-blue-400' },
-    bancolombia: { bg: 'bg-yellow-500/10', border: 'border-yellow-500/30', text: 'text-yellow-300', dot: 'bg-yellow-400' },
-    digital: { bg: 'bg-cyan-500/10', border: 'border-cyan-500/30', text: 'text-cyan-300', dot: 'bg-cyan-400' }
-  };
-  
-  // Si no existe el método, usar colores por defecto basados en un hash simple del ID
-  if (!colors[methodId]) {
-    const defaultColors = [
-      { bg: 'bg-indigo-500/10', border: 'border-indigo-500/30', text: 'text-indigo-300', dot: 'bg-indigo-400' },
-      { bg: 'bg-orange-500/10', border: 'border-orange-500/30', text: 'text-orange-300', dot: 'bg-orange-400' },
-      { bg: 'bg-teal-500/10', border: 'border-teal-500/30', text: 'text-teal-300', dot: 'bg-teal-400' },
-      { bg: 'bg-rose-500/10', border: 'border-rose-500/30', text: 'text-rose-300', dot: 'bg-rose-400' },
-      { bg: 'bg-violet-500/10', border: 'border-violet-500/30', text: 'text-violet-300', dot: 'bg-violet-400' }
-    ];
-    
-    // Generar un índice basado en el hash del methodId
-    const hash = methodId.split('').reduce((a, b) => a + b.charCodeAt(0), 0);
-    const colorIndex = hash % defaultColors.length;
-    return defaultColors[colorIndex];
-  }
-  
-  return colors[methodId];
-};
 
-/**
- * Página de ventas para barberos
- * Permite registrar ventas de productos y cortes
- */
+// Punto de venta para barberos (y administradores que eligen un barbero).
+// Permite vender productos y servicios, asignar método de pago por ítem y registrar la venta.
+// Carga productos con stock y servicios activos, mantiene el carrito en memoria
+// y envía la venta completa con datos de factura; también ofrece reembolsos e historial de facturas.
 const BarberSales = () => {
   const { user } = useAuth();
   const { showSuccess, showError, showInfo } = useNotification();
@@ -99,8 +73,40 @@ const BarberSales = () => {
   const [processingSale, setProcessingSale] = useState(false);
   const [saleCompleted, setSaleCompleted] = useState(false);
 
+  // Toolbar móvil: categorías colapsables
+  const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
+
   // Hook para métodos de pago centralizados
   const { allPaymentMethods, getPaymentMethodByBackendId } = usePaymentMethodsContext();
+  const allPaymentMethodsRef = useRef(allPaymentMethods);
+  useEffect(() => { allPaymentMethodsRef.current = allPaymentMethods; }, [allPaymentMethods]);
+
+  // Color del método: usa el color real del método (backend) con fallback a la paleta legacy
+  // Devuelve los colores del método de pago (color del backend o paleta legacy).
+  const resolveMethodColor = (methodId, liveMethod) => {
+    const method = liveMethod || allPaymentMethodsRef.current?.find((m) => m.backendId === methodId);
+    return getPaymentMethodPalette(method || methodId);
+  };
+
+  // ID del método de pago por defecto (efectivo) según los métodos disponibles
+  // Método de pago por defecto: el de sistema/efectivo o 'efectivo' como fallback.
+  const getDefaultPaymentMethodId = () => {
+    const cash = allPaymentMethods.find((m) => m.isSystem || m.category === 'cash');
+    return cash?.backendId || 'efectivo';
+  };
+
+  // IDs válidos de métodos de pago (id/backendId + alias efectivo↔cash)
+  // Conjunto de ids válidos de métodos de pago, incluyendo el alias efectivo↔cash.
+  const getValidPaymentMethodIds = () => {
+    const ids = new Set();
+    allPaymentMethods.forEach((method) => {
+      if (method?.id) ids.add(method.id);
+      if (method?.backendId) ids.add(method.backendId);
+    });
+    if (ids.has('cash')) ids.add('efectivo');
+    if (ids.has('efectivo')) ids.add('cash');
+    return ids;
+  };
 
   // Estados para métodos de pago
   const [paymentMethodModal, setPaymentMethodModal] = useState({ show: false, item: null });
@@ -117,6 +123,8 @@ const BarberSales = () => {
   const [refundModalOpen, setRefundModalOpen] = useState(false);
 
   // Obtener barberId correctamente
+  // Determina el barbero de la venta: el seleccionado si es admin o el perfil
+  // asociado al usuario cuando es barbero.
   const getBarberId = () => {
     logger.debug('🔍 Datos del usuario:', user);
     logger.debug('🔍 Role:', user.role);
@@ -151,6 +159,7 @@ const BarberSales = () => {
   };
 
   // Cargar datos iniciales
+  // Carga inicial de datos; los admins además cargan la lista de barberos.
   useEffect(() => {
     loadInitialData();
     // Si el usuario es admin, cargar la lista de barberos
@@ -160,6 +169,8 @@ const BarberSales = () => {
   }, [user]);
 
   // Cargar lista de barberos disponibles (solo para admins)
+  // Carga los barberos para el selector de admin: elige el primero por defecto
+  // y corrige la selección si el barbero ya no existe.
   const loadBarbers = async () => {
     setLoadingBarbers(true);
     try {
@@ -201,6 +212,8 @@ const BarberSales = () => {
     }
   };
 
+  // Carga en paralelo inventario y servicios (con timestamp para evitar caché),
+  // filtrando solo productos con stock y servicios activos.
   const loadInitialData = async () => {
     setLoading(true);
     setLoadingInventory(true);
@@ -271,6 +284,7 @@ const BarberSales = () => {
   };
 
   // Filtrar productos según búsqueda y categoría
+  // Aplica búsqueda por nombre/descripción y el filtro de categoría.
   const filteredProducts = products.filter(product => {
     const matchesSearch = product.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          product.description?.toLowerCase().includes(searchTerm.toLowerCase());
@@ -282,35 +296,49 @@ const BarberSales = () => {
   });
 
   // Obtener categorías únicas
+  // Lista de categorías únicas presentes en los productos.
   const categories = [...new Set(products.map(p => p.category).filter(Boolean))];
 
-  // Limpiar carrito solo cuando cambien los métodos de pago disponibles
-  // Solo si realmente hay items con métodos de pago inválidos
+  // Limpiar/normalizar carrito solo cuando cambien los métodos de pago disponibles
+  // - Elimina items con métodos realmente inválidos
+  // - Normaliza alias de efectivo ('efectivo' ↔ 'cash') al backendId canónico
+  // Cuando cambian los métodos de pago disponibles, limpia del carrito los ítems
+  // con métodos inválidos y normaliza el alias de efectivo al id canónico del backend.
   useEffect(() => {
     if (allPaymentMethods.length > 0 && cart.length > 0) {
-      // Usar los IDs del frontend, no los backendId
-      const validPaymentMethods = allPaymentMethods.map(method => method.id);
-      
-      // Solo limpiar si hay items con paymentMethod pero que no esté en la lista válida
-      const itemsWithInvalidPaymentMethods = cart.filter(item => {
-        return item.paymentMethod && !validPaymentMethods.includes(item.paymentMethod);
+      const validPaymentMethods = getValidPaymentMethodIds();
+      const cashMethod = allPaymentMethods.find((m) => m.isSystem || m.category === 'cash');
+      const canonicalCashId = cashMethod?.backendId;
+
+      let changed = false;
+      const normalized = cart.map((item) => {
+        const methodId = item.paymentMethod;
+        if (!methodId) return item;
+        if (!validPaymentMethods.has(methodId)) {
+          changed = true;
+          return null;
+        }
+        if (
+          canonicalCashId &&
+          (methodId === 'efectivo' || methodId === 'cash') &&
+          methodId !== canonicalCashId
+        ) {
+          changed = true;
+          return { ...item, paymentMethod: canonicalCashId };
+        }
+        return item;
       });
-      
-      if (itemsWithInvalidPaymentMethods.length > 0) {
-        console.log('🧹 Limpiando items con métodos de pago inválidos:', itemsWithInvalidPaymentMethods);
-        const validItems = cart.filter(item => {
-          return item.type && 
-                 item.quantity && typeof item.quantity === 'number' && item.quantity > 0 &&
-                 item.price && typeof item.price === 'number' && item.price > 0 &&
-                 (!item.paymentMethod || validPaymentMethods.includes(item.paymentMethod));
-        });
-        
-        setCart(validItems);
+
+      if (changed) {
+        console.log('🧹 Normalizando items del carrito según métodos de pago válidos');
+        setCart(normalized.filter(Boolean));
       }
     }
-  }, [allPaymentMethods]); 
+  }, [allPaymentMethods]);
 
   // Agregar producto al carrito
+  // Agrega un producto al carrito validando id, nombre, precio, cantidad y stock;
+  // si ya existe, acumula la cantidad sin superar el stock disponible.
   const addToCart = (product, quantity = 1) => {
     // Validaciones básicas del producto
     if (!product || !product._id) {
@@ -365,7 +393,7 @@ const BarberSales = () => {
         price: Number(product.price), // Asegurar que sea número
         quantity: Number(quantity), // Asegurar que sea número
         stock: availableStock,
-        paymentMethod: 'efectivo'
+        paymentMethod: getDefaultPaymentMethodId()
       }]);
     }
     
@@ -373,6 +401,8 @@ const BarberSales = () => {
   };
 
   // Agregar servicio de corte al carrito
+  // Agrega al carrito un servicio con precio manual (walk-in) usando el servicio
+  // y el precio elegidos en el formulario.
   const addWalkInService = () => {
     // Validar servicio seleccionado
     if (!selectedService) {
@@ -412,7 +442,7 @@ const BarberSales = () => {
       serviceId: selectedService._id,
       price: Number(price), // Asegurar que sea número
       quantity: 1,
-      paymentMethod: 'efectivo' 
+      paymentMethod: getDefaultPaymentMethodId() 
     }]);
 
     setSelectedService(null);
@@ -421,6 +451,7 @@ const BarberSales = () => {
   };
 
   // Agregar servicio directamente sin depender del estado selectedService
+  // Agrega un servicio directo desde su tarjeta usando su precio de catálogo.
   const addWalkInServiceDirect = (service) => {
     // Validar servicio
     if (!service) {
@@ -452,18 +483,20 @@ const BarberSales = () => {
       serviceId: service._id,
       price: Number(price), // Asegurar que sea número
       quantity: 1,
-      paymentMethod: 'efectivo' 
+      paymentMethod: getDefaultPaymentMethodId() 
     }]);
 
     showInfo(`Servicio ${service.name} agregado`);
   };
 
   // Remover item del carrito
+  // Quita un ítem del carrito por id y tipo.
   const removeFromCart = (itemId, itemType) => {
     setCart(cart.filter(item => !(item.id === itemId && item.type === itemType)));
   };
 
   // Actualizar cantidad en carrito
+  // Cambia la cantidad de un ítem: en 0 lo elimina y en productos valida el stock.
   const updateCartQuantity = (itemId, itemType, newQuantity) => {
     if (newQuantity <= 0) {
       removeFromCart(itemId, itemType);
@@ -484,12 +517,14 @@ const BarberSales = () => {
   };
 
   // Obtener cantidad de un producto en el carrito
+  // Cantidad actual de un producto o servicio dentro del carrito.
   const getCartQuantity = (itemId, itemType) => {
     const cartItem = cart.find(item => item.id === itemId && item.type === itemType);
     return cartItem ? cartItem.quantity : 0;
   };
 
   // Funciones para métodos de pago
+  // Abre el modal para cambiar el método de pago de un ítem.
   const openPaymentMethodModal = (item) => {
     setPaymentMethodModal({ show: true, item });
   };
@@ -498,6 +533,7 @@ const BarberSales = () => {
     setPaymentMethodModal({ show: false, item: null });
   };
 
+  // Aplica el nuevo método de pago al ítem y cierra el modal.
   const updatePaymentMethod = (paymentMethodId) => {
     const { item } = paymentMethodModal;
     setCart(cart.map(cartItem => 
@@ -515,6 +551,7 @@ const BarberSales = () => {
   };
 
   // Calcular totales por método de pago
+  // Agrupa los totales del carrito por método de pago.
   const getPaymentMethodSummary = () => {
     const summary = {};
     cart.forEach(item => {
@@ -526,6 +563,7 @@ const BarberSales = () => {
   };
 
   // Obtener información del método de pago
+  // Busca la información del método de pago con un fallback genérico.
   const getPaymentMethodInfo = (methodId) => {
     const method = getPaymentMethodByBackendId(methodId);
     // Si no se encuentra el método, devolver un fallback
@@ -541,9 +579,12 @@ const BarberSales = () => {
   };
 
   // Calcular total del carrito
+  // Total del carrito: suma precio por cantidad de cada ítem.
   const cartTotal = cart.reduce((total, item) => total + (item.price * item.quantity), 0);
 
   // Procesar venta
+  // Valida carrito y barbero, depura ítems inválidos y envía la venta completa
+  // al backend; al terminar limpia el carrito y recarga el inventario.
   const processSale = async () => {
     if (cart.length === 0) {
       showError('El carrito está vacío');
@@ -572,7 +613,7 @@ const BarberSales = () => {
 
       // Validar que todos los items tienen los campos requeridos
       // Usar los mismos métodos de pago válidos que en el useEffect de limpieza
-      const validPaymentMethods = allPaymentMethods.map(method => method.id);
+      const validPaymentMethods = getValidPaymentMethodIds();
       
       console.log('🔄 Iniciando validación de carrito antes de procesar venta');
       console.log('📦 Items en carrito:', cart.length);
@@ -587,9 +628,10 @@ const BarberSales = () => {
         typeof item.price !== 'number' || 
         item.price <= 0 ||
         !item.paymentMethod ||
-        !validPaymentMethods.includes(item.paymentMethod)
+        !validPaymentMethods.has(item.paymentMethod)
       );
 
+      // Ante ítems inválidos: se detallan, se eliminan del carrito y se aborta la venta.
       if (invalidItems.length > 0) {
         console.error('Items inválidos en el carrito:', invalidItems);
         console.log('📋 Métodos de pago válidos disponibles:', validPaymentMethods);
@@ -614,7 +656,7 @@ const BarberSales = () => {
           if (!item.quantity || typeof item.quantity !== 'number' || item.quantity <= 0) errors.push('cantidad inválida');
           if (!item.price || typeof item.price !== 'number' || item.price <= 0) errors.push('precio inválido');
           if (!item.paymentMethod) errors.push('método de pago faltante');
-          else if (!validPaymentMethods.includes(item.paymentMethod)) errors.push(`método de pago inválido: "${item.paymentMethod}"`);
+          else if (!validPaymentMethods.has(item.paymentMethod)) errors.push(`método de pago inválido: "${item.paymentMethod}"`);
           return `${item.name || 'Item sin nombre'}: ${errors.join(', ')}`;
         }).join('\n');
         
@@ -623,7 +665,7 @@ const BarberSales = () => {
           return item.type && 
                  item.quantity && typeof item.quantity === 'number' && item.quantity > 0 &&
                  item.price && typeof item.price === 'number' && item.price > 0 &&
-                 item.paymentMethod && validPaymentMethods.includes(item.paymentMethod);
+                 item.paymentMethod && validPaymentMethods.has(item.paymentMethod);
         });
         
         setCart(validItems);
@@ -677,6 +719,7 @@ const BarberSales = () => {
         clientDataJSON: JSON.stringify(cartSaleData.clientData)
       });
 
+      // Envía al backend el carrito normalizado junto con barbero y datos de factura.
       const result = await salesService.createCartSale(cartSaleData);
 
       // Mensaje detallado de éxito
@@ -711,6 +754,7 @@ const BarberSales = () => {
 
       // Recargar productos para mostrar stock actualizado
       logger.debug('Recargando inventario para mostrar stock actualizado...');
+      // Recarga el inventario tras un breve retardo para reflejar el stock actualizado.
       setTimeout(async () => {
         try {
           logger.debug('Iniciando recarga de inventario después de venta...');
@@ -730,6 +774,7 @@ const BarberSales = () => {
   };
 
   // Formatear precio
+  // Formatea un valor como precio en pesos colombianos (COP).
   const formatPrice = (price) => {
     return new Intl.NumberFormat('es-CO', {
       style: 'currency',
@@ -739,240 +784,398 @@ const BarberSales = () => {
     }).format(price || 0);
   };
 
+  // Esqueleto de carga mientras llegan inventario y servicios.
   if (loading) {
     return (
       <PageContainer>
-        <div className="flex items-center justify-center h-64">
-          <div className="text-center">
-            <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mb-4"></div>
-            <p className="text-gray-400">Cargando productos y servicios...</p>
-          </div>
-        </div>
+        <BarberSalesSkeleton items={8} />
       </PageContainer>
     );
   }
 
+  // Vista del punto de venta: cabecera con accesos a facturas y reembolsos, buscador
+  // y filtro de categorías, selector de barbero para admin, grilla de servicios y
+  // productos, y carrito lateral con desglose por método de pago y botón de cobro.
   return (
     <>
       <PageContainer>
-      <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-6 space-y-8">
-        {/* Header */}
-        <div className="text-center mb-8">
-          <div className="inline-flex items-center gap-3 mb-4">
-            <div className="p-3 bg-gradient-to-r from-green-600/20 to-blue-600/20 rounded-xl border border-green-500/20 shadow-xl shadow-blue-500/20">
-              <ShoppingCart className="w-6 h-6 sm:w-8 sm:h-8 text-green-400" />
+      <div className="relative z-10 w-full pb-6 space-y-5">
+        {/* ── Top bar ── */}
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex min-w-0 items-center gap-3">
+            <div className="p-2.5 rounded-xl bg-brand-500/10 border border-brand-500/20 flex-shrink-0">
+              <ShoppingCart className="w-5 h-5 sm:w-6 sm:h-6 text-brand-300" />
             </div>
-            <GradientText className="text-xl sm:text-2xl lg:text-3xl font-bold">
-              Punto de Venta
-            </GradientText>
+            <div className="min-w-0">
+              <h1 className="text-lg sm:text-xl lg:text-2xl font-bold text-white truncate">Punto de Venta</h1>
+              <p className="text-xs sm:text-sm text-gray-400 hidden sm:block">Registra ventas de productos y cortes</p>
+            </div>
           </div>
-          <p className="text-gray-400 text-sm sm:text-base lg:text-lg mb-4">
-            Registra ventas de productos y cortes
-          </p>
-          
-          {/* Botones de acción */}
-          <div className="flex justify-center gap-3 mb-4">
+
+          {/* Acciones (iconos sin contenedor) */}
+          <div className="flex items-center gap-1 flex-shrink-0">
             <button
               onClick={() => navigate('/admin/cart-invoices')}
-              className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600/20 border border-blue-500/30 rounded-xl text-blue-400 hover:bg-blue-600/30 hover:text-blue-300 transition-colors shadow-lg shadow-blue-500/20"
+              className="flex h-11 w-11 items-center justify-center rounded-xl text-blue-400 hover:text-blue-300 hover:bg-white/[0.04] transition-colors"
+              title="Facturas de carrito"
+              aria-label="Facturas de carrito"
             >
-              <FileText className="w-4 h-4" />
-              <span className="text-sm font-medium">
-                Facturas de Carrito
-              </span>
+              <FileText className="w-5 h-5" />
             </button>
-            
             <button
               onClick={() => setRefundModalOpen(true)}
-              className="inline-flex items-center gap-2 px-4 py-2 bg-red-600/20 border border-red-500/30 rounded-xl text-red-400 hover:bg-red-600/30 hover:text-red-300 transition-colors shadow-lg shadow-red-500/20"
+              className="flex h-11 w-11 items-center justify-center rounded-xl text-red-400 hover:text-red-300 hover:bg-white/[0.04] transition-colors"
+              title={user?.role === 'admin' ? 'Gestionar reembolsos' : 'Reembolsar ventas'}
+              aria-label="Reembolsar ventas"
             >
-              <RefreshCw className="w-4 h-4" />
-              <span className="text-sm font-medium">
-                {user?.role === 'admin' ? 'Gestionar Ventas' : 'Reembolsar Venta'}
-              </span>
+              <RefreshCw className="w-5 h-5" />
+            </button>
+          </div>
+        </div>
+
+        {/* ── Toolbar: búsqueda y categorías ── */}
+        {/* Desktop */}
+        <div className="hidden sm:grid grid-cols-2 gap-3 max-w-xl">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
+            <input
+              type="text"
+              placeholder="Buscar productos y servicios..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="glassmorphism-input pl-10 w-full"
+            />
+          </div>
+          <div className="relative">
+            <Filter className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4 z-10" />
+            <select
+              value={categoryFilter}
+              onChange={(e) => setCategoryFilter(e.target.value)}
+              className="glassmorphism-select pl-10 w-full"
+            >
+              <option value="all">Todas las categorías</option>
+              {categories.map(category => (
+                <option key={category} value={category}>{category}</option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        {/* Móvil: buscador directo + icono de categorías */}
+        <div className="sm:hidden space-y-2">
+          <div className="flex items-center gap-2">
+            <div className="relative min-w-0 flex-1">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
+              <input
+                type="text"
+                placeholder="Buscar productos y servicios..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="glassmorphism-input pl-10 pr-10 w-full"
+              />
+              {searchTerm && (
+                <button
+                  onClick={() => setSearchTerm('')}
+                  className="absolute right-1 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-lg text-gray-400 hover:text-white"
+                  aria-label="Limpiar búsqueda"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              )}
+            </div>
+            <button
+              onClick={() => setMobileFiltersOpen(prev => !prev)}
+              className={`flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl border transition-colors ${
+                mobileFiltersOpen || categoryFilter !== 'all'
+                  ? 'border-brand-500/40 bg-brand-500/10 text-brand-300'
+                  : 'border-white/[0.08] bg-white/[0.03] text-gray-300'
+              }`}
+              aria-label="Filtrar por categoría"
+              aria-expanded={mobileFiltersOpen}
+            >
+              <Filter className="w-5 h-5" />
             </button>
           </div>
 
+          {mobileFiltersOpen && (
+            <select
+              value={categoryFilter}
+              onChange={(e) => setCategoryFilter(e.target.value)}
+              className="glassmorphism-select w-full"
+            >
+              <option value="all">Todas las categorías</option>
+              {categories.map(category => (
+                <option key={category} value={category}>{category}</option>
+              ))}
+            </select>
+          )}
+        </div>
+
+        {/* ── Usuario + selector de barbero ── */}
+        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
           {user && (
-            <div className="inline-flex items-center px-4 py-2 bg-blue-500/10 backdrop-blur-sm border border-blue-500/20 text-blue-300 rounded-xl text-sm shadow-lg shadow-blue-500/20">
-              <User className="w-4 h-4 mr-2" />
-              {user.role === 'admin' ? 'Administrador' : 'Barbero'}: {user.name || user.email}
+            <div className="flex min-w-0 items-center gap-2 text-sm">
+              <User className="w-4 h-4 flex-shrink-0 text-gray-400" />
+              <span className="flex-shrink-0 text-gray-400">{user.role === 'admin' ? 'Admin' : 'Barbero'}:</span>
+              <span className="truncate font-medium text-white">{user.name || user.email}</span>
+            </div>
+          )}
+          {user?.role === 'admin' && (
+            <div className="flex w-full items-center gap-2 sm:w-auto">
+              {loadingBarbers ? (
+                <div className="flex items-center gap-2 text-xs text-gray-400">
+                  <Skeleton className="h-3.5 w-3.5 rounded-full" />
+                  <span>Cargando barberos...</span>
+                </div>
+              ) : (
+                <>
+                  <label className="text-xs text-gray-400 flex-shrink-0">Barbero:</label>
+                  <select
+                    value={selectedBarberId || ''}
+                    onChange={(e) => setSelectedBarberId(e.target.value)}
+                    className="glassmorphism-select px-3 text-sm w-full sm:min-w-[220px]"
+                    required
+                  >
+                    <option value="">Seleccionar barbero</option>
+                    {availableBarbers.map((barber) => (
+                      <option key={barber._id} value={barber.user?._id || barber._id}>
+                        {barber.user?.name || barber.specialty}
+                      </option>
+                    ))}
+                  </select>
+                </>
+              )}
+              {!selectedBarberId && availableBarbers.length > 0 && (
+                <p className="flex-shrink-0 text-[10px] text-amber-400">Requerido</p>
+              )}
             </div>
           )}
         </div>
 
-        {/* Selector de barbero (solo para admins) */}
-        {user?.role === 'admin' && (
-          <div className="max-w-md mx-auto mb-6">
-            <div className="bg-white/5 border border-white/10 rounded-xl backdrop-blur-sm shadow-lg p-4">
-              <label className="block text-sm font-medium text-gray-300 mb-3">
-                <User className="w-4 h-4 inline mr-2" />
-                Seleccionar Barbero para la Venta
-              </label>
-              {loadingBarbers ? (
-                <div className="flex items-center justify-center py-3">
-                  <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-500"></div>
-                  <span className="ml-2 text-sm text-gray-400">Cargando barberos...</span>
-                </div>
-              ) : (
-                <select
-                  value={selectedBarberId || ''}
-                  onChange={(e) => setSelectedBarberId(e.target.value)}
-                  className="glassmorphism-select w-full"
-                  required
-                >
-                  <option value="">Selecciona un barbero</option>
-                  {availableBarbers.map((barber) => (
-                    <option key={barber._id} value={barber.user?._id || barber._id}>
-                      {barber.user?.name || barber.specialty} - {barber.specialty}
-                    </option>
-                  ))}
-                </select>
-              )}
-              {!selectedBarberId && availableBarbers.length > 0 && (
-                <p className="text-xs text-yellow-400 mt-2">
-                  Debes seleccionar un barbero antes de procesar ventas
-                </p>
-              )}
-            </div>
-          </div>
-        )}
-
         {/* Error */}
         {error && (
-          <div className="bg-red-500/5 backdrop-blur-sm border border-red-500/20 rounded-xl p-4 shadow-xl shadow-red-500/20">
+          <div className="bg-red-500/5 backdrop-blur-sm border border-red-500/20 rounded-xl p-3 shadow-xl shadow-soft">
             <div className="flex items-center">
-              <X className="h-5 w-5 mr-2 text-red-400" />
-              <span className="text-red-300">{error}</span>
+              <X className="h-4 w-4 mr-2 text-red-400" />
+              <span className="text-red-300 text-sm">{error}</span>
             </div>
           </div>
         )}
 
-        {/* Layout principal: Carrito arriba en móvil, lado a lado en desktop */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6 lg:gap-8 min-h-screen">
-          {/* Carrito - Primero en móvil, último en desktop */}
-          <div className="order-1 lg:order-2 lg:col-span-1">
-            <div className="group relative bg-white/5 backdrop-blur-sm border border-white/10 rounded-xl p-3 sm:p-4 lg:p-6 shadow-xl shadow-blue-500/20 overflow-hidden lg:sticky lg:top-4">
+        {/* ── Main Layout: Products + Sticky Cart ── */}
+        <div className="grid grid-cols-1 lg:grid-cols-[1fr_340px] gap-4 sm:gap-6 items-start">
+          {/* ── Products/Services Grid ── */}
+          <div className="space-y-4 sm:space-y-6">
+            {/* Services section */}
+            {services.filter(s => searchTerm === '' || s.name.toLowerCase().includes(searchTerm.toLowerCase())).length > 0 && (
+              <div>
+                <div className="flex items-center gap-2 mb-3">
+                  <Scissors className="w-4 h-4 text-emerald-400" />
+                  <h3 className="text-sm font-semibold text-emerald-400 uppercase tracking-wide">Servicios</h3>
+                  <div className="flex-1 h-px bg-emerald-500/20"></div>
+                </div>
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+                  {services
+                    .filter(service => 
+                      searchTerm === '' || 
+                      service.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                      service.description?.toLowerCase().includes(searchTerm.toLowerCase())
+                    )
+                    .map((service) => (
+                    <div
+                      key={service._id}
+                      className="group relative backdrop-blur-sm border rounded-lg p-3 transition-all duration-300 overflow-hidden hover:scale-[1.002] hover:-translate-y-0.5 cursor-pointer border-emerald-500/30 bg-emerald-500/5 shadow-sm shadow-soft"
+                    >
+                      <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/[2.5%] to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-1000 ease-out rounded-lg"></div>
+                      <div className="relative space-y-2">
+                        <div>
+                          <h3 className="font-semibold text-white text-xs sm:text-sm flex items-center gap-1.5">
+                            <Scissors className="w-3 h-3 text-emerald-400 flex-shrink-0" />
+                            <span className="truncate">{service.name}</span>
+                          </h3>
+                          {service.description && (
+                            <p className="text-gray-400 text-[11px] mt-0.5 line-clamp-2">{service.description}</p>
+                          )}
+                          <span className="inline-block mt-1.5 px-1.5 py-0.5 bg-emerald-500/20 text-emerald-300 text-[10px] rounded-full border border-emerald-500/30">
+                            Servicio
+                          </span>
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <p className="text-emerald-400 font-bold text-xs sm:text-sm">{formatPrice(service.price)}</p>
+                          <button
+                            onClick={() => addWalkInServiceDirect(service)}
+                            className="p-2.5 min-h-11 min-w-11 flex items-center justify-center bg-gradient-to-r from-emerald-600/20 to-blue-600/20 rounded-lg border border-emerald-500/30 hover:border-blue-500/40 transition-all duration-300 backdrop-blur-sm hover:from-emerald-600/30 hover:to-blue-600/30 transform hover:scale-110 shadow-xl shadow-soft"
+                          >
+                            <Plus className="w-3.5 h-3.5 text-emerald-400 group-hover:text-blue-400 transition-colors duration-300" />
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Products section */}
+            <div>
+              <div className="flex items-center gap-2 mb-3">
+                <Package className="w-4 h-4 text-blue-400" />
+                <h3 className="text-sm font-semibold text-blue-400 uppercase tracking-wide">Productos</h3>
+                <div className="flex-1 h-px bg-blue-500/20"></div>
+                <span className="text-[11px] text-gray-500">{filteredProducts.length} disponible{filteredProducts.length !== 1 ? 's' : ''}</span>
+              </div>
+              {filteredProducts.length === 0 && services.filter(s => 
+                  searchTerm === '' || 
+                  s.name.toLowerCase().includes(searchTerm.toLowerCase())
+                ).length === 0 ? (
+                <div className="text-center py-8 bg-white/5 rounded-xl border border-white/10">
+                  <Package className="w-10 h-10 text-gray-600 mx-auto mb-2" />
+                  <p className="text-gray-400 text-sm">
+                    {searchTerm || categoryFilter !== 'all' 
+                      ? 'No se encontraron productos o servicios' 
+                      : 'No hay productos o servicios disponibles'}
+                  </p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+                  {filteredProducts.map((product) => (
+                    <div
+                      key={product._id}
+                      className="group relative backdrop-blur-sm border rounded-lg p-3 transition-all duration-300 overflow-hidden hover:scale-[1.002] hover:-translate-y-0.5 cursor-pointer border-blue-500/30 bg-blue-500/5 shadow-sm shadow-soft"
+                    >
+                      <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/[2.5%] to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-1000 ease-out rounded-lg"></div>
+                      <div className="relative space-y-2">
+                        <div>
+                          <h3 className="font-semibold text-white text-xs sm:text-sm truncate">{product.name}</h3>
+                          {product.description && (
+                            <p className="text-gray-400 text-[11px] mt-0.5 line-clamp-2">{product.description}</p>
+                          )}
+                          {product.category && (
+                            <span className="inline-block mt-1.5 px-1.5 py-0.5 bg-blue-500/20 text-blue-300 text-[10px] rounded-full border border-blue-500/30">
+                              {product.category}
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <p className="text-emerald-400 font-bold text-xs sm:text-sm">{formatPrice(product.price)}</p>
+                            <p className="text-gray-500 text-[10px]">Stock: {product.quantity || product.stock || 0}</p>
+                          </div>
+                          <button
+                            onClick={() => addToCart(product)}
+                            disabled={(product.quantity || product.stock || 0) === 0}
+                            className="p-2.5 min-h-11 min-w-11 flex items-center justify-center bg-gradient-to-r from-blue-600/20 to-emerald-600/20 rounded-lg border border-blue-500/30 hover:border-emerald-500/40 transition-all duration-300 backdrop-blur-sm hover:from-blue-600/30 hover:to-emerald-600/30 transform hover:scale-110 shadow-xl shadow-soft disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
+                          >
+                            <Plus className="w-3.5 h-3.5 text-blue-400 group-hover:text-emerald-400 transition-colors duration-300" />
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* ── Cart (Sticky Sidebar) ── */}
+          <div className="lg:sticky lg:top-4">
+            <div className="group relative bg-white/5 backdrop-blur-sm border border-white/10 rounded-xl shadow-xl shadow-soft overflow-hidden">
               <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/[2.5%] to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-1000 ease-out rounded-xl"></div>
-              <div className="relative">
-                  {/* Botón global para datos de factura del carrito (aparece solo cuando hay items) */}
+              <div className="relative p-4">
+                {/* Cart header */}
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="text-sm sm:text-base font-semibold text-white flex items-center gap-2">
+                    <ShoppingCart className="w-4 h-4 text-emerald-400" />
+                    Carrito
+                    <span className="text-xs text-gray-400 font-normal">({cart.length})</span>
+                  </h3>
                   {cart.length > 0 && (
                     <button
                       onClick={() => setInvoiceDataModal({ show: true, item: null })}
                       title="Datos de factura del carrito"
-                      className="absolute top-3 right-3 z-20 p-2 rounded-md bg-white/5 hover:bg-white/10 text-blue-300"
+                      className="p-1.5 rounded-md bg-white/5 hover:bg-white/10 text-blue-300 transition-colors"
                     >
-                      <FileText className="w-4 h-4" />
+                      <FileText className="w-3.5 h-3.5" />
                     </button>
                   )}
-                <h3 className="text-base sm:text-lg font-semibold text-white mb-3 sm:mb-4 flex items-center">
-                  <ShoppingCart className="w-4 h-4 sm:w-5 sm:h-5 mr-2 text-green-400" />
-                  <span>Carrito </span>({cart.length})
-                </h3>
+                </div>
 
                 {cart.length === 0 ? (
-                  <div className="text-center py-4 sm:py-8">
-                    <ShoppingCart className="w-8 h-8 sm:w-12 sm:h-12 text-gray-600 mx-auto mb-2 sm:mb-3" />
-                    <p className="text-gray-400 text-sm sm:text-base">El carrito está vacío</p>
+                  <div className="text-center py-6 sm:py-10">
+                    <ShoppingCart className="w-10 h-10 sm:w-12 sm:h-12 text-gray-600 mx-auto mb-2" />
+                    <p className="text-gray-400 text-sm">El carrito está vacío</p>
+                    <p className="text-gray-500 text-xs mt-1">Agrega productos o servicios</p>
                   </div>
                 ) : (
                   <>
-                    {/* Lista de productos con scroll limitado */}
-                    <div 
-                      className="space-y-2 custom-scrollbar"
-                      style={{ 
-                        maxHeight: 'calc(2.7 * 84px)', // Reducido de 4 a 2.7 cards (1/3 menos)
-                        overflowY: cart.length > 2 ? 'auto' : 'visible'
-                      }}
-                    >
+                    {/* Cart items */}
+                    <div className="space-y-2 custom-scrollbar max-h-64 sm:max-h-80 lg:max-h-[420px] overflow-y-auto">
                       {cart.map((item, index) => (
                         <div
                           key={`${item.id}-${item.type}-${index}`}
-                          className="group relative backdrop-blur-sm border rounded-lg p-3 transition-all duration-300 overflow-hidden hover:scale-[1.005] hover:-translate-y-0.5 cursor-default border-blue-500/30 bg-blue-500/5 shadow-sm shadow-blue-500/20"
-                          style={{ zIndex: cart.length - index }}
+                          className="group/item relative backdrop-blur-sm border rounded-lg p-2.5 transition-all duration-300 overflow-hidden border-blue-500/30 bg-blue-500/5 shadow-sm shadow-soft"
                         >
-                          <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/[2.5%] to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-1000 ease-out rounded-lg"></div>
                           <div className="relative">
-                            {/* Header compacto con nombre y método de pago */}
-                            <div className="flex items-center justify-between gap-2 mb-2">
-                              <h4 className="text-white text-sm font-medium leading-tight flex-1 truncate">
-                                {item.name}
-                              </h4>
-                              
-                              {/* Método de pago compacto */}
-                              <div className="flex items-center gap-1 flex-shrink-0">
-                                {(() => {
-                                  const methodInfo = getPaymentMethodInfo(item.paymentMethod);
-                                  
-                                  // Validar que el icono sea un componente React válido
-                                  let IconComponent = CreditCard; // Default
-                                  if (methodInfo?.icon && typeof methodInfo.icon === 'function') {
-                                    IconComponent = methodInfo.icon;
-                                  }
-                                  
-                                  // Obtener colores específicos para este método
-                                  const colors = getPaymentMethodColor(item.paymentMethod);
-                                  
-                                  return (
-                                    <button
-                                      onClick={() => openPaymentMethodModal(item)}
-                                      className={`flex items-center gap-1 px-2 py-1 rounded-full text-xs border cursor-pointer hover:opacity-80 transition-opacity duration-300 ${colors.bg} ${colors.border}`}
-                                      title="Cambiar método de pago"
-                                    >
-                                      <IconComponent size={12} className={colors.text} />
-                                      <span className={`${colors.text} whitespace-nowrap hidden sm:inline`}>{methodInfo?.name || item.paymentMethod}</span>
-                                    </button>
-                                  );
-                                })()}
-                                {/* Per-item invoice icon removed — ahora hay un botón global en la esquina del carrito */}
-                              </div>
+                            {/* Item header: name + payment method */}
+                            <div className="flex items-center justify-between gap-1.5 mb-1.5">
+                              <h4 className="text-white text-xs font-medium leading-tight flex-1 truncate">{item.name}</h4>
+                              {(() => {
+                                // Resuelve icono y colores del método de pago asignado al ítem del carrito.
+                                const methodInfo = getPaymentMethodInfo(item.paymentMethod);
+                                let IconComponent = CreditCard;
+                                if (methodInfo?.icon && typeof methodInfo.icon === 'function') {
+                                  IconComponent = methodInfo.icon;
+                                }
+                                const colors = resolveMethodColor(item.paymentMethod);
+                                return (
+                                  <button
+                                    onClick={() => openPaymentMethodModal(item)}
+                                    className={`flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] border cursor-pointer hover:opacity-80 transition-opacity ${colors.bg} ${colors.border}`}
+                                    title="Cambiar método de pago"
+                                  >
+                                    <IconComponent size={10} className={colors.text} />
+                                    <span className={`${colors.text} whitespace-nowrap hidden sm:inline`}>{methodInfo?.name || item.paymentMethod}</span>
+                                  </button>
+                                );
+                              })()}
                             </div>
-
-                            {/* Información compacta en una sola línea */}
+                            {/* Price + controls */}
                             <div className="flex items-center justify-between">
-                              <div className="flex items-center gap-2">
-                                <p className="text-blue-300 text-sm font-semibold">
-                                  {formatPrice(item.price)}
-                                </p>
+                              <div className="flex items-center gap-1.5">
+                                <p className="text-blue-300 text-xs font-semibold">{formatPrice(item.price)}</p>
                                 {item.type === SALE_TYPES.PRODUCT && (
-                                  <p className="text-gray-400 text-xs">
-                                    Stock: {item.stock}
-                                  </p>
+                                  <p className="text-gray-500 text-[10px]">Stk:{item.stock}</p>
                                 )}
                               </div>
-                              
-                              {/* Controles compactos */}
-                              <div className="flex items-center gap-2">
+                              <div className="flex items-center gap-1">
                                 {item.type === SALE_TYPES.PRODUCT ? (
-                                  <div className="flex items-center gap-1 bg-white/5 rounded px-2 py-1">
+                                  <div className="flex items-center gap-0.5 bg-white/5 rounded-lg px-1 py-0.5">
                                     <button
                                       onClick={() => updateCartQuantity(item.id, item.type, item.quantity - 1)}
-                                      className="p-1 text-gray-300 hover:text-white transition-colors duration-300 rounded hover:bg-white/10 touch-manipulation"
+                                      className="p-2 min-h-11 min-w-11 flex items-center justify-center text-gray-300 hover:text-white transition-colors rounded-lg hover:bg-white/10"
                                     >
                                       <Minus className="w-3 h-3" />
                                     </button>
-                                    <span className="text-white text-sm font-medium min-w-[1.5rem] text-center">
-                                      {item.quantity}
-                                    </span>
+                                    <span className="text-white text-xs font-medium min-w-[1.2rem] text-center">{item.quantity}</span>
                                     <button
                                       onClick={() => updateCartQuantity(item.id, item.type, item.quantity + 1)}
                                       disabled={item.quantity >= item.stock}
-                                      className="p-1 text-gray-300 hover:text-white transition-colors duration-300 disabled:opacity-50 disabled:cursor-not-allowed rounded hover:bg-white/10 touch-manipulation"
+                                      className="p-2 min-h-11 min-w-11 flex items-center justify-center text-gray-300 hover:text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed rounded-lg hover:bg-white/10"
                                     >
                                       <Plus className="w-3 h-3" />
                                     </button>
                                   </div>
                                 ) : (
-                                  <div className="bg-white/5 rounded px-3 py-1">
-                                    <span className="text-white text-sm font-medium">1</span>
+                                  <div className="bg-white/5 rounded px-2 py-0.5">
+                                    <span className="text-white text-xs font-medium">1</span>
                                   </div>
                                 )}
                                 <button
                                   onClick={() => removeFromCart(item.id, item.type)}
-                                  className="p-1 text-red-400 hover:text-red-300 transition-colors duration-300 rounded hover:bg-red-500/10 touch-manipulation"
-                                  title="Eliminar del carrito"
+                                  className="p-2 min-h-11 min-w-11 flex items-center justify-center text-red-400 hover:text-red-300 transition-colors rounded-lg hover:bg-red-500/10"
+                                  title="Eliminar"
                                 >
-                                  <X className="w-4 h-4" />
+                                  <X className="w-3.5 h-3.5" />
                                 </button>
                               </div>
                             </div>
@@ -981,214 +1184,64 @@ const BarberSales = () => {
                       ))}
                     </div>
 
-                    {/* Resumen por métodos de pago - Siempre visible */}
-                    <div className="border-t border-blue-500/20 pt-3 sm:pt-4 mt-3 sm:mt-4">
-                      <p className="text-sm font-medium text-white mb-2">Desglose por método de pago:</p>
-                      <div className="space-y-1">
-                        {Object.entries(getPaymentMethodSummary()).map(([methodId, total]) => {
-                          const methodInfo = getPaymentMethodInfo(methodId);
-                          
-                          // Validar que el icono sea un componente React válido
-                          let IconComponent = CreditCard; // Default
-                          if (methodInfo?.icon && typeof methodInfo.icon === 'function') {
-                            IconComponent = methodInfo.icon;
-                          }
-                          
-                          // Obtener colores específicos para este método
-                          const colors = getPaymentMethodColor(methodId);
-                          
-                          return (
-                            <div key={methodId} className="flex items-center justify-between">
-                              <div className="flex items-center gap-2">
-                                <IconComponent size={14} className={colors.text} />
-                                <span className={`text-sm ${colors.text}`}>{methodInfo?.name || methodId}:</span>
+                    {/* Payment breakdown */}
+                    {Object.keys(getPaymentMethodSummary()).length > 0 && (
+                      <div className="border-t border-blue-500/20 pt-2.5 mt-2.5">
+                        <p className="text-[11px] font-medium text-gray-400 mb-1.5">Desglose por método de pago:</p>
+                        <div className="space-y-1">
+                          {Object.entries(getPaymentMethodSummary()).map(([methodId, total]) => {
+                            // Fila del desglose con el total acumulado por método de pago.
+                            const methodInfo = getPaymentMethodInfo(methodId);
+                            let IconComponent = CreditCard;
+                            if (methodInfo?.icon && typeof methodInfo.icon === 'function') {
+                              IconComponent = methodInfo.icon;
+                            }
+                            const colors = resolveMethodColor(methodId);
+                            return (
+                              <div key={methodId} className="flex items-center justify-between">
+                                <div className="flex items-center gap-1.5">
+                                  <IconComponent size={12} className={colors.text} />
+                                  <span className={`text-xs ${colors.text}`}>{methodInfo?.name || methodId}</span>
+                                </div>
+                                <span className="text-xs font-medium text-white">{formatPrice(total)}</span>
                               </div>
-                              <span className="text-sm font-medium text-white">
-                                {formatPrice(total)}
-                              </span>
-                            </div>
-                          );
-                        })}
+                            );
+                          })}
+                        </div>
                       </div>
-                    </div>
+                    )}
 
-                    {/* Total - Siempre visible */}
-                    <div className="border-t border-blue-500/20 pt-3 sm:pt-4 mt-3 sm:mt-4">
-                      <div className="flex justify-between items-center">
-                        <span className="text-base sm:text-lg font-semibold text-white">Total:</span>
-                        <span className="text-base sm:text-lg font-bold text-green-400">
-                          {formatPrice(cartTotal)}
-                        </span>
+                    {/* Total */}
+                    <div className="border-t border-blue-500/20 pt-2.5 mt-2.5">
+                      <div className="flex justify-between items-center mb-3">
+                        <span className="text-sm font-semibold text-white">Total</span>
+                        <span className="text-sm font-bold text-emerald-400">{formatPrice(cartTotal)}</span>
                       </div>
+                      <button
+                        onClick={processSale}
+                        disabled={processingSale || cart.length === 0 || saleCompleted}
+                        className={`w-full min-h-11 py-2.5 rounded-xl transition-all duration-300 flex items-center justify-center font-semibold shadow-xl text-sm ${
+                          saleCompleted 
+                            ? 'bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 shadow-soft' 
+                            : processingSale 
+                            ? 'bg-blue-500/10 border border-blue-500/30 text-blue-300 shadow-soft' 
+                            : cart.length === 0 
+                            ? 'bg-gray-600/10 border border-gray-600/30 cursor-not-allowed text-gray-400'
+                            : 'bg-gradient-to-r from-emerald-600/20 to-blue-600/20 border border-emerald-500/30 hover:border-blue-500/40 text-white hover:from-emerald-600/30 hover:to-blue-600/30 transform hover:scale-105 shadow-soft'
+                        }`}
+                      >
+                        {saleCompleted ? (
+                          <><Check className="w-4 h-4 mr-2" />¡Venta Completada!</>
+                        ) : processingSale ? (
+                          <><Skeleton className="h-4 w-4 rounded-full" />Procesando Venta...</>
+                        ) : (
+                          <><DollarSign className="w-4 h-4 mr-2" />Procesar Venta</>
+                        )}
+                      </button>
                     </div>
-
-                    {/* Botón procesar venta - Siempre visible */}
-                    <button
-                      onClick={processSale}
-                      disabled={processingSale || cart.length === 0 || saleCompleted}
-                      className={`w-full mt-3 sm:mt-4 py-2.5 sm:py-3 rounded-xl transition-all duration-300 flex items-center justify-center font-semibold shadow-xl text-sm sm:text-base ${
-                        saleCompleted 
-                          ? 'bg-green-500/10 border border-green-500/30 text-green-300 shadow-green-500/20' 
-                          : processingSale 
-                          ? 'bg-blue-500/10 border border-blue-500/30 text-blue-300 shadow-blue-500/20' 
-                          : cart.length === 0 
-                          ? 'bg-gray-600/10 border border-gray-600/30 cursor-not-allowed text-gray-400'
-                          : 'bg-gradient-to-r from-green-600/20 to-blue-600/20 border border-green-500/30 hover:border-blue-500/40 text-white hover:bg-gradient-to-r hover:from-green-600/30 hover:to-blue-600/30 transform hover:scale-105 shadow-blue-500/20'
-                      }`}
-                    >
-                      {saleCompleted ? (
-                        <>
-                          <Check className="w-4 h-4 mr-2" />
-                          ¡Venta Completada!
-                        </>
-                      ) : processingSale ? (
-                        <>
-                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                          Procesando Venta...
-                        </>
-                      ) : (
-                        <>
-                          <DollarSign className="w-4 h-4 mr-2" />
-                          Procesar Venta
-                        </>
-                      )}
-                    </button>
                   </>
                 )}
               </div>
-            </div>
-          </div>
-
-          {/* Contenido principal - Segundo en móvil, primero en desktop */}
-          <div className="order-2 lg:order-1 lg:col-span-2 space-y-4 sm:space-y-6 lg:space-y-8">
-            {/* Filtros */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 lg:gap-6">
-              {/* Búsqueda */}
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4 sm:w-5 sm:h-5" />
-                <input
-                  type="text"
-                  placeholder="Buscar productos y servicios..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="glassmorphism-input pl-10 sm:pl-12"
-                />
-              </div>
-
-              {/* Filtro por categoría */}
-              <div className="relative">
-                <Filter className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4 sm:w-5 sm:h-5 z-10" />
-                <select
-                  value={categoryFilter}
-                  onChange={(e) => setCategoryFilter(e.target.value)}
-                  className="glassmorphism-select pl-10 sm:pl-12"
-                >
-                  <option value="all">Todas las categorías</option>
-                  {categories.map(category => (
-                    <option key={category} value={category}>
-                      {category}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </div>
-
-            {/* Grid unificado: Servicios primero (verdes), luego productos (azules) */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-4 lg:gap-6">
-              {/* SERVICIOS PRIMERO - Cards verdes */}
-              {services
-                .filter(service => 
-                  searchTerm === '' || 
-                  service.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                  service.description?.toLowerCase().includes(searchTerm.toLowerCase())
-                )
-                .map((service) => (
-                <div
-                  key={service._id}
-                  className="group relative backdrop-blur-sm border rounded-lg p-3 sm:p-4 transition-all duration-300 overflow-hidden hover:scale-[1.002] hover:-translate-y-0.5 cursor-pointer ml-1 mr-1 border-green-500/30 bg-green-500/5 shadow-sm shadow-green-500/20"
-                >
-                  <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/[2.5%] to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-1000 ease-out rounded-lg"></div>
-                  <div className="relative space-y-2 sm:space-y-3">
-                    <div>
-                      <h3 className="font-semibold text-white text-xs sm:text-sm lg:text-base flex items-center gap-2">
-                        <Scissors className="w-3 h-3 text-green-400" />
-                        {service.name}
-                      </h3>
-                      {service.description && (
-                        <p className="text-gray-400 text-xs mt-1 line-clamp-2">{service.description}</p>
-                      )}
-                      <span className="inline-block mt-1 sm:mt-2 px-2 py-1 bg-green-500/20 text-green-300 text-xs rounded-full border border-green-500/30">
-                        Servicio
-                      </span>
-                    </div>
-                    
-                    <div className="flex items-center justify-between">
-                      <p className="text-green-400 font-bold text-xs sm:text-sm lg:text-base">{formatPrice(service.price)}</p>
-                      <button
-                        onClick={() => {
-                          // Agregar directamente al carrito con el servicio seleccionado
-                          addWalkInServiceDirect(service);
-                        }}
-                        className="group relative p-1.5 sm:p-2 bg-gradient-to-r from-green-600/20 to-blue-600/20 rounded-lg border border-green-500/30 hover:border-blue-500/40 transition-all duration-300 backdrop-blur-sm hover:bg-gradient-to-r hover:from-green-600/30 hover:to-blue-600/30 transform hover:scale-110 shadow-xl shadow-green-500/20"
-                      >
-                        <Plus className="w-3 h-3 sm:w-4 sm:h-4 text-green-400 group-hover:text-blue-400 transition-colors duration-300" />
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              ))}
-
-              {/* PRODUCTOS DESPUÉS - Cards azules */}
-              {filteredProducts.length === 0 && services.filter(s => 
-                  searchTerm === '' || 
-                  s.name.toLowerCase().includes(searchTerm.toLowerCase())
-                ).length === 0 ? (
-                <div className="col-span-full text-center py-6 sm:py-8">
-                  <Package className="w-8 h-8 sm:w-12 sm:h-12 text-gray-600 mx-auto mb-2 sm:mb-3" />
-                  <p className="text-gray-400 text-xs sm:text-sm lg:text-base">
-                    {searchTerm || categoryFilter !== 'all' 
-                      ? 'No se encontraron productos o servicios con los filtros aplicados' 
-                      : 'No hay productos o servicios disponibles'}
-                  </p>
-                </div>
-              ) : null}
-              
-              {/* Mapeo de productos */}
-              {filteredProducts.map((product) => (
-                <div
-                  key={product._id}
-                  className="group relative backdrop-blur-sm border rounded-lg p-3 sm:p-4 transition-all duration-300 overflow-hidden hover:scale-[1.002] hover:-translate-y-0.5 cursor-pointer ml-1 mr-1 border-blue-500/30 bg-blue-500/5 shadow-sm shadow-blue-500/20"
-                >
-                  <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/[2.5%] to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-1000 ease-out rounded-lg"></div>
-                    <div className="relative space-y-2 sm:space-y-3">
-                      <div>
-                        <h3 className="font-semibold text-white text-xs sm:text-sm lg:text-base">{product.name}</h3>
-                        {product.description && (
-                          <p className="text-gray-400 text-xs mt-1 line-clamp-2">{product.description}</p>
-                        )}
-                        {product.category && (
-                          <span className="inline-block mt-1 sm:mt-2 px-2 py-1 bg-blue-500/20 text-blue-300 text-xs rounded-full border border-blue-500/30">
-                            {product.category}
-                          </span>
-                        )}
-                      </div>
-                      
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <p className="text-green-400 font-bold text-xs sm:text-sm lg:text-base">{formatPrice(product.price)}</p>
-                          <p className="text-gray-500 text-xs">Stock: {product.quantity || product.stock || 0}</p>
-                        </div> {/* Cierre price column */}
-                        <button
-                          onClick={() => addToCart(product)}
-                          disabled={(product.quantity || product.stock || 0) === 0}
-                          className="group relative p-1.5 sm:p-2 bg-gradient-to-r from-blue-600/20 to-green-600/20 rounded-lg border border-blue-500/30 hover:border-green-500/40 transition-all duration-300 backdrop-blur-sm hover:bg-gradient-to-r hover:from-blue-600/30 hover:to-green-600/30 transform hover:scale-110 shadow-xl shadow-blue-500/20 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
-                        >
-                          <Plus className="w-3 h-3 sm:w-4 sm:h-4 text-blue-400 group-hover:text-green-400 transition-colors duration-300" />
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                ))}
             </div>
           </div>
         </div>
@@ -1196,80 +1249,59 @@ const BarberSales = () => {
       </PageContainer>
 
       {/* Modal para editar método de pago */}
-      {paymentMethodModal.show && (
-        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4 sm:p-6">
-          <div className="relative w-full max-w-md mx-auto max-h-[90vh] flex flex-col">
-            <div className="relative bg-blue-500/5 backdrop-blur-md border border-blue-500/20 rounded-2xl shadow-2xl shadow-blue-500/20 flex flex-col overflow-hidden">
-              {/* Header fijo */}
-              <div className="flex-shrink-0 p-4 sm:p-6 border-b border-blue-500/20">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className="p-2 bg-gradient-to-r from-blue-600/20 to-purple-600/20 rounded-xl border border-blue-500/20">
-                      <CreditCard className="w-5 h-5 text-blue-400" />
-                    </div>
-                    <div>
-                      <h3 className="text-lg font-semibold text-white">Método de pago</h3>
-                      <p className="text-sm text-gray-300">{paymentMethodModal.item?.name}</p>
-                    </div>
-                  </div>
-                  <button
-                    onClick={closePaymentMethodModal}
-                    className="p-1 text-gray-400 hover:text-white transition-colors duration-300"
-                  >
-                    <X className="w-5 h-5" />
-                  </button>
-                </div>
-              </div>
-
-              {/* Contenido con scroll */}
-              <div className="flex-1 overflow-y-auto custom-scrollbar p-4 sm:p-6">
-                <div className="space-y-3">
-                  {allPaymentMethods && allPaymentMethods.length > 0 ? allPaymentMethods.map((method) => {
-                    if (!method) return null;
-                    
-                    // Validar que el icono sea un componente React válido
-                    let IconComponent = CreditCard; // Default
-                    if (method?.icon && typeof method.icon === 'function') {
-                      IconComponent = method.icon;
-                    } else if (method?.icon && typeof method.icon === 'object') {
-                      IconComponent = CreditCard;
-                    }
-                    
-                    const isSelected = paymentMethodModal.item?.paymentMethod === method.backendId;
-                    
-                    // Obtener colores específicos para este método
-                    const colors = getPaymentMethodColor(method.backendId);
-                    
-                    return (
-                      <button
-                        key={method.backendId || method.id}
-                        onClick={() => updatePaymentMethod(method.backendId)}
-                        className={`w-full p-3 sm:p-4 rounded-xl border transition-all duration-300 flex items-center gap-3 hover:scale-105 ${colors.bg} ${colors.border} ${
-                          isSelected
-                            ? 'shadow-lg ring-2 ring-white/20'
-                            : 'hover:shadow-md'
-                        }`}
-                      >
-                        <IconComponent className={`w-5 h-5 ${colors.text}`} />
-                        <span className={`font-medium ${colors.text}`}>
-                          {method?.name || method?.backendId}
-                        </span>
-                        {isSelected && (
-                          <Check className="w-4 h-4 text-white ml-auto" />
-                        )}
-                      </button>
-                    );
-                  }) : (
-                    <div className="text-center text-gray-400 py-4">
-                      No hay métodos de pago disponibles
-                    </div>
-                  )}
-                </div>
-              </div>
+      <Modal
+        isOpen={paymentMethodModal.show}
+        onClose={closePaymentMethodModal}
+        color="emerald"
+        title="Método de pago"
+        subtitle={paymentMethodModal.item?.name}
+        icon={CreditCard}
+        size="md"
+      >
+        <div className="space-y-3">
+          {allPaymentMethods && allPaymentMethods.length > 0 ? allPaymentMethods.map((method) => {
+            // Salta entradas nulas y garantiza que el icono sea un componente React válido.
+            if (!method) return null;
+            
+            // Validar que el icono sea un componente React válido
+            let IconComponent = CreditCard; // Default
+            if (method?.icon && typeof method.icon === 'function') {
+              IconComponent = method.icon;
+            } else if (method?.icon && typeof method.icon === 'object') {
+              IconComponent = CreditCard;
+            }
+            
+            const isSelected = paymentMethodModal.item?.paymentMethod === method.backendId;
+            
+            // Obtener colores específicos para este método
+            const colors = resolveMethodColor(method.backendId, method);
+            
+            return (
+              <button
+                key={method.backendId || method.id}
+                onClick={() => updatePaymentMethod(method.backendId)}
+                className={`w-full p-3 sm:p-4 rounded-xl border transition-all duration-300 flex items-center gap-3 hover:scale-105 ${colors.bg} ${colors.border} ${
+                  isSelected
+                    ? 'shadow-lg ring-2 ring-white/20'
+                    : 'hover:shadow-md'
+                }`}
+              >
+                <IconComponent className={`w-5 h-5 ${colors.text}`} />
+                <span className={`font-medium ${colors.text}`}>
+                  {method?.name || method?.backendId}
+                </span>
+                {isSelected && (
+                  <Check className="w-4 h-4 text-white ml-auto" />
+                )}
+              </button>
+            );
+          }) : (
+            <div className="text-center text-gray-400 py-4">
+              No hay métodos de pago disponibles
             </div>
-          </div>
+          )}
         </div>
-      )}
+      </Modal>
 
       {/* Modal de Reembolso */}
       <RefundSaleModal

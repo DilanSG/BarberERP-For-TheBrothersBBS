@@ -7,7 +7,6 @@ export * from './upload.js';
 export * from './cache.js';
 export * from './monitoring.js';
 export * from './morgan.js';
-export * from './pagination.js';
 export * from './rateLimiting.js';
 export * from '../../shared/utils/logger.js';
 export { asyncHandler } from '../../shared/utils/errors.js';

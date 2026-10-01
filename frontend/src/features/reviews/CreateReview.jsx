@@ -2,8 +2,12 @@ import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Star, ArrowLeft, CheckCircle } from 'lucide-react';
 import { toast } from 'react-toastify';
-import { reviewService } from '@services/api';
+import { reviewService } from '@services/reviewService';
+import { Skeleton } from '@components/ui/Skeleton';
 
+// Pantalla para calificar (o consultar) la reseña de una cita completada.
+// Ruta: /reviews/create/:appointmentId. Si ya existe reseña la muestra en
+// modo lectura; si no, permite elegir de 1 a 5 estrellas y enviarla.
 const CreateReview = () => {
   const { appointmentId } = useParams();
   const navigate = useNavigate();
@@ -15,10 +19,13 @@ const CreateReview = () => {
   const [eligibility, setEligibility] = useState(null);
   const [existingReview, setExistingReview] = useState(null);
 
+  // Verifica la elegibilidad de la cita al montar o cambiar de cita.
   useEffect(() => {
     checkEligibility();
   }, [appointmentId]);
 
+  // Consulta al backend si la cita puede reseñarse; si ya tiene reseña carga
+  // su valor y, ante error, avisa y regresa a Mis Citas.
   const checkEligibility = async () => {
     try {
       const response = await reviewService.checkEligibility(appointmentId);
@@ -37,6 +44,8 @@ const CreateReview = () => {
     }
   };
 
+  // Envía la reseña con la calificación elegida; exige al menos una estrella
+  // y navega de vuelta a las citas al guardarse.
   const handleSubmit = async (e) => {
     e.preventDefault();
 
@@ -64,9 +73,10 @@ const CreateReview = () => {
     }
   };
 
+  // Estado de carga previo a conocer la elegibilidad.
   if (loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-black flex items-center justify-center">
+      <div className="min-h-screen flex items-center justify-center">
         <div className="text-gray-400">Cargando...</div>
       </div>
     );
@@ -76,8 +86,9 @@ const CreateReview = () => {
                      eligibility?.appointment?.barber?.name || 
                      'Barbero';
 
+  // Vista con dos modos: reseña existente (solo lectura) o formulario de estrellas.
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-black p-4 sm:p-6 lg:p-8">
+    <div className="min-h-screen p-4 sm:p-6 lg:p-8">
       <div className="max-w-2xl mx-auto pt-20">
         {/* Back Button */}
         <button
@@ -91,12 +102,12 @@ const CreateReview = () => {
         {/* Card Principal con Glassmorphism */}
         <div className="bg-gray-800/50 backdrop-blur-xl rounded-2xl border border-gray-700/50 shadow-2xl overflow-hidden">
           {/* Header */}
-          <div className="bg-gradient-to-r from-blue-600/20 to-purple-600/20 border-b border-gray-700/50 p-6">
+          <div className="bg-gradient-to-r from-blue-600/20 to-brand-500/20 border-b border-gray-700/50 p-6">
             <div className="flex items-center gap-3 mb-2">
               {existingReview ? (
-                <CheckCircle className="text-green-400" size={32} />
+                <CheckCircle className="text-emerald-400" size={32} />
               ) : (
-                <Star className="text-yellow-400" size={32} />
+                <Star className="text-amber-400" size={32} />
               )}
               <h1 className="text-2xl font-bold text-white">
                 {existingReview ? 'Tu Reseña' : 'Califica tu Experiencia'}
@@ -121,18 +132,18 @@ const CreateReview = () => {
                         size={48}
                         className={
                           star <= rating
-                            ? 'fill-yellow-400 text-yellow-400'
+                            ? 'fill-amber-400 text-amber-400'
                             : 'text-gray-600'
                         }
                       />
                     ))}
                   </div>
                   <p className="text-gray-400 mt-4">
-                    {rating === 5 && '⭐⭐⭐⭐⭐ ¡Excelente!'}
-                    {rating === 4 && '⭐⭐⭐⭐ Muy bueno'}
-                    {rating === 3 && '⭐⭐⭐ Bueno'}
-                    {rating === 2 && '⭐⭐ Regular'}
-                    {rating === 1 && '⭐ Necesita mejorar'}
+                    {rating === 5 && '★ ★ ★ ★ ★ ¡Excelente!'}
+                    {rating === 4 && '★ ★ ★ ★ Muy bueno'}
+                    {rating === 3 && '★ ★ ★ Bueno'}
+                    {rating === 2 && '★ ★ Regular'}
+                    {rating === 1 && '★ Necesita mejorar'}
                   </p>
                 </div>
 
@@ -163,7 +174,7 @@ const CreateReview = () => {
                           size={48}
                           className={
                             star <= (hoverRating || rating)
-                              ? 'fill-yellow-400 text-yellow-400'
+                              ? 'fill-amber-400 text-amber-400'
                               : 'text-gray-600'
                           }
                         />
@@ -173,11 +184,11 @@ const CreateReview = () => {
 
                   {rating > 0 && (
                     <p className="text-gray-400 text-sm animate-fade-in">
-                      {rating === 5 && '⭐⭐⭐⭐⭐ ¡Excelente!'}
-                      {rating === 4 && '⭐⭐⭐⭐ Muy bueno'}
-                      {rating === 3 && '⭐⭐⭐ Bueno'}
-                      {rating === 2 && '⭐⭐ Regular'}
-                      {rating === 1 && '⭐ Necesita mejorar'}
+                      {rating === 5 && '★ ★ ★ ★ ★ ¡Excelente!'}
+                      {rating === 4 && '★ ★ ★ ★ Muy bueno'}
+                      {rating === 3 && '★ ★ ★ Bueno'}
+                      {rating === 2 && '★ ★ Regular'}
+                      {rating === 1 && '★ Necesita mejorar'}
                     </p>
                   )}
                 </div>
@@ -196,7 +207,7 @@ const CreateReview = () => {
                 >
                   {submitting ? (
                     <span className="flex items-center justify-center gap-2">
-                      <div className="animate-spin rounded-full h-5 w-5 border-2 border-white border-t-transparent"></div>
+                    <Skeleton className="h-4 w-4 rounded-full" />
                       Enviando...
                     </span>
                   ) : (

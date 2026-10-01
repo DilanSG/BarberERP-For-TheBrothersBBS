@@ -69,7 +69,7 @@ router.post('/:serviceId/barbers/:barberId',
   invalidateCacheMiddleware(CACHE_PATTERNS),
   assignServiceToBarber
 );
-router.delete('/:serviceId/barbers/:barberId', protect, adminAuth, validateIdParam, removeServiceFromBarber);
+router.delete('/:serviceId/barbers/:barberId', protect, adminAuth, validateIdParam, invalidateCacheMiddleware(CACHE_PATTERNS), removeServiceFromBarber);
 
 // Ruta de estadísticas
 router.get('/stats/overview', protect, adminAuth, getServiceStats);

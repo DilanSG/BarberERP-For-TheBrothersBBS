@@ -2,13 +2,20 @@ import mongoose from 'mongoose';
 import Appointment from '../../domain/entities/Appointment.js';
 import Barber from '../../domain/entities/Barber.js'; 
 import Service from '../../domain/entities/Service.js';
-import { AppError, logger } from '../../../barrel.js';
+import { AppError, logger, Review } from '../../../barrel.js';
 import { now } from '../../../shared/utils/dateUtils.js';
 // import ReportsCacheService from './reportsCacheService.js';
 
 // const reportsCacheService = new ReportsCacheService();
 
+// Casos de uso de citas (servicio principal).
+// Cubre disponibilidad, CRUD, transiciones de estado (pending/confirmed/
+// completed/cancelled/no_show), reglas de cancelación por rol y estadísticas
+// agregadas por barbero con ajuste de zona horaria de Colombia (UTC-5).
 class AppointmentUseCases {
+  // Obtener horas disponibles de un barbero para una fecha.
+  // Valida barbero, horario configurado y que atienda el día; trae las citas del
+  // día (excluyendo canceladas/no-show) y delega la generación en generateTimeSlots.
   static async getAvailableTimes(barberId, date) {
     const barber = await Barber.findById(barberId).populate('user');
     if (!barber) {
@@ -61,6 +68,10 @@ class AppointmentUseCases {
     return availableSlots;
   }
 
+  // Genera slots de 30 min entre la hora de inicio y fin del barbero.
+  // Marca ocupado un slot si coincide (hh:mm) con la hora de una cita existente;
+  // construye el datetime en UTC sumando +5 h para representar Colombia y
+  // descarta los slots que ya pasaron. Retorna [{ time, datetime }].
   static generateTimeSlots(startTime, endTime, appointments, date) {
     const slots = [];
     const start = new Date(`2000-01-01 ${startTime}`);
@@ -85,6 +96,7 @@ class AppointmentUseCases {
 
       if (isAvailable) {
         // Crear datetime completo para el frontend usando UTC para evitar problemas de zona horaria
+        // Se compensa +5 h respecto a la hora local para expresar Colombia (UTC-5).
         const [year, month, day] = date.split('-').map(Number);
         const [hours, minutes] = timeString.split(':').map(Number);
         
@@ -113,6 +125,10 @@ class AppointmentUseCases {
     return slots;
   }
 
+  // Crea una cita nueva.
+  // Normaliza barberId/serviceId (acepta los alias barber/service), obtiene
+  // duración y precio del servicio, verifica disponibilidad del barbero y que
+  // este ofrezca el servicio; crea en estado 'pending' y devuelve populated.
   static async createAppointment(appointmentData) {
     try {
       // logger.info('📝 Datos recibidos para crear cita:', appointmentData);
@@ -198,33 +214,45 @@ class AppointmentUseCases {
     }
   }
 
+  // Obtiene citas que cumplen los filtros (sin límite artificial), populadas
+  // con usuario/barbero/servicio y ordenadas por fecha ascendente. Calcula
+  // hasReview en una sola consulta a Review para evitar N+1.
   static async getAppointments(filters = {}) {
     try {
+      // Sin límite artificial: los modales/desgloses deben ver TODAS las citas
+      // del período (un limit silencioso producía totales incompletos).
       const appointments = await Appointment.find(filters)
         .populate('user', 'name email phone')
         .populate({
           path: 'barber',
-          select: 'user services',
+          select: 'user',
           populate: { path: 'user', select: 'name email' }
         })
         .populate('service', 'name price duration')
-        .populate('review')
-        .sort({ date: 1 });
+        .sort({ date: 1 })
+        .lean();
 
-      // Agregar campo hasReview a cada cita
-      const appointmentsWithReview = appointments.map(apt => {
-        const aptObj = apt.toObject();
-        aptObj.hasReview = !!aptObj.review;
-        return aptObj;
-      });
+      // Determinar qué citas ya tienen reseña (una sola consulta, sin N+1)
+      // Se resuelve el virtual 'review' cargando appointment y marcando un Set.
+      const ids = appointments.map((apt) => apt._id);
+      const reviews = ids.length
+        ? await Review.find({ appointment: { $in: ids } }).select('appointment').lean()
+        : [];
+      const reviewedIds = new Set(reviews.map((review) => String(review.appointment)));
 
-      return appointmentsWithReview;
+      return appointments.map(apt => ({
+        ...apt,
+        hasReview: reviewedIds.has(String(apt._id))
+      }));
     } catch (error) {
-      logger.error('Error obteniendo citas:', error);
+      logger.error('Error obteniendo citas', { error: error.message, stack: error.stack });
       throw new AppError('Error al obtener las citas', 500);
     }
   }
 
+  // Obtiene una cita por id con usuario, barbero (y su usuario) y servicio
+  // populados, más la reseña. Agrega hasReview como propiedad temporal (no
+  // persistida). Lanza 404 si no existe.
   static async getAppointmentById(id) {
     try {
       const appointment = await Appointment.findById(id)
@@ -251,6 +279,9 @@ class AppointmentUseCases {
     }
   }
 
+  // Actualiza una cita.
+  // Permiso: admin, el usuario dueño de la cita o el usuario del barbero.
+  // Si cambia fecha o duración revalida disponibilidad excluyendo esta cita.
   static async updateAppointment(id, updateData, userId, userRole) {
     try {
       const appointment = await this.getAppointmentById(id);
@@ -295,6 +326,10 @@ class AppointmentUseCases {
     }
   }
 
+  // Cancela una cita aplicando reglas por estado y rol.
+  // pending: el cliente cancela sin motivo, el barbero debe dar motivo (máx 100
+  // palabras) y el admin puede darlo opcional. confirmed: cualquier rol requiere
+  // motivo y la cancelación es inmediata. Marca cancelledBy/At y flags de aviso.
   static async cancelAppointment(id, reason, user) {
     try {
       const appointment = await this.getAppointmentById(id);
@@ -366,6 +401,8 @@ class AppointmentUseCases {
     }
   }
 
+  // Completa una cita confirmada y le asigna el método de pago con el que se
+  // cobró. El estado cambia a 'completed' y se guarda.
   static async completeAppointment(id, userId, userRole, paymentMethod) {
     try {
       const appointment = await this.getAppointmentById(id);
@@ -388,6 +425,9 @@ class AppointmentUseCases {
     }
   }
 
+  // Aprueba (confirma) una cita pendiente.
+  // Solo el barbero asignado o un admin; exige estado pending y vuelve a leer
+  // el documento fresco para detectar carreras (409 si ya fue procesada).
   static async approveAppointment(id, userId, userRole) {
     try {
       // Refrescar los datos de la cita desde la base de datos
@@ -432,6 +472,8 @@ class AppointmentUseCases {
     }
   }
 
+  // Marca una cita confirmada como no-show (el cliente no asistió).
+  // Solo el barbero asignado o un admin pueden hacerlo.
   static async markNoShow(id, userId, userRole) {
     try {
       const appointment = await this.getAppointmentById(id);
@@ -458,6 +500,10 @@ class AppointmentUseCases {
   }
 
   // Métodos auxiliares
+  // Verifica si el barbero puede atender [date, date+duration].
+  // Comprueba disponibilidad del día y que el rango quede dentro del horario
+  // laboral; luego busca citas pending/confirmed del día (excluyendo
+  // excludeAppointmentId) y detecta solapamientos con la fórmula de intervalos.
   static async checkBarberAvailability(barberId, date, duration, excludeAppointmentId = null) {
     try {
       // logger.info('🔍 Verificando disponibilidad:', { barberId, date, duration });
@@ -542,6 +588,7 @@ class AppointmentUseCases {
         // });
 
         // Verificar si hay solapamiento
+        // Cubre: la nueva empieza dentro, termina dentro, o envuelve a la existente.
         if (
           (appointmentDate >= existingStart && appointmentDate < existingEnd) ||
           (endTime > existingStart && endTime <= existingEnd) ||
@@ -561,6 +608,8 @@ class AppointmentUseCases {
     }
   }
 
+  // Estadísticas globales de citas: agrupa por estado (conteo y suma de price)
+  // y retorna { byStatus, total, totalRevenue }.
   static async getAppointmentStats(filters = {}) {
     try {
       const stats = await Appointment.aggregate([
@@ -592,6 +641,8 @@ class AppointmentUseCases {
   }
 
   // Limpiar citas pendientes que ya pasaron
+  // Cancela en bloque las citas 'pending' con fecha anterior a hoy, marcando
+  // cancelledBy:'system' y motivo de expiración. Retorna el resumen del barrido.
   static async cleanupExpiredPendingAppointments() {
     try {
       const now = new Date();
@@ -641,9 +692,10 @@ class AppointmentUseCases {
     }
   }
 
-  /**
-   * Obtener estadísticas de citas por barbero
-   */
+  // Obtener estadísticas de citas por barbero
+  // Acepta fecha específica o rango; ambos se ajustan a zona horaria Colombia
+  // (UTC-5) y se normalizan a inicio/fin de día. Agrupa por estado y suma
+  // revenue solo de las completadas. Ante error retorna ceros (no lanza).
   static async getBarberAppointmentStats(barberId, dateFilter = {}) {
     try {
       // Construir filtros de fecha
@@ -731,9 +783,78 @@ class AppointmentUseCases {
     }
   }
 
-  /**
-   * Obtener reporte diario de citas
-   */
+  // Obtener estadísticas de citas para varios barberos en una sola consulta
+  // @param {string[]} barberIds
+  // @param {Object} dateFilter - { date } | { startDate, endDate }
+  // @returns {Promise<Object>} mapa barberId → { completed, total, revenue, cancelled, pending }
+  // Preinicializa un bucket por barbero (incluso sin citas) y rellena con la
+  // agregación agrupada por { barber, status }; ante error retorna lo parcial.
+  static async getBarbersAppointmentStats(barberIds = [], dateFilter = {}) {
+    const emptyBucket = () => ({ completed: 0, total: 0, revenue: 0, cancelled: 0, pending: 0 });
+    const result = {};
+
+    try {
+      const ids = (barberIds || [])
+        .filter(Boolean)
+        .map((id) => new mongoose.Types.ObjectId(id));
+
+      ids.forEach((id) => { result[String(id)] = emptyBucket(); });
+
+      if (ids.length === 0) return result;
+
+      const matchConditions = { barber: { $in: ids } };
+
+      if (dateFilter.date) {
+        const targetDate = new Date(dateFilter.date + 'T00:00:00.000-05:00');
+        const startOfDay = new Date(targetDate);
+        startOfDay.setHours(0, 0, 0, 0);
+        const endOfDay = new Date(targetDate);
+        endOfDay.setHours(23, 59, 59, 999);
+        matchConditions.date = { $gte: startOfDay, $lte: endOfDay };
+      } else if (dateFilter.startDate && dateFilter.endDate) {
+        const startDate = new Date(dateFilter.startDate + 'T00:00:00.000-05:00');
+        startDate.setHours(0, 0, 0, 0);
+        const endDate = new Date(dateFilter.endDate + 'T23:59:59.999-05:00');
+        endDate.setHours(23, 59, 59, 999);
+        matchConditions.date = { $gte: startDate, $lte: endDate };
+      }
+
+      const rows = await Appointment.aggregate([
+        { $match: matchConditions },
+        {
+          $group: {
+            _id: { barber: '$barber', status: '$status' },
+            count: { $sum: 1 },
+            revenue: {
+              $sum: {
+                $cond: [{ $eq: ['$status', 'completed'] }, '$price', 0]
+              }
+            }
+          }
+        }
+      ]);
+
+      rows.forEach((row) => {
+        const key = String(row._id.barber);
+        if (!result[key]) result[key] = emptyBucket();
+
+        const bucket = result[key];
+        bucket.total += row.count || 0;
+        if (row._id.status) bucket[row._id.status] = row.count || 0;
+        bucket.revenue += row.revenue || 0;
+      });
+
+      return result;
+    } catch (error) {
+      logger.error('Error obteniendo stats de citas por barberos', { error: error.message, stack: error.stack });
+      return result;
+    }
+  }
+
+  // Obtener reporte diario de citas
+  // Citas completadas de un día (inicio/fin de día local), con barbero,
+  // servicio y usuario populados; opcionalmente filtra por barbero.
+  // Ante error retorna [] (no lanza).
   static async getDailyReport(dateString, barberId = null) {
     try {
       const date = new Date(dateString);
@@ -767,9 +888,9 @@ class AppointmentUseCases {
     }
   }
 
-  /**
-   * Obtener fechas disponibles con citas para un barbero
-   */
+  // Obtener fechas disponibles con citas para un barbero
+  // Agrupa citas completadas por día (formato YYYY-MM-DD) y retorna las fechas
+  // ordenadas de más reciente a más antigua; ante error retorna [].
   static async getAvailableDates(barberId) {
     try {
       const appointments = await Appointment.aggregate([
@@ -801,9 +922,10 @@ class AppointmentUseCases {
     }
   }
 
-  /**
-   * Obtener detalles de citas completadas agrupadas por día
-   */
+  // Obtener detalles de citas completadas agrupadas por día
+  // Resuelve el barbero por _id o por user; si hay rango de fechas lo ajusta a
+  // zona horaria Colombia (UTC-5); busca las completadas y las agrupa por día
+  // con totalAmount/totalAppointments. (El cache está comentado.)
   static async getCompletedDetails(barberId, startDate, endDate) {
     try {
       // logger.info(`🔍 Obteniendo detalles de citas completadas - Barbero: ${barberId}, Desde: ${startDate || 'SIN LIMITE'}, Hasta: ${endDate || 'SIN LIMITE'}`);
@@ -865,6 +987,7 @@ class AppointmentUseCases {
           }
 
       // Agrupar por día
+      // dayKey en ISO (YYYY-MM-DD, UTC) y acumula montos y conteos por jornada.
       const appointmentsByDay = {};
       appointments.forEach(appointment => {
         const dayKey = appointment.date.toISOString().split('T')[0];
@@ -923,9 +1046,9 @@ class AppointmentUseCases {
     }
   }
 
-  /**
-   * Obtener todas las citas completadas para el modal de breakdown
-   */
+  // Obtener todas las citas completadas para el modal de breakdown
+  // Filtra las completadas que tengan método de pago, populadas con usuario,
+  // servicio y barbero (y el user del barbero), ordenadas por fecha descendente.
   static async getCompletedAppointments() {
     try {
       logger.info('🔍 Buscando citas completadas con método de pago...');

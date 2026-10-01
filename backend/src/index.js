@@ -13,6 +13,7 @@ import { connectDB } from './shared/config/database.js';
 import { logger } from './shared/utils/logger.js';
 import cronJobService from './services/cronJobService.js';
 import emailService from './services/emailService.js';
+import { initWebSocket } from './services/websocketService.js';
 import mongoose from 'mongoose';
 import monitoringService from './core/application/usecases/MonitoringUseCases.js';
 
@@ -20,11 +21,13 @@ import monitoringService from './core/application/usecases/MonitoringUseCases.js
 const startServer = async () => {
   try {
     logger.info(`Iniciando servidor [${config.app.nodeEnv}] en puerto ${config.app.port}...`);
-    
-    // Conectar a la base de datos
+
+    // 1) Conectar a la base de datos
+    logger.info('Paso 1/5 · Conectando a MongoDB...');
     await connectDB();
 
-    // Verificar configuración de email (no bloquear el startup)
+    // 2) Verificar configuración de email (no bloquear el startup)
+    logger.info('Paso 2/5 · Verificando servicio de email...');
     emailService.verifyConnection()
       .then(() => {
         logger.info('Servicio de email verificado y listo');
@@ -33,48 +36,58 @@ const startServer = async () => {
         logger.warn(`Email no configurado: ${error.message}`);
       });
 
-    // Inicializar trabajos programados (cron jobs)
+    // 3) Inicializar trabajos programados (cron jobs)
+    logger.info('Paso 3/5 · Inicializando cron jobs...');
     cronJobService.initializeJobs();
-    
-    // Iniciar el servidor
-    const server = app.listen(config.app.port, '0.0.0.0', () => {
-      logger.info(`
-==============================================
-SERVER STARTED SUCCESSFULLY
-==============================================
-Environment: ${config.app.nodeEnv}
-Port: ${config.app.port}
-Host: 0.0.0.0
-API Base: http://localhost:${config.app.port}
-API Docs: http://localhost:${config.app.port}/api/docs
-Email: ${process.env.EMAIL_ENABLED === 'true' ? 'Activo ' : 'Deshabilitado '}
-==============================================`);
-      
-      // Iniciar monitoreo de recursos
+
+    // 4) Iniciar servidor HTTP + WebSocket
+    logger.info('Paso 4/5 · Iniciando servidor HTTP y WebSocket...');
+    const server = app.listen(config.app.port, '0.0.0.0');
+    initWebSocket(server);
+
+    // 5) Servicios finales + resumen de arranque
+    server.on('listening', () => {
+      logger.info('Paso 5/5 · Activando monitoreo de recursos...');
       monitoringService.startResourceMonitoring();
-      logger.info('Monitoreo de recursos activo');
+
+      const dbLabel = mongoose.connection.name
+        ? `${mongoose.connection.host}/${mongoose.connection.name}`
+        : 'conectada';
+
+      logger.logStartup({
+        nodeEnv: config.app.nodeEnv,
+        port: config.app.port,
+        host: '0.0.0.0',
+        apiBase: `http://localhost:${config.app.port}/api/${config.app.apiVersion}`,
+        docsUrl: `http://localhost:${config.app.port}/api/docs`,
+        database: dbLabel,
+        email: process.env.EMAIL_ENABLED === 'true' ? 'activo' : 'deshabilitado',
+        websocket: 'activo',
+        cronJobs: cronJobService.isInitialized ? `${cronJobService.jobs.size} activos` : 'deshabilitados',
+        monitoring: 'activo'
+      });
     });
 
     // Manejar señales de terminación
     const shutdown = async (signal) => {
-      logger.info(`\n${signal} recibido. Iniciando apagado elegante...`);
-      
+      logger.info(`${signal} recibido. Iniciando apagado elegante...`);
+
       server.close(async () => {
         logger.info('Servidor HTTP cerrado');
-        
+
         // Detener monitoreo de recursos
         monitoringService.stopResourceMonitoring();
-        
+
         // Detener trabajos programados
         cronJobService.stopAllJobs();
-        logger.info('Cron Jobs detenidos');
-        
+        logger.info('Cron jobs detenidos');
+
         try {
           await mongoose.connection.close();
           logger.info('Conexión a MongoDB cerrada');
           process.exit(0);
         } catch (err) {
-          logger.error('Error cerrando conexión a MongoDB:', err);
+          logger.error('Error cerrando conexión a MongoDB', { error: err.message, stack: err.stack });
           process.exit(1);
         }
       });
@@ -90,7 +103,10 @@ Email: ${process.env.EMAIL_ENABLED === 'true' ? 'Activo ' : 'Deshabilitado '}
     process.on('SIGINT', () => shutdown('SIGINT'));
 
   } catch (error) {
-    logger.error('Error iniciando el servidor:', error);
+    logger.error('Error iniciando el servidor', {
+      error: error.message,
+      stack: error.stack
+    });
     process.exit(1);
   }
 };

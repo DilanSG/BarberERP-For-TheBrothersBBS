@@ -2,10 +2,8 @@ import mongoose from 'mongoose';
 import { logger } from '../../../shared/utils/logger.js';
 const { Schema, ObjectId } = mongoose;
 
-/**
- * Esquema de gastos con soporte para gastos únicos y recurrentes
- * Refactorizado con patrón más limpio y escalable
- */
+// Esquema de gastos con soporte para gastos únicos y recurrentes
+// Refactorizado con patrón más limpio y escalable
 const expenseSchema = new Schema({
   // Campos básicos
   description: {
@@ -32,12 +30,14 @@ const expenseSchema = new Schema({
   },
   
   paymentMethodId: {
+    // Referencia al método de pago configurable (fuente principal).
     type: Schema.Types.ObjectId,
     ref: 'PaymentMethod',
     required: [true, 'El método de pago es requerido']
   },
 
   // Mantener compatibilidad con código existente
+  // paymentMethod (string) queda como respaldo si no hay paymentMethodId.
   paymentMethod: {
     type: String,
     required: false
@@ -57,22 +57,26 @@ const expenseSchema = new Schema({
   },
   
   // Configuración para gastos recurrentes - Refactorizada
+  // recurrence describe la plantilla: patrón, intervalo, vigencia y estado.
   recurrence: {
     pattern: {
       type: String,
       enum: ['daily', 'weekly', 'biweekly', 'monthly', 'yearly'],
+      // Obligatorio solo para plantillas recurrentes ('recurring-template').
       required: function() { 
         return this.type === 'recurring-template';
       }
     },
     
     interval: {
+      // Cada cuántos períodos se repite (1 = cada día/semana/mes/año).
       type: Number,
       default: 1,
       min: [1, 'El intervalo debe ser al menos 1']
     },
     
     startDate: {
+      // Por defecto arranca en la fecha del gasto (solo en plantillas).
       type: Date,
       default: function() {
         return this.type === 'recurring-template' ? this.date : null;
@@ -90,6 +94,7 @@ const expenseSchema = new Schema({
     },
     
     lastProcessed: {
+      // Última fecha para la que ya se generó una instancia recurrente.
       type: Date,
       default: null
     },
@@ -190,6 +195,8 @@ const expenseSchema = new Schema({
   toJSON: {
     transform: function(doc, ret) {
       // Formatear fechas para respuesta
+      // Convierte date, fechas de recurrence y del formato legado a YYYY-MM-DD
+      // (sin hora) para evitar desfases de zona horaria en el frontend.
       if (ret.date) {
         ret.date = ret.date.toISOString().split('T')[0];
       }
@@ -219,6 +226,7 @@ const expenseSchema = new Schema({
 });
 
 // Índices para optimizar consultas
+// Soportan reportes por fecha, tipo, categoría, creador, plantilla y método de pago.
 expenseSchema.index({ date: -1 });
 expenseSchema.index({ type: 1 });
 expenseSchema.index({ 'recurrence.pattern': 1, 'recurrence.isActive': 1 });
@@ -231,16 +239,19 @@ expenseSchema.index({ paymentMethodId: 1 });
 expenseSchema.index({ 'recurringConfig.frequency': 1, 'recurringConfig.isActive': 1 });
 expenseSchema.index({ parentRecurringExpense: 1 });
 
-/**
- * Método estático para obtener resumen de gastos
- * Versión mejorada con soporte para nuevos tipos y filtrado más eficiente
- */
+// Método estático para obtener resumen de gastos
+// Versión mejorada con soporte para nuevos tipos y filtrado más eficiente
+// Parámetros: startDate/endDate (strings YYYY-MM-DD) y filtros opcionales por
+// categoría, método de pago o creador. Retorna totales y desgloses por tipo,
+// categoría y método de pago (nombres resueltos vía $lookup a paymentmethods).
 expenseSchema.statics.getExpenseSummary = async function(startDate, endDate, filters = {}) {
   // Validar fechas de entrada
   if (!startDate || !endDate) {
     throw new Error('startDate y endDate son requeridos para obtener resumen');
   }
 
+  // Normalizar el rango al día completo en UTC: desde 00:00:00.000 hasta
+  // 23:59:59.999, de modo que se incluyan todos los gastos de ambas fechas.
   const startDateTime = new Date(startDate + 'T00:00:00.000Z');
   const endDateTime = new Date(endDate + 'T23:59:59.999Z');
 
@@ -264,6 +275,7 @@ expenseSchema.statics.getExpenseSummary = async function(startDate, endDate, fil
       $match: matchFilters
     },
     {
+      // Une con paymentmethods para obtener el nombre del método de pago.
       $lookup: {
         from: 'paymentmethods',
         localField: 'paymentMethodId',
@@ -272,6 +284,7 @@ expenseSchema.statics.getExpenseSummary = async function(startDate, endDate, fil
       }
     },
     {
+      // Resuelve el nombre: usa el documento relacionado o cae al campo legado.
       $addFields: {
         paymentMethodName: {
           $cond: {
@@ -283,6 +296,8 @@ expenseSchema.statics.getExpenseSummary = async function(startDate, endDate, fil
       }
     },
     {
+      // Agrupa todo en un único documento: total, conteo y arreglos crudos
+      // (categorías, métodos y tipos) que luego se desglosan en el $project.
       $group: {
         _id: null,
         totalExpenses: { $sum: '$amount' },
@@ -315,6 +330,8 @@ expenseSchema.statics.getExpenseSummary = async function(startDate, endDate, fil
       }
     },
     {
+      // Construye los desgloses: agrupa los arreglos crudos por clave única
+      // ($setUnion) y suma los montos de cada grupo con $arrayToObject.
       $project: {
         _id: 0,
         totalExpenses: 1,
@@ -444,6 +461,7 @@ expenseSchema.statics.getExpenseSummary = async function(startDate, endDate, fil
   const result = await this.aggregate(pipeline);
   
   // Retornar resultado por defecto si no hay datos
+  // (evita que los consumidores manejen undefined cuando no hay gastos).
   return result[0] || {
     totalExpenses: 0,
     totalCount: 0,
@@ -453,11 +471,12 @@ expenseSchema.statics.getExpenseSummary = async function(startDate, endDate, fil
   };
 };
 
-/**
- * Método estático para procesar gastos recurrentes
- * IMPORTANTE: Este método quedará deprecado y se migrará a ExpenseService
- * Se mantiene por compatibilidad con el código existente
- */
+// Método estático para procesar gastos recurrentes
+// IMPORTANTE: Este método quedará deprecado y se migrará a ExpenseService
+// Se mantiene por compatibilidad con el código existente
+// Recorre plantillas activas (formato nuevo y legado), calcula su próxima fecha
+// y crea una instancia hija cuando la fecha ya venció, actualizando lastProcessed.
+// Retorna { processed, errors? } y registra en errors los fallos por plantilla.
 expenseSchema.statics.processRecurringExpenses = async function() {
   logger.warn('Método deprecated: Usar ExpenseService.processScheduledExpenses() en su lugar');
   
@@ -491,11 +510,13 @@ expenseSchema.statics.processRecurringExpenses = async function() {
   for (const recurringExpense of recurringExpenses) {
     try {
       // Determinar qué estructura usar
+      // isLegacy indica el formato antiguo (recurringConfig vs recurrence).
       const isLegacy = recurringExpense.type === 'recurring';
       const config = isLegacy ? recurringExpense.recurringConfig : recurringExpense.recurrence;
       const lastProcessed = config.lastProcessed || config.startDate || recurringExpense.date;
       
       // Calcular próxima fecha usando el método apropiado
+      // El formato nuevo usa RecurrenceCalculator; el legado calculateNextDate.
       let nextDate;
       
       if (isLegacy) {
@@ -540,6 +561,7 @@ expenseSchema.statics.processRecurringExpenses = async function() {
         processedCount++;
       }
     } catch (error) {
+      // Acumula el error sin abortar el resto de plantillas.
       errors.push({
         expenseId: recurringExpense._id,
         description: recurringExpense.description,
@@ -554,11 +576,11 @@ expenseSchema.statics.processRecurringExpenses = async function() {
   };
 };
 
-/**
- * Función auxiliar para calcular la próxima fecha de un gasto recurrente
- * DEPRECATED: Se mantiene por compatibilidad con el código existente.
- * Esta función será eliminada en futuras versiones.
- */
+// Función auxiliar para calcular la próxima fecha de un gasto recurrente
+// DEPRECATED: Se mantiene por compatibilidad con el código existente.
+// Esta función será eliminada en futuras versiones.
+// Suma períodos según frequency/interval desde la última fecha procesada y
+// avanza hasta superar hoy; retorna null si se pasa de config.endDate.
 function calculateNextDate(lastDate, config) {
   logger.warn('Función calculateNextDate deprecated. Usar RecurrenceCalculator en su lugar.');
   
@@ -612,10 +634,11 @@ function calculateNextDate(lastDate, config) {
   return nextDate;
 }
 
-/**
- * Middleware para validar configuración de gastos recurrentes
- * Asegura que los datos sean válidos antes de guardar en la BD
- */
+// Middleware para validar configuración de gastos recurrentes
+// Asegura que los datos sean válidos antes de guardar en la BD
+// Exige fecha de inicio y la configuración mínima según el patrón
+// (weekDays para weekly, monthDays para monthly, mes/día para yearly) y
+// mantiene las validaciones del formato legado 'recurring'.
 expenseSchema.pre('save', function(next) {
   // Validación para gastos recurrentes (nuevo formato)
   if (this.type === 'recurring-template') {
@@ -660,9 +683,11 @@ expenseSchema.pre('save', function(next) {
   next();
 });
 
-/**
- * Método para migrar un gasto del formato antiguo al nuevo
- */
+// Método para migrar un gasto del formato antiguo al nuevo
+// Solo aplica a documentos type 'recurring' con recurringConfig; mapea los
+// campos legados a recurrence, deriva la configuración por patrón (semanal,
+// mensual o anual) y cambia el tipo a 'recurring-template'.
+// Retorna true si migró y false si no había nada que migrar.
 expenseSchema.methods.migrateToNewFormat = function() {
   // Solo migrar si tiene el formato antiguo
   if (this.type !== 'recurring' || !this.recurringConfig) {
@@ -699,7 +724,7 @@ expenseSchema.methods.migrateToNewFormat = function() {
       }
       break;
     
-    case 'yearly':
+    case 'yearly': {
       // Extraer mes y día de startDate para configuración anual
       const startDate = new Date(oldConfig.startDate || this.date);
       this.recurrence.config.yearConfig = {
@@ -707,6 +732,7 @@ expenseSchema.methods.migrateToNewFormat = function() {
         day: startDate.getDate()
       };
       break;
+    }
   }
   
   // Actualizar el tipo de gasto
@@ -718,9 +744,10 @@ expenseSchema.methods.migrateToNewFormat = function() {
   return true;
 };
 
-/**
- * Método para obtener la próxima fecha de ejecución
- */
+// Método para obtener la próxima fecha de ejecución
+// Usa RecurrenceCalculator para plantillas nuevas (import dinámico para evitar
+// dependencias circulares, retorna null y loguea si falla) y calculateNextDate
+// para el formato legado. Retorna null si el gasto no es recurrente.
 expenseSchema.methods.getNextExecutionDate = async function() {
   // Usar el nuevo RecurrenceCalculator para cálculo de fechas
   if (this.type === 'recurring-template') {
@@ -748,10 +775,10 @@ expenseSchema.methods.getNextExecutionDate = async function() {
   return null;
 };
 
-/**
- * Método para buscar gastos que deben procesarse
- * Este método optimiza la consulta para el scheduler
- */
+// Método para buscar gastos que deben procesarse
+// Este método optimiza la consulta para el scheduler
+// Devuelve solo plantillas activas y vigentes (sin endDate o con endDate futuro)
+// en formato lean, con los campos que el scheduler necesita.
 expenseSchema.statics.findPendingToProcess = async function() {
   const today = new Date();
   

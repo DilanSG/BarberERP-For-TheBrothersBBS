@@ -1,6 +1,6 @@
 import express from 'express';
-import { protect, barberAuth } from '../middleware/auth.js';
-import { protectFlexible } from '../middleware/flexibleAuth.js';
+import { protect, barberAuth, adminAuth } from '../middleware/auth.js';
+import { validateSaleId, validateInvoiceId, validateBarberId } from '../middleware/validation.js';
 import * as invoiceController from '../controllers/invoiceController.js';
 
 const router = express.Router();
@@ -13,6 +13,7 @@ router.post(
   '/generate/:saleId',
   protect,
   barberAuth,
+  validateSaleId,
   invoiceController.generateInvoice
 );
 
@@ -29,6 +30,7 @@ router.post(
   '/print/:invoiceId',
   protect,
   barberAuth,
+  validateInvoiceId,
   invoiceController.printInvoice
 );
 
@@ -70,7 +72,8 @@ router.get(
 router.get(
   '/consolidated/:barberId',
   protect,
-  barberAuth,
+  adminAuth,
+  validateBarberId,
   invoiceController.generateConsolidatedInvoice
 );
 
@@ -79,6 +82,7 @@ router.get(
   '/sale/:saleId',
   protect,
   barberAuth,
+  validateSaleId,
   invoiceController.getInvoicesBySale
 );
 
@@ -87,7 +91,8 @@ router.get(
 // Ver factura en HTML (navegador) - /:invoiceId/view
 router.get(
   '/:invoiceId/view',
-  protectFlexible,
+  protect,
+  validateInvoiceId,
   invoiceController.viewInvoiceHTML
 );
 
@@ -96,6 +101,7 @@ router.get(
   '/:invoiceId',
   protect,
   barberAuth,
+  validateInvoiceId,
   invoiceController.getInvoice
 );
 
@@ -103,7 +109,8 @@ router.get(
 router.put(
   '/:invoiceId/cancel',
   protect,
-  barberAuth,
+  adminAuth,
+  validateInvoiceId,
   invoiceController.cancelInvoice
 );
 
@@ -113,7 +120,7 @@ router.put(
 router.post(
   '/printer/test',
   protect,
-  barberAuth,
+  adminAuth,
   invoiceController.testPrinter
 );
 
@@ -121,7 +128,7 @@ router.post(
 router.get(
   '/printer/status',
   protect,
-  barberAuth,
+  adminAuth,
   invoiceController.getPrinterStatus
 );
 
@@ -129,7 +136,7 @@ router.get(
 router.post(
   '/printer/connect',
   protect,
-  barberAuth,
+  adminAuth,
   invoiceController.connectPrinter
 );
 
@@ -137,7 +144,7 @@ router.post(
 router.post(
   '/printer/disconnect',
   protect,
-  barberAuth,
+  adminAuth,
   invoiceController.disconnectPrinter
 );
 

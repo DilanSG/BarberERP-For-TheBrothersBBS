@@ -1,18 +1,15 @@
-/**
- * User Repository Implementation
- * Implementación concreta del repositorio de usuarios usando Mongoose
- * Implementa IUserRepository de Clean Architecture
- */
+// User Repository Implementation
+// Implementación concreta del repositorio de usuarios usando Mongoose
+// Implementa IUserRepository de Clean Architecture
+// La contraseña nunca se retorna (select('-password')) y se valida con comparePassword.
 
 import IUserRepository from '../../../core/domain/repositories/IUserRepository.js';
 import { User, logger, AppError } from '../../../barrel.js';
 
 class UserRepositoryImpl extends IUserRepository {
-  /**
-   * Buscar usuario por ID
-   * @param {string} id - ID del usuario
-   * @returns {Promise<User|null>}
-   */
+  // Buscar usuario por ID
+  // @param {string} id - ID del usuario
+  // @returns {Promise<User|null>}
   async findById(id) {
     try {
       logger.info(`Searching user by ID: ${id}`);
@@ -29,11 +26,9 @@ class UserRepositoryImpl extends IUserRepository {
     }
   }
 
-  /**
-   * Buscar usuario por email
-   * @param {string} email - Email del usuario
-   * @returns {Promise<User|null>}
-   */
+  // Buscar usuario por email
+  // @param {string} email - Email del usuario
+  // @returns {Promise<User|null>}
   async findByEmail(email) {
     try {
       logger.info(`Searching user by email: ${email}`);
@@ -50,11 +45,9 @@ class UserRepositoryImpl extends IUserRepository {
     }
   }
 
-  /**
-   * Buscar todos los usuarios con filtros, paginación y ordenamiento
-   * @param {Object} options - Opciones de búsqueda
-   * @returns {Promise<Object>} - Objeto con datos y metadatos de paginación
-   */
+  // Buscar todos los usuarios con filtros, paginación y ordenamiento
+  // @param {Object} options - Opciones de búsqueda
+  // @returns {Promise<Object>} - Objeto con datos y metadatos de paginación
   async findAll(options = {}) {
     try {
       const {
@@ -65,7 +58,7 @@ class UserRepositoryImpl extends IUserRepository {
         select = '-password'
       } = options;
 
-      logger.info(`Finding users with options:`, { filter, limit, page, sort });
+      logger.debug('Buscando usuarios', { filter, limit, page, sort });
 
       const skip = (page - 1) * limit;
 
@@ -74,7 +67,8 @@ class UserRepositoryImpl extends IUserRepository {
           .select(select)
           .sort(sort)
           .limit(limit)
-          .skip(skip),
+          .skip(skip)
+          .lean(),
         User.countDocuments(filter)
       ]);
 
@@ -88,7 +82,7 @@ class UserRepositoryImpl extends IUserRepository {
         }
       };
 
-      logger.info(`Found ${users.length} users out of ${total} total`);
+      logger.debug(`Encontrados ${users.length} usuarios de ${total} totales`);
       return result;
     } catch (error) {
       logger.error('Error finding users:', error);
@@ -96,11 +90,9 @@ class UserRepositoryImpl extends IUserRepository {
     }
   }
 
-  /**
-   * Crear nuevo usuario
-   * @param {Object} userData - Datos del usuario
-   * @returns {Promise<User>}
-   */
+  // Crear nuevo usuario
+  // @param {Object} userData - Datos del usuario
+  // @returns {Promise<User>}
   async create(userData) {
     try {
       logger.info(`Creating user with email: ${userData.email}`);
@@ -134,12 +126,10 @@ class UserRepositoryImpl extends IUserRepository {
     }
   }
 
-  /**
-   * Actualizar usuario
-   * @param {string} id - ID del usuario
-   * @param {Object} updateData - Datos a actualizar
-   * @returns {Promise<User>}
-   */
+  // Actualizar usuario
+  // @param {string} id - ID del usuario
+  // @param {Object} updateData - Datos a actualizar
+  // @returns {Promise<User>}
   async update(id, updateData) {
     try {
       logger.info(`Updating user: ${id}`);
@@ -187,11 +177,9 @@ class UserRepositoryImpl extends IUserRepository {
     }
   }
 
-  /**
-   * Eliminar usuario
-   * @param {string} id - ID del usuario
-   * @returns {Promise<boolean>}
-   */
+  // Eliminar usuario
+  // @param {string} id - ID del usuario
+  // @returns {Promise<boolean>}
   async delete(id) {
     try {
       logger.info(`Deleting user: ${id}`);
@@ -215,12 +203,10 @@ class UserRepositoryImpl extends IUserRepository {
     }
   }
 
-  /**
-   * Buscar usuarios por rol
-   * @param {string} role - Rol de usuario
-   * @param {Object} options - Opciones adicionales
-   * @returns {Promise<Array>}
-   */
+  // Buscar usuarios por rol
+  // @param {string} role - Rol de usuario
+  // @param {Object} options - Opciones adicionales
+  // @returns {Promise<Array>}
   async findByRole(role, options = {}) {
     try {
       const {
@@ -234,7 +220,8 @@ class UserRepositoryImpl extends IUserRepository {
       const users = await User.find({ role })
         .select(select)
         .sort(sort)
-        .limit(limit);
+        .limit(limit)
+        .lean();
 
       logger.info(`Found ${users.length} users with role: ${role}`);
       return users;
@@ -244,15 +231,14 @@ class UserRepositoryImpl extends IUserRepository {
     }
   }
 
-  /**
-   * Contar usuarios por estado
-   * @param {Object} filters - Filtros adicionales
-   * @returns {Promise<Object>}
-   */
+  // Contar usuarios por estado
+  // @param {Object} filters - Filtros adicionales
+  // @returns {Promise<Object>}
   async countByStatus(filters = {}) {
     try {
       logger.info('Counting users by status');
       
+      // Cuenta total, activos/inactivos y por rol en paralelo
       const [total, active, inactive, clients, barbers, admins] = await Promise.all([
         User.countDocuments(filters),
         User.countDocuments({ ...filters, isActive: true }),
@@ -281,15 +267,14 @@ class UserRepositoryImpl extends IUserRepository {
     }
   }
 
-  /**
-   * Validar contraseña de usuario
-   * @param {string} id - ID del usuario
-   * @param {string} password - Contraseña a validar
-   * @returns {Promise<boolean>}
-   */
+  // Validar contraseña de usuario
+  // @param {string} id - ID del usuario
+  // @param {string} password - Contraseña a validar
+  // @returns {Promise<boolean>}
   async validatePassword(id, password) {
     try {
       logger.info(`Validating password for user: ${id}`);
+      // '+password' fuerza a incluir el hash (por defecto está excluido)
       const user = await User.findById(id).select('+password');
       
       if (!user) {
@@ -311,12 +296,10 @@ class UserRepositoryImpl extends IUserRepository {
     }
   }
 
-  /**
-   * Actualizar contraseña de usuario
-   * @param {string} id - ID del usuario
-   * @param {string} newPassword - Nueva contraseña
-   * @returns {Promise<boolean>}
-   */
+  // Actualizar contraseña de usuario
+  // @param {string} id - ID del usuario
+  // @param {string} newPassword - Nueva contraseña
+  // @returns {Promise<boolean>}
   async updatePassword(id, newPassword) {
     try {
       logger.info(`Updating password for user: ${id}`);

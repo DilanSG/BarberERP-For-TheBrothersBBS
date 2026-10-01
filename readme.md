@@ -4,7 +4,7 @@
 
 Un sistema completo de gestión diseñado específicamente para barberías que combina un backend robusto con Clean Architecture y un frontend React moderno. Incluye gestión de citas, inventario, ventas, reportes financieros, sistema de socios y facturación térmica.
 
-[![License](https://img.shields.io/badge/License-PROPRIETARY-red.svg)](LICENSE)
+[![License](https://img.shields.io/badge/License-BarberERP%201.0%20Non--Commercial-blue.svg)](LICENSE)
 [![Node.js](https://img.shields.io/badge/Node.js-20+-green.svg)](https://nodejs.org/)
 [![React](https://img.shields.io/badge/React-18+-blue.svg)](https://reactjs.org/)
 [![MongoDB](https://img.shields.io/badge/MongoDB-6+-green.svg)](https://mongodb.com/)
@@ -279,13 +279,17 @@ Sistema → Monitor Stock → Alerta Bajo Stock → Admin Restock → Snapshot A
 
 ## 📄 Licencia
 
-Este proyecto es **PROPRIETARY** - Todos los derechos reservados.
+**BarberERP 1.0 — No Comercial (Source-Available)** · Desarrollado por **IntoCod**, programado por **Dilan Acuña**. Ver [`LICENSE`](LICENSE).
 
-- ✅ **Uso permitido**: Desarrollo y operación de The Brothers Barber Shop
-- ❌ **Uso prohibido**: Redistribución, modificación para terceros, uso comercial externo
-- 📧 **Contacto**: Para licencias comerciales contactar al equipo de desarrollo
+- ✅ **Permitido**: usar, estudiar, copiar y **modificar** el código; uso en **entornos propios** (personales/internos).
+- ❌ **Prohibido**: cualquier **uso comercial** (vender, cobrar, ofrecerlo como servicio, integrarlo en productos/servicios de pago o usarlo para generar ganancias).
+- 🔁 **Derivados**: deben conservar la autoría y distribuirse bajo esta misma licencia.
+- 📧 **Contacto**: para licencias comerciales, contactar al equipo de desarrollo (IntoCod / Dilan Acuña).
 
 ## 👤 Autor y Equipo
+
+### **Desarrolladora**
+- **IntoCode** — *Desarrollo del proyecto (BarberERP)*
 
 ### **Desarrollador Principal**
 - **Dilan Acuña** - *Arquitectura Full-Stack y Lead Developer*

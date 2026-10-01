@@ -2,6 +2,7 @@ import nodemailer from 'nodemailer';
 import { logger } from '../utils/logger.js';
 
 // Crear transporter para enviar emails
+// @returns {Object} Transporter de Nodemailer configurado por variables de entorno
 const createTransporter = () => {
   return nodemailer.createTransport({
     service: process.env.EMAIL_SERVICE || 'Gmail',
@@ -82,6 +83,10 @@ export const emailTemplates = {
 };
 
 // Función para enviar email
+// @param {string} to - Destinatario
+// @param {string} templateName - Clave de emailTemplates
+// @param {Array} templateData - Argumentos que recibe la plantilla
+// @returns {Promise<Object>} Resultado del envío de Nodemailer
 export const sendEmail = async (to, templateName, templateData) => {
   try {
     const transporter = createTransporter();

@@ -1,7 +1,10 @@
 import React from 'react';
 import { CheckCircle, XCircle, AlertCircle, Check } from 'lucide-react';
 
+// Badge de estado de cita: combina icono, texto traducido y color según `status`.
+// Valores soportados: pending, confirmed, completed, cancelled (default: desconocido).
 export const StatusBadge = ({ status }) => {
+  // Icono representativo de cada estado.
   const getStatusIcon = () => {
     switch (status) {
       case 'pending': return <AlertCircle className="w-4 h-4" />;
@@ -12,12 +15,13 @@ export const StatusBadge = ({ status }) => {
     }
   };
 
+  // Colores (fondo/borde/texto) por estado.
   const getStatusClasses = () => {
     switch (status) {
       case 'pending': 
-        return 'bg-yellow-500/20 text-yellow-300 border-yellow-500/40';
+        return 'bg-amber-500/20 text-amber-300 border-amber-500/40';
       case 'confirmed': 
-        return 'bg-green-500/20 text-green-300 border-green-500/40';
+        return 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40';
       case 'completed': 
         return 'bg-blue-500/20 text-blue-300 border-blue-500/40';
       case 'cancelled': 
@@ -27,6 +31,7 @@ export const StatusBadge = ({ status }) => {
     }
   };
 
+  // Etiqueta en español por estado.
   const getStatusText = () => {
     switch (status) {
       case 'pending': return 'Pendiente';

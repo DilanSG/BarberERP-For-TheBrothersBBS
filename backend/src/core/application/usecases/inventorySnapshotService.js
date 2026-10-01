@@ -3,14 +3,15 @@ import Inventory from '../../domain/entities/Inventory.js';
 import { AppError, logger } from '../../../barrel.js';
 import ExcelJS from 'exceljs';
 
+// Servicio de snapshots (cortes) de inventario.
+// Persiste conteos físicos por producto, sincroniza el stock real en Inventory,
+// expone consultas paginadas/estadísticas y exporta el corte a Excel.
 export class InventorySnapshotService {
   
-  /**
-   * Crear un nuevo snapshot de inventario
-   * @param {Object} snapshotData - Datos del snapshot
-   * @param {string} userId - ID del usuario que crea el snapshot
-   * @returns {Promise<Object>} Snapshot creado
-   */
+  // Crear un nuevo snapshot de inventario
+  // Valida que vengan items, guarda el corte (los totales se calculan en el
+  // pre-save del modelo) y luego actualiza realStock/lastUpdated de cada
+  // producto. Si un update falla, el snapshot ya quedó guardado (sin rollback).
   static async createSnapshot(snapshotData, userId) {
     try {
       logger.info('Creando snapshot de inventario', { 
@@ -33,6 +34,7 @@ export class InventorySnapshotService {
       const savedSnapshot = await snapshot.save();
       
       // Actualizar el stock real en los productos del inventario
+      // Sincroniza el conteo físico del corte con cada documento Inventory.
       for (const item of snapshotData.items) {
         await Inventory.findByIdAndUpdate(
           item.productId,
@@ -60,13 +62,9 @@ export class InventorySnapshotService {
     }
   }
 
-  /**
-   * Obtener snapshots con paginación
-   * @param {Object} filters - Filtros de búsqueda
-   * @param {number} page - Página
-   * @param {number} limit - Límite por página
-   * @returns {Promise<Object>} Snapshots paginados
-   */
+  // Obtener snapshots con paginación
+  // Filtra por rango de fechas (date) y/o creador; populea el autor, ordena por
+  // fecha descendente y calcula skip/limit junto con la metadata de paginación.
   static async getSnapshots(filters = {}, page = 1, limit = 10) {
     try {
       const skip = (page - 1) * limit;
@@ -114,11 +112,9 @@ export class InventorySnapshotService {
     }
   }
 
-  /**
-   * Obtener un snapshot por ID
-   * @param {string} snapshotId - ID del snapshot
-   * @returns {Promise<Object>} Snapshot encontrado
-   */
+  // Obtener un snapshot por ID
+  // Popula el autor (name/email) y los productos referenciados (name/category);
+  // lanza 404 si no existe.
   static async getSnapshotById(snapshotId) {
     try {
       const snapshot = await InventorySnapshot.findById(snapshotId)
@@ -140,11 +136,9 @@ export class InventorySnapshotService {
     }
   }
 
-  /**
-   * Eliminar un snapshot
-   * @param {string} snapshotId - ID del snapshot
-   * @returns {Promise<void>}
-   */
+  // Eliminar un snapshot
+  // Verifica existencia (404) y lo borra permanentemente. No revierte el
+  // realStock de los productos.
   static async deleteSnapshot(snapshotId) {
     try {
       const snapshot = await InventorySnapshot.findById(snapshotId);
@@ -166,11 +160,10 @@ export class InventorySnapshotService {
     }
   }
 
-  /**
-   * Obtener estadísticas de snapshots
-   * @param {Object} dateRange - Rango de fechas
-   * @returns {Promise<Object>} Estadísticas
-   */
+  // Obtener estadísticas de snapshots
+  // Agrega con $match por rango de fechas opcional y calcula conteo total,
+  // promedio/máximo/mínimo de la diferencia y promedio de items por corte.
+  // Retorna ceros si no hay datos.
   static async getSnapshotStats(dateRange = {}) {
     try {
       const matchStage = {};
@@ -214,11 +207,10 @@ export class InventorySnapshotService {
     }
   }
 
-  /**
-   * Generar archivo Excel para un snapshot
-   * @param {string} snapshotId - ID del snapshot
-   * @returns {Promise<Buffer>} Buffer del archivo Excel
-   */
+  // Generar archivo Excel para un snapshot
+  // Construye un workbook con encabezado (fecha, totales), fila de títulos de
+  // 9 columnas y una fila por producto; pinta en rojo las diferencias negativas
+  // y retorna el buffer listo para descargar.
   static async generateExcel(snapshotId) {
     try {
       logger.info('Generando archivo Excel para snapshot', { snapshotId });
@@ -296,6 +288,7 @@ export class InventorySnapshotService {
       });
 
       // Generar buffer
+      // writeBuffer serializa el workbook en memoria (sin tocar disco).
       const excelBuffer = await workbook.xlsx.writeBuffer();
       
       logger.info('Archivo Excel generado exitosamente', { 

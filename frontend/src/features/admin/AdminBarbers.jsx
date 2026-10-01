@@ -1,14 +1,14 @@
 ﻿import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  Users, AlertTriangle, Scissors, Package, X, 
-  ShoppingCart, DollarSign, Clock, Eye, Filter, RefreshCw, Receipt
+  Users, AlertTriangle, Scissors, Package, Calendar,
+  ShoppingCart, DollarSign, Clock, Eye, Receipt
 } from 'lucide-react';
 import { useAuth } from '@contexts/AuthContext';
 import { useNotification } from '@contexts/NotificationContext';
 import { logger } from '@utils/logger';
 import { PageContainer } from '@components/layout/PageContainer';
-import GradientText from '@components/ui/GradientText';
+import Modal from '@components/ui/Modal';
 import { SimpleDateFilter } from '@components/common/SimpleDateFilter';
 import { useBarberStats } from '@hooks/useBarberStats';
 import { useDetailedReports } from '@hooks/useDetailedReports';
@@ -17,23 +17,19 @@ import {
   DetailedCutsModal, 
   DetailedAppointmentsModal 
 } from './DetailedModals';
+import { Skeleton, AdminBarbersSkeleton } from '@components/ui/Skeleton';
+import { formatCurrency } from '@utils/formatters';
 
-/**
- * Modal para detalles de ventas
- */
+// Modal para detalles de ventas
 const SalesDetailModal = ({ isOpen, onClose, salesData, barberName, dateRange }) => {
   if (!isOpen) return null;
 
   //SalesData viene agrupado por día con { date, sales[], totalAmount, totalProducts }
+  // Totales del período: suma de productos y de montos de todos los días
   const totalAmount = salesData?.reduce((sum, day) => sum + (day.totalAmount || 0), 0) || 0;
   const totalProducts = salesData?.reduce((sum, day) => sum + (day.totalProducts || 0), 0) || 0;
   
-  const formatCurrency = (amount) => new Intl.NumberFormat('es-CO', {
-    style: 'currency',
-    currency: 'COP',
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0
-  }).format(amount);
+  
 
   //Helper para formatear el rango de fechas del modal
   const formatModalDateRange = () => {
@@ -66,61 +62,34 @@ const SalesDetailModal = ({ isOpen, onClose, salesData, barberName, dateRange })
     return 'Período seleccionado';
   };
 
-  // Bloquear scroll del body
-  useEffect(() => {
-    document.body.style.overflow = 'hidden';
-    return () => { document.body.style.overflow = 'unset'; };
-  }, []);
-
   return (
-    <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-[9999] p-4 sm:p-6 lg:p-8">
-      <div className="relative w-full max-w-sm sm:max-w-md lg:max-w-2xl mx-auto h-[90vh] sm:h-[85vh] lg:h-[80vh] flex flex-col">
-        <div className="relative bg-green-500/5 backdrop-blur-md border border-green-500/20 rounded-2xl shadow-2xl shadow-green-500/20 h-full flex flex-col overflow-hidden">
-          {/* Header fijo */}
-          <div className="relative z-10 flex-shrink-0 p-4 sm:p-6">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2 sm:gap-3">
-                <div className="p-1.5 sm:p-2 rounded-lg bg-green-500/20 border border-green-500/30">
-                  <ShoppingCart className="w-4 h-4 sm:w-5 sm:h-5 text-green-400" />
-                </div>
-                <div>
-                  <h3 className="text-base sm:text-lg font-semibold text-white">
-                    Ventas - {barberName}
-                  </h3>
-                  <p className="text-xs sm:text-sm text-green-300">
-                    {formatModalDateRange()}
-                  </p>
-                </div>
-              </div>
-              <button 
-                onClick={onClose}
-                className="p-1 text-gray-400 hover:text-white transition-colors duration-200"
-              >
-                <X className="w-4 h-4 sm:w-5 sm:h-5" />
-              </button>
-            </div>
-            
-            {/* Resumen */}
-            <div className="mt-4 p-3 sm:p-4 bg-green-500/10 rounded-xl border border-green-500/20">
-              <div className="grid grid-cols-2 gap-4">
-                <div className="text-center">
-                  <p className="text-xs sm:text-sm text-green-300">Total Productos</p>
-                  <p className="text-lg sm:text-xl font-bold text-white">{totalProducts}</p>
-                </div>
-                <div className="text-center">
-                  <p className="text-xs sm:text-sm text-green-300">Total Ventas</p>
-                  <p className="text-lg sm:text-xl font-bold text-green-400">{formatCurrency(totalAmount)}</p>
-                </div>
-              </div>
-            </div>
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      color="emerald"
+      title={`Ventas - ${barberName}`}
+      subtitle={formatModalDateRange()}
+      icon={ShoppingCart}
+      size="2xl"
+    >
+      {/* Resumen */}
+      <div className="mb-4 p-3 sm:p-4 bg-emerald-500/10 rounded-xl border border-emerald-500/20">
+        <div className="grid grid-cols-2 gap-4">
+          <div className="text-center">
+            <p className="text-xs sm:text-sm text-emerald-300">Total Productos</p>
+            <p className="text-lg sm:text-xl font-bold text-white">{totalProducts}</p>
           </div>
+          <div className="text-center">
+            <p className="text-xs sm:text-sm text-emerald-300">Total Ventas</p>
+            <p className="text-lg sm:text-xl font-bold text-emerald-400">{formatCurrency(totalAmount)}</p>
+          </div>
+        </div>
+      </div>
 
-          {/* Contenido scrolleable */}
-          <div className="flex-1 overflow-y-auto overflow-x-hidden custom-scrollbar px-4 sm:px-6 pb-4 sm:pb-6" style={{ minHeight: 0 }}>
             {!salesData || salesData.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-8 text-center">
-                <div className="p-4 rounded-full bg-green-500/10 border border-green-500/20 mb-4">
-                  <ShoppingCart className="w-8 h-8 text-green-400" />
+                <div className="p-4 rounded-full bg-emerald-500/10 border border-emerald-500/20 mb-4">
+                  <ShoppingCart className="w-8 h-8 text-emerald-400" />
                 </div>
                 <p className="text-gray-400">No hay ventas registradas en este período</p>
               </div>
@@ -130,8 +99,8 @@ const SalesDetailModal = ({ isOpen, onClose, salesData, barberName, dateRange })
                 {salesData.map((dayData, dayIndex) => (
                   <div key={`day-${dayData.date || dayIndex}`} className="mb-6">
                     {/* Encabezado del día */}
-                    <div className="flex items-center gap-2 mb-3 pb-2 border-b border-green-500/20">
-                      <Calendar size={16} className="text-green-400" />
+                    <div className="flex items-center gap-2 mb-3 pb-2 border-b border-emerald-500/20">
+                      <Calendar size={16} className="text-emerald-400" />
                       <h4 className="text-sm font-semibold text-white">
                         {new Date(dayData.date).toLocaleDateString('es-ES', { 
                           weekday: 'long', 
@@ -140,7 +109,7 @@ const SalesDetailModal = ({ isOpen, onClose, salesData, barberName, dateRange })
                           day: 'numeric' 
                         })}
                       </h4>
-                      <span className="ml-auto text-xs text-green-300">
+                      <span className="ml-auto text-xs text-emerald-300">
                         {dayData.totalProducts} productos - {formatCurrency(dayData.totalAmount)}
                       </span>
                     </div>
@@ -148,11 +117,11 @@ const SalesDetailModal = ({ isOpen, onClose, salesData, barberName, dateRange })
                     {/* Ventas del día */}
                     {dayData.sales && dayData.sales.length > 0 ? (
                       dayData.sales.map((sale, saleIndex) => (
-                        <div key={`${sale._id || sale.id || saleIndex}`} className="group relative p-4 bg-green-500/5 border border-green-500/20 rounded-xl hover:bg-green-500/10 transition-all duration-300 mb-2">
+                        <div key={`${sale._id || sale.id || saleIndex}`} className="group relative p-4 bg-emerald-500/5 border border-emerald-500/20 rounded-xl hover:bg-emerald-500/10 transition-all duration-300 mb-2">
                           <div className="flex items-start justify-between mb-3">
                             <div className="flex-1">
                               <div className="flex items-center gap-2 mb-2">
-                                <Package size={14} className="text-green-400" />
+                                <Package size={14} className="text-emerald-400" />
                                 <h5 className="text-sm font-medium text-white">
                                   Venta #{sale.saleNumber || sale._id?.slice(-6) || saleIndex + 1}
                                 </h5>
@@ -162,22 +131,22 @@ const SalesDetailModal = ({ isOpen, onClose, salesData, barberName, dateRange })
                               </div>
                             </div>
                             <div className="text-right">
-                              <p className="text-sm font-bold text-green-400">{formatCurrency(sale.total || 0)}</p>
+                              <p className="text-sm font-bold text-emerald-400">{formatCurrency(sale.total || 0)}</p>
                             </div>
                           </div>
                           
                           {/* Lista de productos en la venta */}
                           {sale.items && sale.items.length > 0 ? (
-                            <div className="space-y-2 border-t border-green-500/20 pt-3">
-                              <p className="text-xs font-medium text-green-300 mb-2">Productos vendidos:</p>
+                            <div className="space-y-2 border-t border-emerald-500/20 pt-3">
+                              <p className="text-xs font-medium text-emerald-300 mb-2">Productos vendidos:</p>
                               {sale.items.map((item, itemIndex) => (
-                                <div key={itemIndex} className="flex items-center justify-between p-2 bg-green-500/5 rounded-lg">
+                                <div key={itemIndex} className="flex items-center justify-between p-2 bg-emerald-500/5 rounded-lg">
                                   <div className="flex-1">
                                     <p className="text-xs font-medium text-white">{item.name || item.productName}</p>
                                     <p className="text-xs text-gray-400">Cantidad: {item.quantity || 1}</p>
                                   </div>
                                   <div className="text-right">
-                                    <p className="text-xs text-green-400">{formatCurrency(item.price || 0)}</p>
+                                    <p className="text-xs text-emerald-400">{formatCurrency(item.price || 0)}</p>
                                     <p className="text-xs font-medium text-white">{formatCurrency((item.price || 0) * (item.quantity || 1))}</p>
                                   </div>
                                 </div>
@@ -193,26 +162,17 @@ const SalesDetailModal = ({ isOpen, onClose, salesData, barberName, dateRange })
                 ))}
               </div>
             )}
-          </div>
-        </div>
-      </div>
-    </div>
+    </Modal>
   );
 };
 
-/**
- * Modal para detalles de citas
- */
+// Modal para detalles de citas
 const AppointmentsDetailModal = ({ isOpen, onClose, appointmentsData, barberName, dateRange }) => {
   if (!isOpen) return null;
 
+  // Ingresos totales del período sumando el monto de cada cita
   const totalAmount = appointmentsData?.reduce((sum, apt) => sum + (apt.total || apt.price || 0), 0) || 0;
-  const formatCurrency = (amount) => new Intl.NumberFormat('es-CO', {
-    style: 'currency',
-    currency: 'COP',
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0
-  }).format(amount);
+  
 
   // Helper para formatear el rango de fechas del modal
   const formatModalDateRange = () => {
@@ -233,16 +193,10 @@ const AppointmentsDetailModal = ({ isOpen, onClose, appointmentsData, barberName
     return 'Período seleccionado';
   };
 
-  // Bloquear scroll del body
-  useEffect(() => {
-    document.body.style.overflow = 'hidden';
-    return () => { document.body.style.overflow = 'unset'; };
-  }, []);
-
   const getStatusColor = (status) => {
     switch (status) {
-      case 'confirmed': return 'text-green-400 bg-green-500/20 border-green-500/30';
-      case 'pending': return 'text-yellow-400 bg-yellow-500/20 border-yellow-500/30';
+      case 'confirmed': return 'text-emerald-400 bg-emerald-500/20 border-emerald-500/30';
+      case 'pending': return 'text-amber-400 bg-amber-500/20 border-amber-500/30';
       case 'cancelled': return 'text-red-400 bg-red-500/20 border-red-500/30';
       case 'completed': return 'text-blue-400 bg-blue-500/20 border-blue-500/30';
       default: return 'text-gray-400 bg-gray-500/20 border-gray-500/30';
@@ -260,50 +214,29 @@ const AppointmentsDetailModal = ({ isOpen, onClose, appointmentsData, barberName
   };
 
   return (
-    <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-[9999] p-4 sm:p-6 lg:p-8">
-      <div className="relative w-full max-w-sm sm:max-w-md lg:max-w-2xl mx-auto h-[90vh] sm:h-[85vh] lg:h-[80vh] flex flex-col">
-        <div className="relative bg-blue-500/5 backdrop-blur-md border border-blue-500/20 rounded-2xl shadow-2xl shadow-blue-500/20 h-full flex flex-col overflow-hidden">
-          {/* Header fijo */}
-          <div className="relative z-10 flex-shrink-0 p-4 sm:p-6">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2 sm:gap-3">
-                <div className="p-1.5 sm:p-2 rounded-lg bg-blue-500/20 border border-blue-500/30">
-                  <Clock className="w-4 h-4 sm:w-5 sm:h-5 text-blue-400" />
-                </div>
-                <div>
-                  <h3 className="text-base sm:text-lg font-semibold text-white">
-                    Citas - {barberName}
-                  </h3>
-                  <p className="text-xs sm:text-sm text-blue-300">
-                    {formatModalDateRange()}
-                  </p>
-                </div>
-              </div>
-              <button 
-                onClick={onClose}
-                className="p-1 text-gray-400 hover:text-white transition-colors duration-200"
-              >
-                <X className="w-4 h-4 sm:w-5 sm:h-5" />
-              </button>
-            </div>
-            
-            {/* Resumen */}
-            <div className="mt-4 p-3 sm:p-4 bg-blue-500/10 rounded-xl border border-blue-500/20">
-              <div className="grid grid-cols-2 gap-4">
-                <div className="text-center">
-                  <p className="text-xs sm:text-sm text-blue-300">Total Citas</p>
-                  <p className="text-lg sm:text-xl font-bold text-white">{appointmentsData?.length || 0}</p>
-                </div>
-                <div className="text-center">
-                  <p className="text-xs sm:text-sm text-blue-300">Ingresos</p>
-                  <p className="text-lg sm:text-xl font-bold text-blue-400">{formatCurrency(totalAmount)}</p>
-                </div>
-              </div>
-            </div>
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      color="blue"
+      title={`Citas - ${barberName}`}
+      subtitle={formatModalDateRange()}
+      icon={Clock}
+      size="2xl"
+    >
+      {/* Resumen */}
+      <div className="mb-4 p-3 sm:p-4 bg-blue-500/10 rounded-xl border border-blue-500/20">
+        <div className="grid grid-cols-2 gap-4">
+          <div className="text-center">
+            <p className="text-xs sm:text-sm text-blue-300">Total Citas</p>
+            <p className="text-lg sm:text-xl font-bold text-white">{appointmentsData?.length || 0}</p>
           </div>
+          <div className="text-center">
+            <p className="text-xs sm:text-sm text-blue-300">Ingresos</p>
+            <p className="text-lg sm:text-xl font-bold text-blue-400">{formatCurrency(totalAmount)}</p>
+          </div>
+        </div>
+      </div>
 
-          {/* Contenido scrolleable */}
-          <div className="flex-1 overflow-y-auto overflow-x-hidden custom-scrollbar px-4 sm:px-6 pb-4 sm:pb-6" style={{ minHeight: 0 }}>
             {!appointmentsData || appointmentsData.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-8 text-center">
                 <div className="p-4 rounded-full bg-blue-500/10 border border-blue-500/20 mb-4">
@@ -364,26 +297,17 @@ const AppointmentsDetailModal = ({ isOpen, onClose, appointmentsData, barberName
                 ))}
               </div>
             )}
-          </div>
-        </div>
-      </div>
-    </div>
+    </Modal>
   );
 };
 
-/**
- * Modal para detalles de cortes
- */
+// Modal para detalles de cortes
 const ServicesDetailModal = ({ isOpen, onClose, servicesData, barberName, dateRange }) => {
   if (!isOpen) return null;
 
+  // Ingresos totales del período sumando el monto de cada corte
   const totalAmount = servicesData?.reduce((sum, cut) => sum + (cut.total || cut.price || 0), 0) || 0;
-  const formatCurrency = (amount) => new Intl.NumberFormat('es-CO', {
-    style: 'currency',
-    currency: 'COP',
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0
-  }).format(amount);
+  
 
   // Helper para formatear el rango de fechas del modal
   const formatModalDateRange = () => {
@@ -404,76 +328,49 @@ const ServicesDetailModal = ({ isOpen, onClose, servicesData, barberName, dateRa
     return 'Período seleccionado';
   };
 
-  // Bloquear scroll del body
-  useEffect(() => {
-    document.body.style.overflow = 'hidden';
-    return () => { document.body.style.overflow = 'unset'; };
-  }, []);
-
   return (
-    <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-[9999] p-4 sm:p-6 lg:p-8">
-      <div className="relative w-full max-w-sm sm:max-w-md lg:max-w-2xl mx-auto h-[90vh] sm:h-[85vh] lg:h-[80vh] flex flex-col">
-        <div className="relative bg-purple-500/5 backdrop-blur-md border border-purple-500/20 rounded-2xl shadow-2xl shadow-purple-500/20 h-full flex flex-col overflow-hidden">
-          {/* Header fijo */}
-          <div className="relative z-10 flex-shrink-0 p-4 sm:p-6">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2 sm:gap-3">
-                <div className="p-1.5 sm:p-2 rounded-lg bg-purple-500/20 border border-purple-500/30">
-                  <Scissors className="w-4 h-4 sm:w-5 sm:h-5 text-purple-400" />
-                </div>
-                <div>
-                  <h3 className="text-base sm:text-lg font-semibold text-white">
-                    Cortes - {barberName}
-                  </h3>
-                  <p className="text-xs sm:text-sm text-purple-300">
-                    {formatModalDateRange()}
-                  </p>
-                </div>
-              </div>
-              <button 
-                onClick={onClose}
-                className="p-1 text-gray-400 hover:text-white transition-colors duration-200"
-              >
-                <X className="w-4 h-4 sm:w-5 sm:h-5" />
-              </button>
-            </div>
-            
-            {/* Resumen */}
-            <div className="mt-4 p-3 sm:p-4 bg-purple-500/10 rounded-xl border border-purple-500/20">
-              <div className="grid grid-cols-2 gap-4">
-                <div className="text-center">
-                  <p className="text-xs sm:text-sm text-purple-300">Total Cortes</p>
-                  <p className="text-lg sm:text-xl font-bold text-white">{servicesData?.length || 0}</p>
-                </div>
-                <div className="text-center">
-                  <p className="text-xs sm:text-sm text-purple-300">Ingresos</p>
-                  <p className="text-lg sm:text-xl font-bold text-purple-400">{formatCurrency(totalAmount)}</p>
-                </div>
-              </div>
-            </div>
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      color="brand"
+      title={`Cortes - ${barberName}`}
+      subtitle={formatModalDateRange()}
+      icon={Scissors}
+      size="2xl"
+    >
+      {/* Resumen */}
+      <div className="mb-4 p-3 sm:p-4 bg-brand-400/10 rounded-xl border border-brand-400/20">
+        <div className="grid grid-cols-2 gap-4">
+          <div className="text-center">
+            <p className="text-xs sm:text-sm text-brand-200">Total Cortes</p>
+            <p className="text-lg sm:text-xl font-bold text-white">{servicesData?.length || 0}</p>
           </div>
+          <div className="text-center">
+            <p className="text-xs sm:text-sm text-brand-200">Ingresos</p>
+            <p className="text-lg sm:text-xl font-bold text-brand-300">{formatCurrency(totalAmount)}</p>
+          </div>
+        </div>
+      </div>
 
-          {/* Contenido scrolleable */}
-          <div className="flex-1 overflow-y-auto overflow-x-hidden custom-scrollbar px-4 sm:px-6 pb-4 sm:pb-6" style={{ minHeight: 0 }}>
             {!servicesData || servicesData.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-8 text-center">
-                <div className="p-4 rounded-full bg-purple-500/10 border border-purple-500/20 mb-4">
-                  <Scissors className="w-8 h-8 text-purple-400" />
+                <div className="p-4 rounded-full bg-brand-400/10 border border-brand-400/20 mb-4">
+                  <Scissors className="w-8 h-8 text-brand-300" />
                 </div>
                 <p className="text-gray-400">No hay cortes registrados en este período</p>
               </div>
             ) : (
               <div className="space-y-3">
                 {servicesData.map((cut, index) => (
-                  <div key={`${cut._id || cut.id || index}`} className="group relative p-4 bg-purple-500/5 border border-purple-500/20 rounded-xl hover:bg-purple-500/10 transition-all duration-300">
+                  <div key={`${cut._id || cut.id || index}`} className="group relative p-4 bg-brand-400/5 border border-brand-400/20 rounded-xl hover:bg-brand-400/10 transition-all duration-300">
                     <div className="flex items-start justify-between mb-3">
                       <div className="flex-1">
                         <div className="flex items-center gap-2 mb-2">
-                          <Scissors size={14} className="text-purple-400" />
+                          <Scissors size={14} className="text-brand-300" />
                           <h4 className="text-sm font-medium text-white">
                             Corte #{cut.cutNumber || cut._id?.slice(-6) || index + 1}
                           </h4>
-                          <span className="px-2 py-1 text-xs bg-purple-500/20 text-purple-300 rounded-full">
+                          <span className="px-2 py-1 text-xs bg-brand-400/20 text-brand-200 rounded-full">
                             {new Date(cut.date || cut.createdAt || cut.saleDate).toLocaleDateString('es-ES')}
                           </span>
                         </div>
@@ -487,13 +384,13 @@ const ServicesDetailModal = ({ isOpen, onClose, servicesData, barberName, dateRa
                         </div>
                       </div>
                       <div className="text-right">
-                        <p className="text-sm font-bold text-purple-400">{formatCurrency(cut.total || cut.price || 0)}</p>
+                        <p className="text-sm font-bold text-brand-300">{formatCurrency(cut.total || cut.price || 0)}</p>
                       </div>
                     </div>
                     
                     {/* Detalles del corte registrado en el carrito */}
-                    <div className="border-t border-purple-500/20 pt-3">
-                      <div className="flex items-center justify-between p-2 bg-purple-500/5 rounded-lg">
+                    <div className="border-t border-brand-400/20 pt-3">
+                      <div className="flex items-center justify-between p-2 bg-brand-400/5 rounded-lg">
                         <div className="flex-1">
                           <p className="text-xs font-medium text-white">
                             {cut.service?.name || cut.serviceName || cut.name || 'Corte de cabello'}
@@ -502,14 +399,14 @@ const ServicesDetailModal = ({ isOpen, onClose, servicesData, barberName, dateRa
                             {cut.service?.description || cut.description || 'Corte registrado en el carrito de ventas'}
                           </p>
                           {cut.notes && (
-                            <p className="text-xs text-purple-300 mt-1">Notas: {cut.notes}</p>
+                            <p className="text-xs text-brand-200 mt-1">Notas: {cut.notes}</p>
                           )}
                           {cut.paymentMethod && (
-                            <p className="text-xs text-purple-300 mt-1">Pago: {cut.paymentMethod}</p>
+                            <p className="text-xs text-brand-200 mt-1">Pago: {cut.paymentMethod}</p>
                           )}
                         </div>
                         <div className="text-right">
-                          <p className="text-xs text-purple-300">En carrito</p>
+                          <p className="text-xs text-brand-200">En carrito</p>
                           <p className="text-xs font-medium text-white">
                             {new Date(cut.date || cut.createdAt || cut.saleDate).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}
                           </p>
@@ -520,235 +417,180 @@ const ServicesDetailModal = ({ isOpen, onClose, servicesData, barberName, dateRa
                 ))}
               </div>
             )}
-          </div>
-        </div>
-      </div>
-    </div>
+    </Modal>
   );
 };
 
-/**
- * Card de estadísticas mejorada para barberos
- */
-const BarberStatsCard = ({ 
-  barber, 
-  totals, 
+// Card de estadísticas por barbero.
+// Header con avatar/nombre, 3 stats clickeables (ventas, citas, cortes)
+// y footer con el total de ingresos del período.
+const BarberStatsCard = ({
+  barber,
+  totals,
   isLoading = false,
-  onSalesClick, 
-  onAppointmentsClick, 
-  onServicesClick, 
+  onSalesClick,
+  onAppointmentsClick,
+  onServicesClick,
   formatCurrency,
   navigate,
-  dateRange,
   onGenerateInvoice
 }) => {
+  const name = barber.user?.name || barber.name || 'Barbero';
+  const email = barber.user?.email || barber.email || 'Sin email';
+  const phone = barber.user?.phone || barber.phone;
+
+  // Definición de las 3 métricas clickeables (valor, detalle y acción por tipo)
+  const stats = [
+    {
+      id: 'sales',
+      label: 'Ventas',
+      detail: `${totals.salesCount} producto${totals.salesCount !== 1 ? 's' : ''}`,
+      value: formatCurrency(totals.sales),
+      icon: ShoppingCart,
+      onClick: () => onSalesClick(barber._id),
+      rowClass: 'hover:bg-emerald-500/[0.07]',
+      boxClass: 'bg-emerald-500/15 border-emerald-500/25',
+      iconClass: 'text-emerald-400',
+      valueClass: 'text-emerald-400'
+    },
+    {
+      id: 'appointments',
+      label: 'Citas',
+      detail: `${totals.appointmentsCount} cita${totals.appointmentsCount !== 1 ? 's' : ''}`,
+      value: formatCurrency(totals.appointments),
+      icon: Clock,
+      onClick: () => onAppointmentsClick(barber._id),
+      rowClass: 'hover:bg-blue-500/[0.07]',
+      boxClass: 'bg-blue-500/15 border-blue-500/25',
+      iconClass: 'text-blue-400',
+      valueClass: 'text-blue-400'
+    },
+    {
+      id: 'services',
+      label: 'Cortes',
+      detail: `${totals.servicesCount} corte${totals.servicesCount !== 1 ? 's' : ''}`,
+      value: formatCurrency(totals.services),
+      icon: Scissors,
+      onClick: () => onServicesClick(barber._id),
+      rowClass: 'hover:bg-brand-400/[0.07]',
+      boxClass: 'bg-brand-400/15 border-brand-400/25',
+      iconClass: 'text-brand-300',
+      valueClass: 'text-brand-300'
+    }
+  ];
+
   return (
-    <div className="group relative bg-transparent border border-white/10 rounded-2xl backdrop-blur-sm shadow-2xl shadow-blue-500/20 overflow-hidden min-h-[400px] flex flex-col">
-      {/* Efecto de brillo */}
-      <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/[2.5%] to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-1000 ease-out rounded-2xl"></div>
+    <div className="group relative flex flex-col overflow-hidden rounded-2xl border border-white/[0.08] bg-white/[0.03] backdrop-blur-sm transition-colors duration-300 hover:border-white/[0.16] hover:bg-white/[0.05]">
+      {/* ── Header: avatar + datos ── */}
+      <div className="flex items-center gap-3 p-4 border-b border-white/[0.06]">
+        <button
+          onClick={() => navigate(`/barbers/${barber._id}`)}
+          className="relative flex-shrink-0 rounded-full transition-transform duration-300 hover:scale-105 focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+          title={`Ver perfil público de ${name}`}
+        >
+          {barber.user?.profilePicture ? (
+            <>
+              <img
+                src={barber.user.profilePicture}
+                alt={name}
+                className="w-12 h-12 rounded-full object-cover border-2 border-blue-500/30"
+                onError={(e) => {
+                  e.target.style.display = 'none';
+                  const fallback = e.target.parentElement.querySelector('.fallback-avatar');
+                  if (fallback) fallback.style.display = 'flex';
+                }}
+              />
+              <div
+                className="fallback-avatar w-12 h-12 rounded-full bg-gradient-to-r from-blue-600/20 to-brand-500/20 border-2 border-blue-500/30 items-center justify-center"
+                style={{ display: 'none' }}
+              >
+                <span className="text-base font-bold text-white">
+                  {name[0]?.toUpperCase() || '?'}
+                </span>
+              </div>
+            </>
+          ) : (
+            <div className="w-12 h-12 rounded-full bg-gradient-to-r from-blue-600/20 to-brand-500/20 border-2 border-blue-500/30 flex items-center justify-center">
+              <span className="text-base font-bold text-white">
+                {name[0]?.toUpperCase() || '?'}
+              </span>
+            </div>
+          )}
+        </button>
 
-      {/* Botón de Reporte Consolidado */}
-      <button
-        onClick={() => onGenerateInvoice(barber._id)}
-        className="absolute top-2 right-2 z-30 p-1.5 bg-gradient-to-r from-blue-600/20 to-purple-600/20 border border-blue-500/30 rounded-md hover:from-blue-600/30 hover:to-purple-600/30 hover:border-blue-500/50 transition-all duration-300 hover:scale-105 shadow-md shadow-blue-500/20 hover:shadow-blue-500/40 group/invoice"
-        title="Generar reporte consolidado del período"
-      >
-        <Receipt className="w-4 h-4 text-blue-400 group-hover/invoice:text-blue-300" />
-      </button>
-      
-      <div className="relative p-6 lg:p-8 flex-1 flex flex-col">
-        {/* Header del barbero */}
-        <div className="flex items-start gap-4 mb-6 min-h-[80px] sm:min-h-[88px]">
-          <div className="relative flex-shrink-0 z-30">
-            {/* Imagen clickeable que navega al perfil público */}
-            <button
-              onClick={(e) => {
-                e.stopPropagation(); // Evitar propagación del evento
-                try {
-                  navigate(`/barbers/${barber._id}`);
-                } catch (error) {
-                  console.error('Error en navegación:', error);
-                }
-              }}
-              className="relative block hover:scale-105 transition-transform duration-300 focus:outline-none focus:ring-2 focus:ring-blue-500/50 rounded-full z-40 cursor-pointer"
-              title={`Ver perfil público de ${barber.user?.name || 'Barbero'}`}
-            >
-              {barber.user?.profilePicture ? (
-                <>
-                  <img
-                    src={barber.user.profilePicture}
-                    alt={barber.user?.name || 'Barbero'}
-                    className="w-16 h-16 sm:w-20 sm:h-20 rounded-full object-cover border-2 border-blue-500/30 shadow-lg"
-                    onError={(e) => {
-                      console.error('Error cargando imagen de perfil:', e.target.src, 'for barber:', barber.user?.name);
-                      e.target.style.display = 'none';
-                      const fallback = e.target.parentElement.querySelector('.fallback-avatar');
-                      if (fallback) fallback.style.display = 'flex';
-                    }}
-                    onLoad={() => {
-                    }}
-                  />
-                  {/* Fallback avatar - inicialmente oculto */}
-                  <div className="fallback-avatar w-16 h-16 sm:w-20 sm:h-20 rounded-full bg-gradient-to-r from-blue-600/20 to-purple-600/20 border-2 border-blue-500/30 flex items-center justify-center shadow-lg" style={{display: 'none'}}>
-                    <span className="text-lg sm:text-xl font-bold text-white">
-                      {barber.user?.name?.[0]?.toUpperCase() || barber.name?.[0]?.toUpperCase() || '?'}
-                    </span>
-                  </div>
-                </>
-              ) : (
-                <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-full bg-gradient-to-r from-blue-600/20 to-purple-600/20 border-2 border-blue-500/30 flex items-center justify-center shadow-lg">
-                  <span className="text-lg sm:text-xl font-bold text-white">
-                    {barber.user?.name?.[0]?.toUpperCase() || barber.name?.[0]?.toUpperCase() || '?'}
-                  </span>
-                </div>
-              )}
-            </button>
-          </div>
-          
-          <div className="flex-1 min-w-0">
-            {/* Nombre */}
-            <h3 className="text-lg sm:text-xl font-bold text-white mb-1 leading-tight break-words">
-              {barber.user?.name || barber.name || 'Barbero'}
-            </h3>
-            
-            {/* Email */}
-            <p className="text-sm text-gray-400 truncate" title={barber.user?.email || barber.email || 'Sin email'}>
-              {barber.user?.email || barber.email || 'Sin email'}
-            </p>
-            
-            {/* Teléfono */}
-            {(barber.user?.phone || barber.phone) && (
-              <p className="text-sm text-gray-400 truncate mt-1" title={barber.user?.phone || barber.phone}>
-                {barber.user?.phone || barber.phone}
-              </p>
-            )}
-          </div>
+        <div className="min-w-0 flex-1">
+          <h3 className="text-sm sm:text-base font-semibold text-white truncate" title={name}>{name}</h3>
+          <p className="text-xs text-gray-400 truncate" title={email}>{email}</p>
+          {phone && <p className="text-xs text-gray-500 truncate">{phone}</p>}
         </div>
 
-        {/* Estadísticas clickeables */}
-        {isLoading && !totals ? (
-          // Mostrar loading solo si realmente no hay datos
-          <div className="flex-1 flex items-center justify-center">
-            <div className="text-center">
-              <RefreshCw className="w-6 h-6 animate-spin text-blue-400 mx-auto mb-3" />
-              <p className="text-gray-400 text-sm">Cargando datos...</p>
-            </div>
-          </div>
-        ) : (
-          // Mostrar estadísticas normales
-          <div className="flex-1 space-y-4">
-          {/* Ventas */}
-          <button
-            onClick={() => {
-              onSalesClick(barber._id);
-            }}
-            className="group/stat w-full p-4 bg-green-500/5 border border-green-500/20 rounded-xl hover:bg-green-500/10 hover:border-green-500/40 transition-all duration-300 text-left hover:scale-[1.02]"
-          >
-            <div className="flex items-start justify-between gap-3">
-              <div className="flex items-center gap-3 min-w-0 flex-1">
-                <div className="p-2 bg-green-500/20 rounded-lg border border-green-500/30 flex-shrink-0">
-                  <ShoppingCart className="w-4 h-4 text-green-400" />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <p className="text-sm text-green-300 group-hover/stat:text-green-200 font-medium">Ventas</p>
-                  <p className="text-xs text-gray-400 truncate">{totals.salesCount} productos</p>
-                </div>
-              </div>
-              <div className="flex items-center gap-2 flex-shrink-0">
-                <div className="text-right">
-                  <p className="text-base font-bold text-green-400 group-hover/stat:text-green-300 whitespace-nowrap">
-                    {formatCurrency(totals.sales)}
-                  </p>
-                </div>
-                <Eye className="w-4 h-4 text-green-400 group-hover/stat:text-green-300 flex-shrink-0" />
-              </div>
-            </div>
-          </button>
-
-          {/* Citas */}
-          <button
-            onClick={() => onAppointmentsClick(barber._id)}
-            className="group/stat w-full p-4 bg-blue-500/5 border border-blue-500/20 rounded-xl hover:bg-blue-500/10 hover:border-blue-500/40 transition-all duration-300 text-left hover:scale-[1.02]"
-          >
-            <div className="flex items-start justify-between gap-3">
-              <div className="flex items-center gap-3 min-w-0 flex-1">
-                <div className="p-2 bg-blue-500/20 rounded-lg border border-blue-500/30 flex-shrink-0">
-                  <Clock className="w-4 h-4 text-blue-400" />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <p className="text-sm text-blue-300 group-hover/stat:text-blue-200 font-medium">Citas</p>
-                  <p className="text-xs text-gray-400 truncate">{totals.appointmentsCount} citas</p>
-                </div>
-              </div>
-              <div className="flex items-center gap-2 flex-shrink-0">
-                <div className="text-right">
-                  <p className="text-base font-bold text-blue-400 group-hover/stat:text-blue-300 whitespace-nowrap">
-                    {formatCurrency(totals.appointments)}
-                  </p>
-                </div>
-                <Eye className="w-4 h-4 text-blue-400 group-hover/stat:text-blue-300 flex-shrink-0" />
-              </div>
-            </div>
-          </button>
-
-          {/* Cortes Totales */}
-          <button
-            onClick={() => onServicesClick(barber._id)}
-            className="group/stat w-full p-4 bg-purple-500/5 border border-purple-500/20 rounded-xl hover:bg-purple-500/10 hover:border-purple-500/40 transition-all duration-300 text-left hover:scale-[1.02]"
-          >
-            <div className="flex items-start justify-between gap-3">
-              <div className="flex items-center gap-3 min-w-0 flex-1">
-                <div className="p-2 bg-purple-500/20 rounded-lg border border-purple-500/30 flex-shrink-0">
-                  <Scissors className="w-4 h-4 text-purple-400" />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <p className="text-sm text-purple-300 group-hover/stat:text-purple-200 font-medium">Cortes</p>
-                  <p className="text-xs text-gray-400 truncate">{totals.servicesCount} cortes</p>
-                </div>
-              </div>
-              <div className="flex items-center gap-2 flex-shrink-0">
-                <div className="text-right">
-                  <p className="text-base font-bold text-purple-400 group-hover/stat:text-purple-300 whitespace-nowrap">
-                    {formatCurrency(totals.services)}
-                  </p>
-                </div>
-                <Eye className="w-4 h-4 text-purple-400 group-hover/stat:text-purple-300 flex-shrink-0" />
-              </div>
-            </div>
-          </button>
-        </div>
-        )}
-
-        {/* Total general */}
-        {!isLoading && (
-          <div className="mt-6 p-4 bg-gradient-to-r from-blue-500/10 to-purple-500/10 border border-blue-500/30 rounded-xl">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-gradient-to-r from-blue-600/20 to-purple-600/20 rounded-lg border border-blue-500/30">
-                  <DollarSign className="w-5 h-5 text-blue-400" />
-                </div>
-                <p className="text-sm font-medium text-white">Total Ingresos</p>
-              </div>
-              <p className="text-xl font-bold bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent">
-                {formatCurrency(totals.total)}
-              </p>
-            </div>
-          </div>
-        )}
+        <button
+          onClick={() => onGenerateInvoice(barber._id)}
+          className="flex min-h-11 min-w-11 flex-shrink-0 items-center justify-center rounded-lg border border-white/[0.08] bg-white/[0.04] p-2 text-gray-400 transition-colors duration-200 hover:border-blue-500/30 hover:bg-white/[0.08] hover:text-blue-300"
+          title="Generar reporte consolidado del período"
+        >
+          <Receipt className="w-4 h-4" />
+        </button>
       </div>
+
+      {/* ── Stats clickeables ── */}
+      {isLoading && !totals ? (
+        <div className="flex flex-1 items-center justify-center p-6">
+          <div className="text-center">
+            <Skeleton className="h-3 w-3 rounded-full mx-auto" />
+            <p className="text-gray-400 text-sm mt-2">Cargando datos...</p>
+          </div>
+        </div>
+      ) : (
+        <div className="flex-1 divide-y divide-white/[0.06]">
+          {stats.map(({ id, label, detail, value, icon: Icon, onClick, rowClass, boxClass, iconClass, valueClass }) => (
+            <button
+              key={id}
+              onClick={onClick}
+              className={`group/stat flex w-full items-center gap-3 px-4 py-3 text-left transition-colors duration-200 ${rowClass}`}
+            >
+              <div className={`flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg border ${boxClass}`}>
+                <Icon className={`h-4 w-4 ${iconClass}`} />
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="text-xs font-medium text-gray-300">{label}</p>
+                <p className="text-[11px] text-gray-500 truncate">{detail}</p>
+              </div>
+              <div className="flex flex-shrink-0 items-center gap-2">
+                <p className={`text-sm font-bold whitespace-nowrap ${valueClass}`}>{value}</p>
+                <Eye className="h-4 w-4 text-gray-500 transition-colors duration-200 group-hover/stat:text-white" />
+              </div>
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* ── Total del período ── */}
+      {!isLoading && (
+        <div className="flex items-center justify-between border-t border-white/[0.06] bg-gradient-to-r from-blue-500/[0.08] to-brand-400/[0.08] px-4 py-3">
+          <span className="flex items-center gap-2 text-xs font-medium text-gray-300">
+            <DollarSign className="h-4 w-4 text-blue-400" />
+            Total ingresos
+          </span>
+          <span className="text-base font-bold text-blue-400">
+            {formatCurrency(totals.total)}
+          </span>
+        </div>
+      )}
     </div>
   );
 };
 
-/**
- * Página principal AdminBarbers
- */
+// Página principal AdminBarbers.
+// Muestra estadísticas por barbero (ventas, citas y cortes) con filtro de
+// período, modales de detalle y generación de reporte consolidado en PDF.
 const AdminBarbers = () => {
   const { user } = useAuth();
   const { showError, showInfo } = useNotification();
   const navigate = useNavigate();
 
   // Helper para obtener fecha local en formato YYYY-MM-DD
+  // (evita desfases de UTC al construir los filtros de fecha)
   const getTodayLocalDate = () => {
     const now = new Date();
     
@@ -761,6 +603,7 @@ const AdminBarbers = () => {
   };
 
   // Hook para estadísticas de barberos
+  // Expone la lista, las estadísticas por barbero y el filtro aplicado
   const {
     barbers,
     statistics,
@@ -776,6 +619,7 @@ const AdminBarbers = () => {
   } = useBarberStats();
 
   // Hook para reportes detallados
+  // Provee los fetchers de ventas, cortes y citas completadas para los modales
   const {
     loading: detailedLoading,
     error: detailedError,
@@ -790,11 +634,13 @@ const AdminBarbers = () => {
   } = useDetailedReports();
 
   // Estados para filtros de fecha - Simplificados para usar SimpleDateFilter (igual que Reports)
+  // preset: all | today | yesterday | custom; startDate/endDate en formato YYYY-MM-DD
   const [dateRange, setDateRange] = useState({
     preset: 'all',
     startDate: null,
     endDate: null
   });
+  // Estado de los tres modales de detalle (ventas, citas y cortes)
   const [modalData, setModalData] = useState({
     sales: { isOpen: false, data: null, barber: null, dateRange: null },
     appointments: { isOpen: false, data: null, barber: null, dateRange: null },
@@ -802,6 +648,7 @@ const AdminBarbers = () => {
   });
 
   // Helper para calcular fechas basado en preset
+  // "yesterday" se calcula con Date local restando un día para evitar desfases
   const calculateDatesFromPreset = (preset) => {
     const today = getTodayLocalDate();
     
@@ -891,29 +738,15 @@ const AdminBarbers = () => {
   
   // Effect para asegurar que siempre haya scroll disponible
   useEffect(() => {
-    const ensureScroll = () => {
-      // Asegurar que el body tenga scroll disponible
-      document.body.style.overflowY = 'auto';
-      document.documentElement.style.overflowY = 'auto';
-      
-      // Si el contenido es muy pequeño, agregar altura mínima
-      const mainContent = document.querySelector('.admin-barbers-container');
-      if (mainContent) {
-        mainContent.style.minHeight = '100vh';
-      }
-    };
-
-    ensureScroll();
-    
-    // Asegurar scroll después de cambios de filtro
-    const timer = setTimeout(ensureScroll, 100);
-    
+    // Resetear estilos de scroll al desmontar
     return () => {
-      clearTimeout(timer);
+      document.body.style.overflowY = '';
+      document.documentElement.style.overflowY = '';
     };
-  }, [dateRange.preset, dateRange.startDate, dateRange.endDate, barbers]);
+  }, []);
 
   // Funciones para abrir modales con reportes detallados
+  // Cada una abre el modal en estado de carga, pide los datos del período y los inyecta
   const openSalesModal = useCallback(async (barberId) => {
     const barber = barbers.find(b => b._id === barberId);
     const barberName = barber?.user?.name || barber?.name || 'Barbero';
@@ -960,6 +793,7 @@ const AdminBarbers = () => {
     }
   }, [dateRange, barbers, statistics, filteredStats]);
 
+  // Abre el modal de cortes/walk-ins del barbero con el rango de fechas activo
   const openServicesModal = useCallback(async (barberId) => {
     const barber = barbers.find(b => b._id === barberId);
     const barberName = barber?.user?.name || barber?.name || 'Barbero';
@@ -1005,6 +839,7 @@ const AdminBarbers = () => {
     }
   }, [dateRange, barbers]);
 
+  // Abre el modal de citas completadas del barbero con el rango de fechas activo
   const openAppointmentsModal = useCallback(async (barberId) => {
     const barber = barbers.find(b => b._id === barberId);
     const barberName = barber?.user?.name || barber?.name || 'Barbero';
@@ -1067,6 +902,7 @@ const AdminBarbers = () => {
   }));
 
   // Función para generar reporte consolidado del período filtrado
+  // Descarga el PDF del backend con el token de auth y lo abre en una pestaña nueva
   const handleGenerateConsolidatedInvoice = async (barberId) => {
     // VALIDACIÓN: No permitir factura con filtro "General"
     if (dateRange.preset === 'all') {
@@ -1119,6 +955,7 @@ const AdminBarbers = () => {
   };
 
   // Función simplificada para calcular totales
+  // Usa filteredStats cuando hay un filtro distinto de "General"; si no, statistics
   const calculateTotals = (barberId) => {
     // Usar filteredStats si hay un filtro aplicado, sino usar statistics
     const statsToUse = (filterType && filterType !== 'General') ? filteredStats : statistics;
@@ -1146,120 +983,162 @@ const AdminBarbers = () => {
     return totals;
   };
 
-  // Función para formatear moneda
-  const formatCurrency = (amount) => {
-    return new Intl.NumberFormat('es-CO', {
-      style: 'currency',
-      currency: 'COP',
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0
-    }).format(amount);
-  };
-
+  // Skeleton mientras cargan las estadísticas
   if (loading) {
     return (
       <PageContainer>
-        <div className="flex flex-col items-center justify-center min-h-64">
-          <RefreshCw className="w-8 h-8 animate-spin text-blue-400 mb-4" />
-          <p className="text-gray-400">Cargando estadísticas de barberos...</p>
+        <div className="relative z-10 w-full pb-6">
+          <AdminBarbersSkeleton />
         </div>
       </PageContainer>
     );
   }
 
+  // Pantalla de error si el hook no pudo cargar los datos
   if (error) {
     return (
       <PageContainer>
-        <div className="flex flex-col items-center justify-center min-h-64">
-          <AlertTriangle className="w-8 h-8 text-red-400 mb-4" />
-          <p className="text-red-400 text-center">{error}</p>
+        <div className="relative z-10 w-full pb-6">
+          <div className="flex flex-col items-center justify-center min-h-64">
+            <AlertTriangle className="w-8 h-8 text-red-400 mb-4" />
+            <p className="text-red-400 text-center">{error}</p>
+          </div>
         </div>
       </PageContainer>
     );
   }
 
+  // Totales del equipo según el filtro activo
+  // Acumula las métricas de todos los barberos para la barra de stats superior
+  const teamTotals = barbers.reduce((acc, barber) => {
+    const totals = calculateTotals(barber._id);
+    acc.sales += totals.sales;
+    acc.salesCount += totals.salesCount;
+    acc.appointments += totals.appointments;
+    acc.appointmentsCount += totals.appointmentsCount;
+    acc.services += totals.services;
+    acc.servicesCount += totals.servicesCount;
+    acc.total += totals.total;
+    return acc;
+  }, {
+    sales: 0, salesCount: 0,
+    appointments: 0, appointmentsCount: 0,
+    services: 0, servicesCount: 0,
+    total: 0
+  });
+
+  // Tarjetas resumen del equipo (ventas, citas, cortes y total de ingresos)
+  const teamStats = [
+    {
+      id: 'sales',
+      label: 'Ventas del equipo',
+      detail: `${teamTotals.salesCount} producto${teamTotals.salesCount !== 1 ? 's' : ''}`,
+      value: formatCurrency(teamTotals.sales),
+      icon: ShoppingCart,
+      box: 'bg-emerald-500/15 border-emerald-500/25',
+      color: 'text-emerald-400'
+    },
+    {
+      id: 'appointments',
+      label: 'Citas completadas',
+      detail: `${teamTotals.appointmentsCount} cita${teamTotals.appointmentsCount !== 1 ? 's' : ''}`,
+      value: formatCurrency(teamTotals.appointments),
+      icon: Calendar,
+      box: 'bg-blue-500/15 border-blue-500/25',
+      color: 'text-blue-400'
+    },
+    {
+      id: 'services',
+      label: 'Cortes realizados',
+      detail: `${teamTotals.servicesCount} corte${teamTotals.servicesCount !== 1 ? 's' : ''}`,
+      value: formatCurrency(teamTotals.services),
+      icon: Scissors,
+      box: 'bg-brand-400/15 border-brand-400/25',
+      color: 'text-brand-300'
+    },
+    {
+      id: 'total',
+      label: 'Total ingresos',
+      detail: `${barbers.length} barbero${barbers.length !== 1 ? 's' : ''}`,
+      value: formatCurrency(teamTotals.total),
+      icon: DollarSign,
+      box: 'bg-violet-500/15 border-violet-500/25',
+      color: 'text-violet-300'
+    }
+  ];
+
   return (
     <PageContainer>
-      <div className="admin-barbers-container relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-6 space-y-8 min-h-screen overflow-y-auto">
-        {/* Título principal */}
-        <div className="text-center mb-8">
-          <div className="inline-flex items-center gap-3 mb-4">
-            <div className="p-3 bg-gradient-to-r from-blue-600/20 to-purple-600/20 rounded-xl border border-blue-500/20 shadow-xl shadow-blue-500/20">
-              <Users className="w-6 h-6 sm:w-8 sm:h-8 text-blue-400" />
+      <div className="relative z-10 w-full pb-6 space-y-5">
+        {/* ── Top bar: título + filtro de período ── */}
+        <div className="flex flex-col lg:flex-row lg:items-center gap-4">
+          <div className="flex items-center gap-3 flex-shrink-0">
+            <div className="p-2.5 rounded-xl bg-brand-500/10 border border-brand-500/20">
+              <Users className="w-5 h-5 sm:w-6 sm:h-6 text-brand-300" />
             </div>
-            <GradientText className="text-xl sm:text-2xl lg:text-3xl font-bold">
-              Estadísticas de Barberos
-            </GradientText>
+            <div>
+              <h1 className="text-lg sm:text-xl lg:text-2xl font-bold text-white">Estadísticas de Barberos</h1>
+              <p className="text-xs sm:text-sm text-gray-400 hidden sm:block">
+                Rendimiento de ventas, citas y cortes por barbero
+              </p>
+            </div>
           </div>
-          <p className="text-gray-400 text-sm sm:text-base max-w-2xl mx-auto">
-            Panel completo de rendimiento con métricas detalladas de ventas, citas y servicios por barbero
-          </p>
+
+          <div className="flex-1 min-w-0">
+            <SimpleDateFilter
+              className="w-full lg:max-w-3xl lg:ml-auto"
+              fluid
+              dateRange={dateRange}
+              onPresetChange={handlePresetChange}
+              onCustomDateChange={handleCustomDateChange}
+              loading={loading}
+            />
+          </div>
         </div>
 
-        {/* Filtro de días */}
-        <div className="text-center">
-          <div className="flex items-center justify-center gap-3 mb-4">
-            <div className="p-2 bg-gradient-to-r from-purple-600/20 to-blue-600/20 rounded-xl border border-purple-500/20 shadow-xl shadow-blue-500/20">
-              <Filter className="w-5 h-5 text-purple-400" />
+        {/* ── Stats strip: totales del equipo ── */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+          {teamStats.map(({ id, label, detail, value, icon: Icon, box, color }) => (
+            <div key={id} className="flex items-center gap-3 p-3 rounded-xl border border-white/10 bg-white/5 backdrop-blur-sm">
+              <div className={`p-2 rounded-lg border flex-shrink-0 ${box}`}>
+                <Icon className={`w-5 h-5 ${color}`} />
+              </div>
+              <div className="min-w-0">
+                <p className="text-lg sm:text-xl font-bold text-white leading-tight truncate">{value}</p>
+                <p className="text-gray-400 text-xs truncate">{label}</p>
+                <p className="text-gray-500 text-[10px] truncate">{detail}</p>
+              </div>
             </div>
-            <h3 className="text-lg font-semibold text-white">Filtrar por Período</h3>
-          </div>
-          <SimpleDateFilter
-            dateRange={dateRange}
-            onPresetChange={handlePresetChange}
-            onCustomDateChange={handleCustomDateChange}
-            loading={loading}
-          />
+          ))}
         </div>
 
-        {/* Grid de barberos */}
+        {/* ── Grid de barberos ── */}
+        {/* Estado vacío si no hay barberos; si hay, una card de stats por barbero */}
         {barbers.length === 0 ? (
-          <div className="text-center py-12 min-h-96">
+          <div className="text-center py-20">
             <div className="p-4 rounded-full bg-blue-500/10 border border-blue-500/20 mb-4 inline-block">
               <Users className="w-8 h-8 text-blue-400" />
             </div>
-            <p className="text-gray-400">No hay barberos registrados</p>
-          </div>
-        ) : Object.keys(statistics).length === 0 && !loading ? (
-          // Mostrar loading cuando tenemos barberos pero no estadísticas (cargando filtros)
-          <div className="text-center py-12 min-h-96">
-            {(() => {
-              return null;
-            })()}
-            <RefreshCw className="w-8 h-8 animate-spin text-blue-400 mb-4 mx-auto" />
-            <p className="text-gray-400">Cargando datos del filtro...</p>
-            <p className="text-xs text-gray-500 mt-2">
-              Debug: stats={Object.keys(statistics).length}, filtered={Object.keys(filteredStats).length}
-            </p>
+            <h3 className="text-xl font-bold text-gray-400 mb-2">No hay barberos registrados</h3>
+            <p className="text-gray-500 text-sm">Agrega barberos para ver sus estadísticas de rendimiento</p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 lg:gap-8 min-h-96 pb-20">
-            {/* Debug completo antes del mapeo - SOLO para General */}
-            {(() => {
-              if (filterType === 'General' && !window.debugShown) {
-                window.debugShown = true; // Evitar spam
-              }
-              return null;
-            })()}
-            {barbers.map(barber => {
-              const totals = calculateTotals(barber._id);
-              
-              return (
-                <BarberStatsCard
-                  key={barber._id}
-                  barber={barber}
-                  totals={totals}
-                  isLoading={loading}
-                  onSalesClick={openSalesModal}
-                  onAppointmentsClick={openAppointmentsModal}
-                  onServicesClick={openServicesModal}
-                  formatCurrency={formatCurrency}
-                  navigate={navigate}
-                  dateRange={dateRange}
-                  onGenerateInvoice={handleGenerateConsolidatedInvoice}
-                />
-              );
-            })}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {barbers.map(barber => (
+              <BarberStatsCard
+                key={barber._id}
+                barber={barber}
+                totals={calculateTotals(barber._id)}
+                isLoading={loading}
+                onSalesClick={openSalesModal}
+                onAppointmentsClick={openAppointmentsModal}
+                onServicesClick={openServicesModal}
+                formatCurrency={formatCurrency}
+                navigate={navigate}
+                dateRange={dateRange}
+                onGenerateInvoice={handleGenerateConsolidatedInvoice}
+              />
+            ))}
           </div>
         )}
 
@@ -1271,7 +1150,7 @@ const AdminBarbers = () => {
           barberName={modalData.sales.barber}
           dateRange={modalData.sales.dateRange}
         />
-        
+
         <DetailedCutsModal
           isOpen={modalData.services.isOpen}
           onClose={closeServicesModal}
@@ -1279,7 +1158,7 @@ const AdminBarbers = () => {
           barberName={modalData.services.barber}
           dateRange={modalData.services.dateRange}
         />
-        
+
         <DetailedAppointmentsModal
           isOpen={modalData.appointments.isOpen}
           onClose={closeAppointmentsModal}

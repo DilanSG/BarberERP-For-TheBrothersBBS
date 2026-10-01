@@ -1,3 +1,7 @@
+// Logger centralizado de la aplicación.
+// Nivel configurable con VITE_LOG_LEVEL (error < warn < info < debug).
+// error/warn siempre salen; info solo en desarrollo; debug/perf/cache/api
+// requieren además VITE_DEBUG=true. Los logs salen con prefijo [NIVEL].
 // Logging utilities para producción
 // Solo logs esenciales y controlados por environment
 

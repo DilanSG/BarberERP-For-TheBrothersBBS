@@ -1,5 +1,8 @@
 import mongoose from 'mongoose';
 
+// Modelo Mongoose del catálogo de servicios de la barbería.
+// Representa cada servicio ofrecido (corte, afeitado, combo, etc.) con su
+// precio, duración y banderas de visibilidad para el sitio y el panel.
 const serviceSchema = new mongoose.Schema({
   name: {
     type: String,
@@ -19,6 +22,7 @@ const serviceSchema = new mongoose.Schema({
     min: [0, 'El precio no puede ser negativo']
   },
   duration: {
+    // Duración estimada del servicio expresada en minutos (entre 15 y 240).
     type: Number, // en minutos
     required: [true, 'La duración del servicio es requerida'],
     min: [15, 'La duración mínima es 15 minutos'],
@@ -30,10 +34,12 @@ const serviceSchema = new mongoose.Schema({
     enum: ['corte', 'afeitado', 'lavado', 'combo', 'otro']
   },
   isActive: {
+    // Si es false el servicio queda oculto para nuevas ventas/citas.
     type: Boolean,
     default: true
   },
   showInHome: {
+    // Controla si el servicio se promociona en la página principal.
     type: Boolean,
     default: false
   },
@@ -46,6 +52,7 @@ const serviceSchema = new mongoose.Schema({
 });
 
 // Índices para mejor performance
+// Aceleran los listados por categoría y la búsqueda de servicios activos.
 serviceSchema.index({ category: 1 });
 serviceSchema.index({ isActive: 1 });
 

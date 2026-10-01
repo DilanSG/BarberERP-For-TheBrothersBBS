@@ -1,14 +1,16 @@
 import { useState, useEffect } from 'react';
-import { X, Minus, Shield, AlertTriangle, Clock, DollarSign, Package, Scissors, Calendar, Filter, SendHorizontal, Trash2, CreditCard, ChevronDown, ChevronUp, ArrowLeft } from 'lucide-react';
+import { Minus, Shield, AlertTriangle, Clock, DollarSign, Package, Scissors, Calendar, Filter, SendHorizontal, Trash2, CreditCard, ArrowLeft } from 'lucide-react';
 import { refundService } from '../../services/refundService';
+import { api } from '../../services/api';
 import * as invoiceService from '../../services/invoiceService';
 import logger from '@utils/logger';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
-import LoadingSpinner from '../ui/LoadingSpinner';
+import { ListSkeleton, Skeleton } from '@components/ui/Skeleton';
 import { useNotification } from '../../contexts/NotificationContext';
 import { useAuth } from '../../contexts/AuthContext';
 import DateRangeModal from '../modals/DateRangeModal';
+import Modal from '../ui/Modal';
 import { 
   SALE_TYPES, 
   SALE_TYPE_LABELS,
@@ -19,10 +21,21 @@ import {
   SALE_TYPE_ICONS,
   SALE_TYPE_COLORS
 } from '../../constants/salesConstants';
+import { formatCurrency } from '@utils/formatters';
 
+// Modal para procesar reembolsos de ventas (barberos) o gestionarlas (admins).
+// Lista las ventas no reembolsadas con filtros por fecha, tipo, categoría y pago;
+// el panel derecho captura motivo obligatorio y, si no es admin, el código de verificación.
+// Para admins permite elegir primero el barbero cuyas ventas se revisan.
+// Modal para procesar reembolsos de ventas.
+// - Barbero: solo ve sus ventas y requiere código de administrador.
+// - Admin: puede filtrar por barbero (`selectedBarberId`) y reembolsar sin código.
+// Props: isOpen, onClose, selectedBarberId (opcional, vista admin).
+// Flujo: seleccionar venta → motivo (+ código si barbero) → confirmar (irreversible).
 const RefundSaleModal = ({ isOpen, onClose, selectedBarberId = null }) => {
   const { showSuccess, showError } = useNotification();
   const { user } = useAuth();
+  // Datos, filtros y estado del formulario de reembolso.
   const [mySales, setMySales] = useState([]);
   const [selectedBarberInfo, setSelectedBarberInfo] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -43,23 +56,19 @@ const RefundSaleModal = ({ isOpen, onClose, selectedBarberId = null }) => {
     paymentMethod: ''
   });
 
-  // Bloquear scroll del body cuando el modal está abierto
-  useEffect(() => {
-    if (isOpen) {
-      document.body.style.overflow = 'hidden';
-    } else {
-      document.body.style.overflow = 'unset';
-    }
-    return () => { document.body.style.overflow = 'unset'; };
-  }, [isOpen]);
-
   // Cargar ventas cuando el modal se abre
+  // Al abrir el modal (o cambiar filtros/barbero) recarga las ventas elegibles.
   useEffect(() => {
     if (isOpen) {
       loadMySales();
     }
   }, [isOpen, filters, selectedBarberId]);
 
+  // Carga las ventas según el rol: un admin ve las del barbero seleccionado (con
+  // sus datos) y un barbero ve las propias. Descarta las ya reembolsadas.
+  // Deriva las opciones de filtro a partir de los datos recibidos.
+  // Carga las ventas del barbero (o de un barbero concreto si es admin) y
+  // descarta explícitamente las ya reembolsadas como medida de seguridad.
   const loadMySales = async () => {
     try {
       setLoading(true);
@@ -78,7 +87,6 @@ const RefundSaleModal = ({ isOpen, onClose, selectedBarberId = null }) => {
         
         // Cargar información del barbero seleccionado
         try {
-          const { api } = await import('../../services/api');
           const barberResponse = await api.get(`/barbers/by-user/${selectedBarberId}`);
           if (barberResponse.success && barberResponse.data) {
             setSelectedBarberInfo(barberResponse.data);
@@ -134,6 +142,8 @@ const RefundSaleModal = ({ isOpen, onClose, selectedBarberId = null }) => {
     }
   };
 
+  // Extrae las categorías y métodos de pago únicos presentes en las ventas.
+  // Extrae categorías y métodos de pago únicos para poblar los selects de filtros.
   const updateFilterOptions = (sales) => {
     const categories = [...new Set(sales.map(sale => sale.category).filter(Boolean))];
     const paymentMethods = [...new Set(sales.map(sale => sale.paymentMethod).filter(Boolean))];
@@ -142,15 +152,19 @@ const RefundSaleModal = ({ isOpen, onClose, selectedBarberId = null }) => {
     setAvailablePaymentMethods(paymentMethods);
   };
 
+  // Nombre legible del método de pago (o el valor original si no está mapeado).
+  // Nombre legible y color del método de pago según las constantes de ventas.
   const getPaymentMethodDisplayName = (method) => {
     return PAYMENT_METHOD_LABELS[method] || method || 'Sin especificar';
   };
 
+  // Colores del badge del método de pago según la constante de la paleta.
   const getPaymentMethodColor = (methodId) => {
     return PAYMENT_METHOD_COLORS[methodId?.toLowerCase()] || DEFAULT_PAYMENT_COLOR;
   };
 
   // Función para obtener el ícono de tipo de venta
+  // Resuelve el componente de icono correspondiente al tipo de venta.
   const getSaleTypeIcon = (saleType) => {
     const IconComponent = SALE_TYPE_ICONS[saleType];
     if (IconComponent === 'Package') return Package;
@@ -160,10 +174,14 @@ const RefundSaleModal = ({ isOpen, onClose, selectedBarberId = null }) => {
   };
 
   // Función para obtener el color del tipo de venta
+  // Clase de color para el tipo de venta según la paleta definida.
   const getSaleTypeColor = (saleType) => {
     return SALE_TYPE_COLORS[saleType] || 'text-gray-400';
   };
 
+  // Procesa el reembolso tras validar venta seleccionada, motivo, estado no
+  // reembolsado y código de administrador cuando el usuario no es admin.
+  // Valida selección/motivo, evita reembolsos duplicados y exige código si no es admin.
   const handleRefundSale = async () => {
     if (!selectedSale || !refundReason.trim()) {
       setError('Por favor, completa todos los campos requeridos');
@@ -189,6 +207,7 @@ const RefundSaleModal = ({ isOpen, onClose, selectedBarberId = null }) => {
       setRefunding(true);
       setError(null);
 
+      // El código de administrador solo viaja si quien reembolsa no es admin.
       const refundData = {
         saleId: selectedSale._id,
         reason: refundReason,
@@ -215,6 +234,8 @@ const RefundSaleModal = ({ isOpen, onClose, selectedBarberId = null }) => {
     }
   };
 
+  // Cierra el modal limpiando venta, motivo, código y error pendientes.
+  // Limpia el formulario y el error antes de cerrar.
   const handleClose = () => {
     setSelectedSale(null);
     setRefundReason('');
@@ -223,20 +244,16 @@ const RefundSaleModal = ({ isOpen, onClose, selectedBarberId = null }) => {
     onClose();
   };
 
-  const formatCurrency = (amount) => {
-    return new Intl.NumberFormat('es-CO', {
-      style: 'currency',
-      currency: 'COP',
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0,
-    }).format(amount);
-  };
+  
 
+  // Da formato dd/MM/yyyy a una fecha.
+  // Formatea fechas en español (dd/MM/yyyy) con date-fns.
   const formatDate = (date) => {
     return format(new Date(date), 'dd/MM/yyyy', { locale: es });
   };
 
   // Manejar selección de rango de fechas
+  // Guarda el rango de fechas elegido en el modal de calendario.
   const handleDateRangeSelect = (dateRange) => {
     setFilters(prev => ({
       ...prev,
@@ -246,6 +263,8 @@ const RefundSaleModal = ({ isOpen, onClose, selectedBarberId = null }) => {
   };
 
   // Limpiar filtros
+  // Restablece todos los filtros a su valor vacío.
+  // Limpia todos los filtros a su estado inicial.
   const clearFilters = () => {
     setFilters({
       startDate: '',
@@ -256,57 +275,84 @@ const RefundSaleModal = ({ isOpen, onClose, selectedBarberId = null }) => {
     });
   };
 
+  // El modal no se renderiza mientras esté cerrado.
   if (!isOpen) return null;
 
+  // Vista en dos paneles: a la izquierda la lista filtrable de ventas y a la
+  // derecha el formulario de reembolso, más el modal de rango de fechas.
+  // En móvil se alterna entre lista y formulario según haya venta seleccionada.
   return (
     <>
-      <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-[10003] p-2 sm:p-4 lg:p-8 pt-20 sm:pt-16 lg:pt-20 pb-4 sm:pb-6 lg:pb-8">
-        <div className="bg-red-500/5 backdrop-blur-md border border-red-500/20 rounded-xl w-full max-w-6xl h-[85vh] sm:h-[85vh] lg:h-[80vh] flex flex-col shadow-2xl shadow-red-500/20">
-          {/* Header responsivo */}
-          <div className="flex items-center justify-between p-3 sm:p-4 lg:p-6 border-b border-red-500/20 flex-shrink-0">
-            <div className="flex items-center gap-2 sm:gap-3 lg:gap-4">
-              <div className="flex items-center justify-center w-8 h-8 sm:w-10 sm:h-10 lg:w-12 lg:h-12 bg-red-500/20 border border-red-500/30 rounded-lg lg:rounded-xl">
-                <Minus className="w-4 h-4 sm:w-5 sm:h-5 lg:w-6 lg:h-6 text-red-400" />
-              </div>
-              <div>
-                <h2 className="text-lg sm:text-xl lg:text-2xl font-bold text-white">
-                  {user?.role === 'admin' ? 'Gestionar Ventas' : 'Procesar Reembolso'}
-                </h2>
-              </div>
-            </div>
-            <div className="flex items-center gap-1 sm:gap-2 lg:gap-3">
-              {/* Badge de rol - compacto */}
-              <div className={`flex items-center gap-1 sm:gap-2 px-2 py-1 sm:px-3 sm:py-1.5 rounded-md border ${
-                user?.role === 'admin' 
-                  ? 'bg-blue-500/20 border-blue-500/30' 
-                  : 'bg-green-500/20 border-green-500/30'
+      <Modal
+        isOpen={isOpen}
+        onClose={handleClose}
+        color="red"
+        title={user?.role === 'admin' ? 'Gestionar Ventas' : 'Procesar Reembolso'}
+        subtitle="Reembolsos y anulaciones"
+        icon={Minus}
+        size="6xl"
+        zIndex="top"
+        headerExtra={
+          <div className="flex items-center gap-1 sm:gap-2 lg:gap-3">
+            {/* Badge de rol - compacto */}
+            <div className={`flex items-center gap-1 sm:gap-2 px-2 py-1 sm:px-3 sm:py-1.5 rounded-md border ${
+              user?.role === 'admin' 
+                ? 'bg-blue-500/20 border-blue-500/30' 
+                : 'bg-emerald-500/20 border-emerald-500/30'
+            }`}>
+              <Shield className={`w-3 h-3 sm:w-4 sm:h-4 ${
+                user?.role === 'admin' ? 'text-blue-400' : 'text-emerald-400'
+              }`} />
+              <span className={`text-xs font-medium ${
+                user?.role === 'admin' ? 'text-blue-300' : 'text-emerald-300'
               }`}>
-                <Shield className={`w-3 h-3 sm:w-4 sm:h-4 ${
-                  user?.role === 'admin' ? 'text-blue-400' : 'text-green-400'
-                }`} />
-                <span className={`text-xs font-medium ${
-                  user?.role === 'admin' ? 'text-blue-300' : 'text-green-300'
-                }`}>
-                  {user?.role === 'admin' ? 'Admin' : 'Barbero'}
-                </span>
-              </div>
-              {/* Alerta compacta - oculta en móvil muy pequeño */}
-              <div className="hidden sm:flex items-center gap-1 px-2 py-1 sm:px-3 sm:py-1.5 bg-amber-500/20 border border-amber-500/30 rounded-md">
-                <AlertTriangle className="w-3 h-3 text-amber-400" />
-                <span className="text-amber-300 text-xs font-medium">Irreversible</span>
-              </div>
-              <button
-                onClick={handleClose}
-                className="flex items-center justify-center w-7 h-7 sm:w-8 sm:h-8 bg-gray-500/20 hover:bg-red-500/20 rounded-md transition-colors border border-gray-500/30"
-              >
-                <X className="w-4 h-4 text-gray-400" />
-              </button>
+                {user?.role === 'admin' ? 'Admin' : 'Barbero'}
+              </span>
+            </div>
+            {/* Alerta compacta - oculta en móvil muy pequeño */}
+            <div className="hidden sm:flex items-center gap-1 px-2 py-1 sm:px-3 sm:py-1.5 bg-amber-500/20 border border-amber-500/30 rounded-md">
+              <AlertTriangle className="w-3 h-3 text-amber-400" />
+              <span className="text-amber-300 text-xs font-medium">Irreversible</span>
             </div>
           </div>
-
+        }
+        footer={
+          <div className="flex gap-3 sm:justify-end">
+            <button
+              type="button"
+              onClick={handleClose}
+              className="flex-1 sm:flex-none px-4 py-2.5 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.08] text-gray-300 hover:text-white text-sm font-medium transition-colors"
+            >
+              Cancelar
+            </button>
+            <button
+              type="button"
+              onClick={handleRefundSale}
+              disabled={
+                !selectedSale || 
+                !refundReason.trim() || 
+                (user?.role !== 'admin' && !adminCode.trim()) || 
+                refunding
+              }
+              className="flex-1 sm:flex-none px-5 py-2.5 rounded-xl bg-red-500/80 hover:bg-red-500 border border-red-500/50 text-white text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+            >
+              {refunding ? (
+                <>
+                  <Skeleton className="h-4 w-4 rounded-full" />
+                  <span>Procesando...</span>
+                </>
+              ) : (
+                <>
+                  <SendHorizontal className="w-4 h-4" />
+                  <span>Procesar Reembolso</span>
+                </>
+              )}
+            </button>
+          </div>
+        }
+      >
           {/* Contenido principal - Layout responsivo */}
-          <div className="flex-1 overflow-hidden">
-            <div className="h-full flex flex-col md:flex-row gap-2 sm:gap-4 p-2 sm:p-4 lg:p-6">
+          <div className="h-full flex flex-col md:flex-row gap-2 sm:gap-4">
               
               {/* Panel de ventas - se oculta en móvil cuando hay venta seleccionada */}
               <div className={`flex-1 flex flex-col bg-red-500/5 backdrop-blur-sm rounded-lg border border-red-500/20 overflow-hidden ${
@@ -340,7 +386,7 @@ const RefundSaleModal = ({ isOpen, onClose, selectedBarberId = null }) => {
                     </div>
                     <button
                       onClick={() => setShowFilters(!showFilters)}
-                      className={`flex items-center gap-1.5 px-2 py-1.5 rounded-md transition-colors text-xs ${
+                      className={`flex min-h-10 items-center gap-1.5 px-3 py-2 rounded-md transition-colors text-xs ${
                         showFilters 
                           ? 'bg-red-500/20 border border-red-500/30 text-red-300' 
                           : 'bg-gray-500/20 border border-gray-500/30 text-gray-300 hover:bg-red-500/10'
@@ -355,13 +401,13 @@ const RefundSaleModal = ({ isOpen, onClose, selectedBarberId = null }) => {
                   {showFilters && (
                     <div className="space-y-2 p-2 bg-red-500/5 rounded-lg border border-red-500/20">
                       {/* Fila de filtros principales */}
-                      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
                         {/* Selector de fechas */}
                         <div>
                           <label className="block text-xs font-medium text-gray-400 mb-1">Fechas</label>
                           <button
                             onClick={() => setShowDateRangeModal(true)}
-                            className="w-full flex items-center gap-1 px-2 py-1.5 bg-gray-800/50 border border-gray-600/50 rounded-md text-white text-xs hover:bg-gray-700/50 transition-colors"
+                            className="w-full min-h-11 flex items-center gap-1 px-2 py-2 bg-gray-800/50 border border-gray-600/50 rounded-md text-base sm:text-xs text-white hover:bg-gray-700/50 transition-colors"
                           >
                             <Calendar className="w-3 h-3" />
                             <span className="flex-1 text-left">
@@ -381,7 +427,7 @@ const RefundSaleModal = ({ isOpen, onClose, selectedBarberId = null }) => {
                             <select
                               value={filters.type}
                               onChange={(e) => setFilters({ ...filters, type: e.target.value })}
-                              className="w-full pl-6 pr-6 py-1.5 bg-gray-800/50 border border-gray-600/50 rounded-md text-white text-xs focus:outline-none focus:ring-1 focus:ring-red-500/50 focus:border-red-500/50 appearance-none"
+                              className="w-full min-h-11 pl-6 pr-6 py-2 bg-gray-800/50 border border-gray-600/50 rounded-md text-base sm:text-xs text-white focus:outline-none focus:ring-1 focus:ring-red-500/50 focus:border-red-500/50 appearance-none"
                             >
                               <option value="">Todos</option>
                               <option value={SALE_TYPES.PRODUCT}>{SALE_TYPE_LABELS[SALE_TYPES.PRODUCT]}</option>
@@ -399,7 +445,7 @@ const RefundSaleModal = ({ isOpen, onClose, selectedBarberId = null }) => {
                             <select
                               value={filters.category}
                               onChange={(e) => setFilters({ ...filters, category: e.target.value })}
-                              className="w-full pl-6 pr-6 py-1.5 bg-gray-800/50 border border-gray-600/50 rounded-md text-white text-xs focus:outline-none focus:ring-1 focus:ring-red-500/50 focus:border-red-500/50 appearance-none"
+                              className="w-full min-h-11 pl-6 pr-6 py-2 bg-gray-800/50 border border-gray-600/50 rounded-md text-base sm:text-xs text-white focus:outline-none focus:ring-1 focus:ring-red-500/50 focus:border-red-500/50 appearance-none"
                               disabled={availableCategories.length === 0}
                             >
                               <option value="">Todas</option>
@@ -418,7 +464,7 @@ const RefundSaleModal = ({ isOpen, onClose, selectedBarberId = null }) => {
                             <select
                               value={filters.paymentMethod}
                               onChange={(e) => setFilters({ ...filters, paymentMethod: e.target.value })}
-                              className="w-full pl-6 pr-6 py-1.5 bg-gray-800/50 border border-gray-600/50 rounded-md text-white text-xs focus:outline-none focus:ring-1 focus:ring-red-500/50 focus:border-red-500/50 appearance-none"
+                              className="w-full min-h-11 pl-6 pr-6 py-2 bg-gray-800/50 border border-gray-600/50 rounded-md text-base sm:text-xs text-white focus:outline-none focus:ring-1 focus:ring-red-500/50 focus:border-red-500/50 appearance-none"
                               disabled={availablePaymentMethods.length === 0}
                             >
                               <option value="">Todos</option>
@@ -442,7 +488,7 @@ const RefundSaleModal = ({ isOpen, onClose, selectedBarberId = null }) => {
                         </div>
                         <button
                           onClick={clearFilters}
-                          className="flex items-center gap-1 px-2 py-1 bg-gray-600/50 hover:bg-gray-500/50 text-gray-300 text-xs rounded-md transition-colors"
+                          className="flex min-h-10 items-center gap-1 px-3 py-2 bg-gray-600/50 hover:bg-gray-500/50 text-gray-300 text-xs rounded-md transition-colors"
                         >
                           <Trash2 className="w-3 h-3" />
                           Limpiar
@@ -452,11 +498,11 @@ const RefundSaleModal = ({ isOpen, onClose, selectedBarberId = null }) => {
                   )}
                 </div>
                 
-                <div className="flex-1 overflow-y-auto p-2 space-y-2">
+                <div className="flex-1 overflow-y-auto p-2 space-y-2 max-h-[55vh] lg:max-h-none">
                   {loading ? (
                     <div className="flex items-center justify-center h-full">
                       <div className="text-center">
-                        <LoadingSpinner />
+                        <ListSkeleton rows={3} />
                         <p className="text-gray-300 font-medium mb-1 mt-2">Cargando ventas...</p>
                         <p className="text-gray-400 text-xs">Por favor espera</p>
                       </div>
@@ -485,6 +531,7 @@ const RefundSaleModal = ({ isOpen, onClose, selectedBarberId = null }) => {
                     </div>
                   ) : (
                     mySales.map((sale) => (
+                      // Tarjeta de venta con tipo, nombre, fecha, monto y método de pago.
                       <div
                         key={sale._id}
                         className={`p-2 rounded-lg border transition-all ${
@@ -510,7 +557,7 @@ const RefundSaleModal = ({ isOpen, onClose, selectedBarberId = null }) => {
                                 {sale.type === SALE_TYPES.PRODUCT ? (
                                   <Package className="w-3 h-3 text-blue-400 flex-shrink-0" />
                                 ) : (
-                                  <Scissors className="w-3 h-3 text-green-400 flex-shrink-0" />
+                                  <Scissors className="w-3 h-3 text-emerald-400 flex-shrink-0" />
                                 )}
                                 <span className="text-xs font-medium text-gray-400">
                                   {sale.type === SALE_TYPES.PRODUCT ? 'Producto' : 'Servicio'}
@@ -589,6 +636,7 @@ const RefundSaleModal = ({ isOpen, onClose, selectedBarberId = null }) => {
                 
                 <div className="flex-1 p-2 overflow-y-auto">
                   {selectedSale ? (
+                    // Formulario de reembolso: resumen de la venta, motivo y código si no es admin.
                     <div className="space-y-2">
                       {/* Resumen de la venta seleccionada */}
                       <div className="bg-blue-500/10 p-1.5 rounded-lg border border-blue-500/20">
@@ -665,30 +713,6 @@ const RefundSaleModal = ({ isOpen, onClose, selectedBarberId = null }) => {
                           </div>
                         </div>
                       )}
-
-                      {/* Botón de envío */}
-                      <button
-                        onClick={handleRefundSale}
-                        disabled={
-                          !selectedSale || 
-                          !refundReason.trim() || 
-                          (user?.role !== 'admin' && !adminCode.trim()) || 
-                          refunding
-                        }
-                        className="w-full px-3 py-1.5 bg-gradient-to-r from-red-600 to-red-700 text-white rounded-lg font-medium text-xs hover:from-red-700 hover:to-red-800 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 flex items-center justify-center gap-1 shadow-lg hover:shadow-xl disabled:shadow-none"
-                      >
-                        {refunding ? (
-                          <>
-                            <LoadingSpinner size="sm" />
-                            <span>Procesando...</span>
-                          </>
-                        ) : (
-                          <>
-                            <SendHorizontal className="w-3 h-3" />
-                            <span>Procesar Reembolso</span>
-                          </>
-                        )}
-                      </button>
                     </div>
                   ) : (
                     <div className="flex items-center justify-center h-full">
@@ -703,11 +727,8 @@ const RefundSaleModal = ({ isOpen, onClose, selectedBarberId = null }) => {
                   )}
                 </div>
               </div>
-              
-            </div>
           </div>
-        </div>
-      </div>
+      </Modal>
 
       {/* Modal de selección de rango de fechas */}
       <DateRangeModal

@@ -1,9 +1,7 @@
-/**
- * Calculadora unificada para gastos recurrentes
- * 
- * Centraliza toda la lógica de cálculos para gastos recurrentes,
- * reemplazando las implementaciones duplicadas en frontend y backend.
- */
+// Calculadora unificada para gastos recurrentes
+//
+// Centraliza toda la lógica de cálculos para gastos recurrentes,
+// reemplazando las implementaciones duplicadas en frontend y backend.
 
 import { 
   FREQUENCY_PATTERNS, 
@@ -14,20 +12,16 @@ import {
 import { validateRecurrenceConfig, validateAmount } from './validator.js';
 import { logger } from '../utils/logger.js';
 
-/**
- * Clase principal para cálculos de gastos recurrentes
- */
+// Clase principal para cálculos de gastos recurrentes
 export class RecurringExpenseCalculator {
   constructor() {
     this.constants = CALCULATION_CONSTANTS;
   }
 
-  /**
-   * Normaliza la configuración de un gasto recurrente
-   * Maneja tanto formato legacy como nuevo formato
-   * @param {Object} expense - Gasto recurrente
-   * @returns {Object} - Configuración normalizada
-   */
+  // Normaliza la configuración de un gasto recurrente
+  // Maneja tanto formato legacy como nuevo formato
+  // @param {Object} expense - Gasto recurrente
+  // @returns {Object} - Configuración normalizada
   normalizeConfig(expense) {
     if (!expense) {
       return {
@@ -72,11 +66,10 @@ export class RecurringExpenseCalculator {
     };
   }
 
-  /**
-   * Calcula el monto diario base de un gasto recurrente
-   * @param {Object} expense - Gasto recurrente
-   * @returns {number} - Monto diario base
-   */
+  // Calcula el monto diario base de un gasto recurrente
+  // Convierte el monto según el patrón a un promedio por día (base para reportes).
+  // @param {Object} expense - Gasto recurrente
+  // @returns {number} - Monto diario base
   calculateBaseDailyAmount(expense) {
     if (!expense || !expense.amount) {
       return 0;
@@ -104,12 +97,10 @@ export class RecurringExpenseCalculator {
     }
   }
 
-  /**
-   * Obtiene el monto ajustado para una fecha específica
-   * @param {Object} expense - Gasto recurrente
-   * @param {string} dateStr - Fecha en formato YYYY-MM-DD
-   * @returns {number} - Monto ajustado para la fecha
-   */
+  // Obtiene el monto ajustado para una fecha específica
+  // @param {Object} expense - Gasto recurrente
+  // @param {string} dateStr - Fecha en formato YYYY-MM-DD
+  // @returns {number} - Monto ajustado para la fecha
   getDailyAdjustedAmount(expense, dateStr) {
     const baseDailyAmount = this.calculateBaseDailyAmount(expense);
     const config = this.normalizeConfig(expense);
@@ -122,11 +113,10 @@ export class RecurringExpenseCalculator {
     return baseDailyAmount;
   }
 
-  /**
-   * Calcula el monto mensual de un gasto recurrente
-   * @param {Object} expense - Gasto recurrente
-   * @returns {number} - Monto mensual
-   */
+  // Calcula el monto mensual de un gasto recurrente
+  // Normaliza el monto al equivalente mensual según el patrón e intervalo.
+  // @param {Object} expense - Gasto recurrente
+  // @returns {number} - Monto mensual
   calculateMonthlyAmount(expense) {
     if (!expense || !expense.amount) {
       return 0;
@@ -154,13 +144,11 @@ export class RecurringExpenseCalculator {
     }
   }
 
-  /**
-   * Calcula el monto total para un rango de fechas
-   * @param {Object} expense - Gasto recurrente
-   * @param {string} startDate - Fecha de inicio (YYYY-MM-DD)
-   * @param {string} endDate - Fecha de fin (YYYY-MM-DD)
-   * @returns {number} - Monto total para el rango
-   */
+  // Calcula el monto total para un rango de fechas
+  // @param {Object} expense - Gasto recurrente
+  // @param {string} startDate - Fecha de inicio (YYYY-MM-DD)
+  // @param {string} endDate - Fecha de fin (YYYY-MM-DD)
+  // @returns {number} - Monto total para el rango
   calculateRangeAmount(expense, startDate, endDate) {
     if (!expense || !startDate || !endDate) {
       return 0;
@@ -192,12 +180,10 @@ export class RecurringExpenseCalculator {
     return totalAmount;
   }
 
-  /**
-   * Calcula la próxima fecha de ocurrencia
-   * @param {Object} expense - Gasto recurrente
-   * @param {string|Date} fromDate - Fecha desde la cual calcular (opcional)
-   * @returns {Date|null} - Próxima fecha de ocurrencia
-   */
+  // Calcula la próxima fecha de ocurrencia
+  // @param {Object} expense - Gasto recurrente
+  // @param {string|Date} fromDate - Fecha desde la cual calcular (opcional)
+  // @returns {Date|null} - Próxima fecha de ocurrencia
   calculateNextOccurrence(expense, fromDate = new Date()) {
     const config = this.normalizeConfig(expense);
     
@@ -221,12 +207,10 @@ export class RecurringExpenseCalculator {
     return this._calculateNextDateForPattern(config, baseDate);
   }
 
-  /**
-   * Verifica si un gasto debe ocurrir en una fecha específica
-   * @param {Object} expense - Gasto recurrente
-   * @param {string|Date} date - Fecha a verificar
-   * @returns {boolean} - True si debe ocurrir en esa fecha
-   */
+  // Verifica si un gasto debe ocurrir en una fecha específica
+  // @param {Object} expense - Gasto recurrente
+  // @param {string|Date} date - Fecha a verificar
+  // @returns {boolean} - True si debe ocurrir en esa fecha
   shouldOccurOnDate(expense, date) {
     const config = this.normalizeConfig(expense);
     const checkDate = new Date(date);
@@ -236,10 +220,8 @@ export class RecurringExpenseCalculator {
 
   // ============ MÉTODOS PRIVADOS ============
 
-  /**
-   * Normaliza la frecuencia usando el mapeo de legacy
-   * @private
-   */
+  // Normaliza la frecuencia usando el mapeo de legacy
+  // @private
   _normalizeFrequency(frequency) {
     if (!frequency) {
       return DEFAULT_CONFIG.frequency;
@@ -248,10 +230,8 @@ export class RecurringExpenseCalculator {
     return LEGACY_FREQUENCY_MAP[frequency.toLowerCase()] || frequency;
   }
 
-  /**
-   * Extrae la configuración específica del patrón
-   * @private
-   */
+  // Extrae la configuración específica del patrón
+  // @private
   _extractPatternConfig(config, expense, pattern) {
     const patternConfig = config.config || {};
 
@@ -269,7 +249,7 @@ export class RecurringExpenseCalculator {
                      config.dayOfMonth !== undefined ? [parseInt(config.dayOfMonth)] : [])
         };
 
-      case FREQUENCY_PATTERNS.YEARLY:
+      case FREQUENCY_PATTERNS.YEARLY: {
         if (patternConfig.yearConfig) {
           return { yearConfig: patternConfig.yearConfig };
         }
@@ -281,16 +261,15 @@ export class RecurringExpenseCalculator {
             day: startDate.getDate()
           }
         };
+      }
 
       default:
         return {};
     }
   }
 
-  /**
-   * Verifica si el gasto está activo en un rango de fechas
-   * @private
-   */
+  // Verifica si el gasto está activo en un rango de fechas
+  // @private
   _isActiveInRange(config, startDate, endDate) {
     if (!config.isActive) {
       return false;
@@ -316,10 +295,8 @@ export class RecurringExpenseCalculator {
     return true;
   }
 
-  /**
-   * Verifica si un gasto debe ocurrir en una fecha específica según su configuración
-   * @private
-   */
+  // Verifica si un gasto debe ocurrir en una fecha específica según su configuración
+  // @private
   _shouldOccurOnDate(config, date) {
     const startDate = new Date(config.startDate);
     
@@ -351,19 +328,15 @@ export class RecurringExpenseCalculator {
     }
   }
 
-  /**
-   * Lógica para recurrencia diaria
-   * @private
-   */
+  // Lógica para recurrencia diaria
+  // @private
   _shouldOccurDaily(config, date, startDate) {
     const daysDiff = Math.floor((date - startDate) / (1000 * 60 * 60 * 24));
     return daysDiff >= 0 && daysDiff % config.interval === 0;
   }
 
-  /**
-   * Lógica para recurrencia semanal
-   * @private
-   */
+  // Lógica para recurrencia semanal
+  // @private
   _shouldOccurWeekly(config, date, startDate) {
     // Si hay días específicos configurados, verificar solo esos días
     if (config.config.weekDays && config.config.weekDays.length > 0) {
@@ -377,10 +350,8 @@ export class RecurringExpenseCalculator {
     return weeksDiff >= 0 && weeksDiff % config.interval === 0;
   }
 
-  /**
-   * Lógica para recurrencia mensual
-   * @private
-   */
+  // Lógica para recurrencia mensual
+  // @private
   _shouldOccurMonthly(config, date, startDate) {
     // Si hay días específicos del mes configurados
     if (config.config.monthDays && config.config.monthDays.length > 0) {
@@ -396,10 +367,8 @@ export class RecurringExpenseCalculator {
     return monthsDiff >= 0 && monthsDiff % config.interval === 0;
   }
 
-  /**
-   * Lógica para recurrencia anual
-   * @private
-   */
+  // Lógica para recurrencia anual
+  // @private
   _shouldOccurYearly(config, date, startDate) {
     const yearConfig = config.config.yearConfig;
     
@@ -422,10 +391,8 @@ export class RecurringExpenseCalculator {
     return yearsDiff >= 0 && yearsDiff % config.interval === 0;
   }
 
-  /**
-   * Calcula la próxima fecha para un patrón específico
-   * @private
-   */
+  // Calcula la próxima fecha para un patrón específico
+  // @private
   _calculateNextDateForPattern(config, fromDate) {
     const nextDate = new Date(fromDate);
     nextDate.setDate(nextDate.getDate() + 1); // Empezar desde el día siguiente
@@ -444,29 +411,23 @@ export class RecurringExpenseCalculator {
     return null; // No se encontró próxima ocurrencia
   }
 
-  /**
-   * Formatea una fecha como YYYY-MM-DD
-   * @private
-   */
+  // Formatea una fecha como YYYY-MM-DD
+  // @private
   _formatDate(date) {
     return date.toISOString().split('T')[0];
   }
 
-  /**
-   * Calcula el monto mensual base sin ajustes diarios
-   * (Alias de calculateMonthlyAmount para compatibilidad)
-   * @param {Object} expense - Gasto recurrente
-   * @returns {number} - Monto mensual base
-   */
+  // Calcula el monto mensual base sin ajustes diarios
+  // (Alias de calculateMonthlyAmount para compatibilidad)
+  // @param {Object} expense - Gasto recurrente
+  // @returns {number} - Monto mensual base
   calculateBaseMonthlyAmount(expense) {
     return this.calculateMonthlyAmount(expense);
   }
 
-  /**
-   * Obtiene la descripción de frecuencia del gasto
-   * @param {Object} expense - Gasto recurrente
-   * @returns {string} - Descripción de la frecuencia
-   */
+  // Obtiene la descripción de frecuencia del gasto
+  // @param {Object} expense - Gasto recurrente
+  // @returns {string} - Descripción de la frecuencia
   getFrequencyDescription(expense) {
     const config = this.normalizeConfig(expense);
     const { pattern, interval } = config;
@@ -482,9 +443,10 @@ export class RecurringExpenseCalculator {
         return interval === 1 ? 'Mensual' : `Cada ${interval} meses`;
       case 'yearly':
         return interval === 1 ? 'Anual' : `Cada ${interval} años`;
-      default:
+      default: {
         const intervalText = interval > 1 ? ` cada ${interval}` : '';
         return `${pattern}${intervalText}`;
+      }
     }
   }
 }
@@ -501,19 +463,15 @@ export const calculateRangeAmount = (expense, startDate, endDate) => calculator.
 export const calculateNextOccurrence = (expense, fromDate) => calculator.calculateNextOccurrence(expense, fromDate);
 export const shouldOccurOnDate = (expense, date) => calculator.shouldOccurOnDate(expense, date);
 
-/**
- * Calcula el monto mensual base sin ajustes diarios
- * (Alias de calculateMonthlyAmount para compatibilidad)
- * @param {Object} expense - Gasto recurrente
- * @returns {number} - Monto mensual base
- */
+// Calcula el monto mensual base sin ajustes diarios
+// (Alias de calculateMonthlyAmount para compatibilidad)
+// @param {Object} expense - Gasto recurrente
+// @returns {number} - Monto mensual base
 export const calculateBaseMonthlyAmount = (expense) => calculator.calculateMonthlyAmount(expense);
 
-/**
- * Obtiene la descripción de frecuencia del gasto
- * @param {Object} expense - Gasto recurrente
- * @returns {string} - Descripción de la frecuencia
- */
+// Obtiene la descripción de frecuencia del gasto
+// @param {Object} expense - Gasto recurrente
+// @returns {string} - Descripción de la frecuencia
 export const getFrequencyDescription = (expense) => {
   const { formatExpenseSummary } = require('./formatter.js');
   return formatExpenseSummary(expense).frequency;

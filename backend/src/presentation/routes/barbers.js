@@ -13,7 +13,6 @@ import {
 import {
   protect,
   adminAuth,
-  barberAuth,
   sameUserOrAdmin
 } from '../middleware/auth.js';
 import {
@@ -30,11 +29,11 @@ import { cacheMiddleware, invalidateCacheMiddleware } from '../middleware/cache.
 
 const router = express.Router();
 
-// Cache patterns para invalidación
+// Cache patterns para invalidación (las keys incluyen el prefijo /api/v1)
 const CACHE_PATTERNS = [
-  '^/api/barbers',
-  '^/api/barbers/\\w+',
-  '^/api/barbers/by-user/\\w+'
+  '^/api/v1/barbers',
+  '^/api/v1/barbers/\\w+',
+  '^/api/v1/barbers/by-user/\\w+'
 ];
 
 // Rutas públicas
@@ -92,7 +91,7 @@ router.put('/:id/profile',
 );
 
 // Remover barbero (cambiar a rol user) - solo admin
-router.put('/:id/remove', validateIdParam, adminAuth, removeBarber);
+router.put('/:id/remove', validateIdParam, adminAuth, invalidateCacheMiddleware(CACHE_PATTERNS), removeBarber);
 
 // Actualizar estado de barbero principal - solo admin
 router.patch('/:id/main-status', 

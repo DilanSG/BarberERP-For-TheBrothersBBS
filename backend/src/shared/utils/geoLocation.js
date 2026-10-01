@@ -1,11 +1,9 @@
 import geoip from 'geoip-lite';
 import { logger } from './logger.js';
 
-/**
- * Detecta la ubicación geográfica desde una dirección IP
- * @param {string} ip - Dirección IP del cliente
- * @returns {string} - Ubicación en formato "Ciudad, País" o "País" o "Unknown"
- */
+// Detecta la ubicación geográfica desde una dirección IP
+// @param {string} ip - Dirección IP del cliente
+// @returns {string} - Ubicación en formato "Ciudad, País" o "País" o "Unknown"
 export const getLocationFromIP = (ip) => {
   try {
     // Manejar IPs locales o de desarrollo
@@ -39,11 +37,9 @@ export const getLocationFromIP = (ip) => {
   }
 };
 
-/**
- * Extrae la IP real del cliente desde req (considera proxies y load balancers)
- * @param {Object} req - Request de Express
- * @returns {string} - IP del cliente
- */
+// Extrae la IP real del cliente desde req (considera proxies y load balancers)
+// @param {Object} req - Request de Express
+// @returns {string} - IP del cliente
 export const getRealIP = (req) => {
   // Prioridad de headers para detectar IP real
   const ip = 
@@ -57,11 +53,9 @@ export const getRealIP = (req) => {
   return ip;
 };
 
-/**
- * Obtiene ubicación completa desde el request
- * @param {Object} req - Request de Express
- * @returns {Object} - {ip, location, country, city}
- */
+// Obtiene ubicación completa desde el request
+// @param {Object} req - Request de Express
+// @returns {Object} - {ip, location, country, city}
 export const getLocationInfo = (req) => {
   const ip = getRealIP(req);
   const cleanIP = ip.replace(/^::ffff:/, '');

@@ -11,25 +11,28 @@ const __dirname = path.dirname(__filename);
 import { logger } from '../utils/logger.js';
 
 // Validar variables de entorno requeridas
+// Loguea el estado de las variables clave y lanza error si falta alguna crítica
+// (JWT_SECRET, MONGODB_URI y credenciales de Cloudinary). Email es opcional.
 export const validateEnv = () => {
-  logger.debug('=== DEBUGGING VARIABLES DE ENTORNO ===');
-  logger.debug(`NODE_ENV: ${process.env.NODE_ENV || 'not set'}`);
-  logger.debug(`PORT: ${process.env.PORT || 'not set'}`);
-  logger.debug(`JWT_SECRET presente: ${!!process.env.JWT_SECRET ? 'Si' : 'No'}`);
-  logger.debug(`MONGODB_URI presente: ${!!process.env.MONGODB_URI ? 'Si' : 'No'}`);
-  logger.debug(`EMAIL_USER presente: ${!!process.env.EMAIL_USER ? 'Si' : 'No'}`);
-  logger.debug(`EMAIL_PASSWORD presente: ${!!process.env.EMAIL_PASSWORD ? 'Si' : 'No'}`);
-  logger.debug(`EMAIL_SERVICE presente: ${!!process.env.EMAIL_SERVICE ? 'Si' : 'No'}`);
-  logger.debug(`EMAIL_HOST presente: ${!!process.env.EMAIL_HOST ? 'Si' : 'No'}`);
-  logger.debug(`EMAIL_PORT presente: ${!!process.env.EMAIL_PORT ? 'Si' : 'No'}`);
-  logger.debug(`EMAIL_FROM_NAME presente: ${!!process.env.EMAIL_FROM_NAME ? 'Si' : 'No'}`);
-  logger.debug(`EMAIL_FROM_ADDRESS presente: ${!!process.env.EMAIL_FROM_ADDRESS ? 'Si' : 'No'}`);
-  logger.debug(`CLOUDINARY_CLOUD_NAME presente: ${!!process.env.CLOUDINARY_CLOUD_NAME ? 'Si' : 'No'}`);
-  logger.debug(`CLOUDINARY_API_KEY presente: ${!!process.env.CLOUDINARY_API_KEY ? 'Si' : 'No'}`);
-  logger.debug(`CLOUDINARY_API_SECRET presente: ${!!process.env.CLOUDINARY_API_SECRET ? 'Si' : 'No'}`);
-  logger.debug(`FRONTEND_URL: ${process.env.FRONTEND_URL || 'not set'}`);
-  logger.debug(`ALLOWED_ORIGINS: ${process.env.ALLOWED_ORIGINS || 'not set'}`);
-  logger.debug('=== FIN DEBUGGING VARIABLES ===');
+  const envStatus = {
+    NODE_ENV: process.env.NODE_ENV || 'not set',
+    PORT: process.env.PORT || 'not set',
+    JWT_SECRET: process.env.JWT_SECRET ? 'presente' : 'FALTANTE',
+    MONGODB_URI: process.env.MONGODB_URI ? 'presente' : 'FALTANTE',
+    EMAIL_USER: process.env.EMAIL_USER ? 'presente' : 'no configurado',
+    EMAIL_PASSWORD: process.env.EMAIL_PASSWORD ? 'presente' : 'no configurado',
+    EMAIL_SERVICE: process.env.EMAIL_SERVICE ? 'presente' : 'no configurado',
+    EMAIL_HOST: process.env.EMAIL_HOST ? 'presente' : 'no configurado',
+    EMAIL_PORT: process.env.EMAIL_PORT ? 'presente' : 'no configurado',
+    EMAIL_FROM_NAME: process.env.EMAIL_FROM_NAME ? 'presente' : 'no configurado',
+    EMAIL_FROM_ADDRESS: process.env.EMAIL_FROM_ADDRESS ? 'presente' : 'no configurado',
+    CLOUDINARY_CLOUD_NAME: process.env.CLOUDINARY_CLOUD_NAME ? 'presente' : 'FALTANTE',
+    CLOUDINARY_API_KEY: process.env.CLOUDINARY_API_KEY ? 'presente' : 'FALTANTE',
+    CLOUDINARY_API_SECRET: process.env.CLOUDINARY_API_SECRET ? 'presente' : 'FALTANTE',
+    FRONTEND_URL: process.env.FRONTEND_URL || 'not set',
+    ALLOWED_ORIGINS: process.env.ALLOWED_ORIGINS || 'not set'
+  };
+  logger.debug('Variables de entorno:', envStatus);
 
   const requiredEnvVars = [
     'JWT_SECRET',
@@ -84,7 +87,9 @@ export const config = {
   // Configuración de JWT
   jwt: {
     secret: process.env.JWT_SECRET,
-    refreshSecret: process.env.JWT_REFRESH_SECRET || process.env.JWT_SECRET + '_refresh',
+    refreshSecret: process.env.JWT_REFRESH_SECRET || (process.env.JWT_SECRET + '-refresh-v2'),
+    issuer: 'the-brothers-barbershop-api',
+    audience: 'the-brothers-barbershop-users',
     // Fallback para tokens no diferenciados por rol (se usarán tiempos específicos por rol en authService)
     accessExpiresIn: process.env.JWT_ACCESS_EXPIRES_IN || '4h',
     refreshExpiresIn: process.env.JWT_REFRESH_EXPIRES_IN || '30d',
@@ -172,6 +177,7 @@ const envConfigs = {
 };
 
 // Añadir configuraciones específicas del ambiente
+// (logLevel y formato de morgan según development/test/production)
 Object.assign(config, envConfigs[config.app.nodeEnv] || envConfigs.development);
 
 // Exportar configuraciones individuales
@@ -179,8 +185,6 @@ export * from './database.js';
 export * from './cloudinary.js';
 export * from './email.js';
 export * from './cors.js';
-export * from './rateLimit.js';
-export * from './jwt.js';
 
 // Exportar configuración principal como default
 export default config;

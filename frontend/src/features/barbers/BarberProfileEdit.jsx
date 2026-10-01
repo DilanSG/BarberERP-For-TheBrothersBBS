@@ -1,35 +1,35 @@
 ﻿import React, { useState, useEffect, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { PageContainer } from '@components/layout/PageContainer';
 import { useAuth } from '@contexts/AuthContext';
-import { useSocioStatus } from '@hooks/useSocioStatus';
-import { api, barberService, serviceService } from '@services/api';
+import { api } from '@services/api';
+import { barberService } from '@services/barberService';
+import { serviceService } from '@services/serviceService';
 import { useNotification } from '@contexts/NotificationContext';
 import GradientButton from '@components/ui/GradientButton';
-import GradientText from '@components/ui/GradientText';
+import { BarberProfileEditSkeleton, ScheduleListSkeleton } from '@components/ui/Skeleton';
 import logger from '@utils/logger';
-import { 
-  User, 
-  Camera, 
-  Upload, 
-  X, 
-  Save, 
-  ArrowLeft,
+import {
+  User,
+  Camera,
+  Upload,
+  Save,
   Scissors,
   Clock,
   Star,
   Phone,
   Mail,
   Calendar,
-  Settings,
-  ChevronDown,
   FileText,
   Lock,
   Eye,
   EyeOff,
-  Crown
+  RotateCcw,
+  Trash2,
+  ChevronDown,
+  CheckCircle2
 } from 'lucide-react';
 
+// Nombres en español de los días para la pestaña de horarios.
 const daysInSpanish = {
   monday: 'Lunes',
   tuesday: 'Martes',
@@ -40,31 +40,43 @@ const daysInSpanish = {
   sunday: 'Domingo'
 };
 
+// Horario por defecto: lunes a sábado 9:00-19:00 y domingo cerrado.
 const defaultSchedule = {
-  monday: { start: '07:00', end: '22:00', available: true },
-  tuesday: { start: '07:00', end: '22:00', available: true },
-  wednesday: { start: '07:00', end: '22:00', available: true },
-  thursday: { start: '07:00', end: '22:00', available: true },
-  friday: { start: '07:00', end: '22:00', available: true },
-  saturday: { start: '07:00', end: '22:00', available: true },
-  sunday: { start: '07:00', end: '22:00', available: false }
+  monday: { start: '09:00', end: '19:00', available: true },
+  tuesday: { start: '09:00', end: '19:00', available: true },
+  wednesday: { start: '09:00', end: '19:00', available: true },
+  thursday: { start: '09:00', end: '19:00', available: true },
+  friday: { start: '09:00', end: '19:00', available: true },
+  saturday: { start: '09:00', end: '19:00', available: true },
+  sunday: { start: '09:00', end: '19:00', available: false }
 };
 
+// Pestañas del editor: personal, seguridad, información, servicios y horarios.
+const TABS = [
+  { id: 'personal', label: 'Personal', icon: User },
+  { id: 'security', label: 'Seguridad', icon: Lock },
+  { id: 'professional', label: 'Información', icon: Star },
+  { id: 'services', label: 'Servicios', icon: Scissors },
+  { id: 'schedule', label: 'Horarios', icon: Clock }
+];
+
+// Editor del perfil del barbero organizado por pestañas.
+// Carga el perfil del barbero y el catálogo de servicios; permite actualizar
+// datos personales (incluida la foto), contraseña, información profesional,
+// los servicios ofrecidos y el horario semanal.
 const BarberProfileEdit = () => {
   const { user, setUser } = useAuth();
-  const { isSocio, tipoSocio, isFounder } = useSocioStatus();
-  const navigate = useNavigate();
   const { showSuccess, showError } = useNotification();
   const fileInputRef = useRef(null);
-  
+
   // Estados principales
   const [barber, setBarber] = useState(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [activeTab, setActiveTab] = useState('personal');
   const [previewImage, setPreviewImage] = useState(null);
-const [scheduleLoaded, setScheduleLoaded] = useState(false);
-  
+  const [scheduleLoaded, setScheduleLoaded] = useState(false);
+
   // Estados para el formulario del usuario
   const [userFormData, setUserFormData] = useState({
     name: '',
@@ -72,32 +84,33 @@ const [scheduleLoaded, setScheduleLoaded] = useState(false);
     phone: '',
     birthdate: ''
   });
-  
-// Estados para el formulario del barbero
+
+  // Estados para el formulario del barbero
   const [barberFormData, setBarberFormData] = useState({
     specialty: '',
     experience: '',
     description: '',
     services: []
   });
-  
-// Estados para servicios y horarios
+
+  // Estados para servicios y horarios
   const [availableServices, setAvailableServices] = useState([]);
   const [schedule, setSchedule] = useState(defaultSchedule);
-  
+
   // Estados para contraseñas
   const [passwordData, setPasswordData] = useState({
     currentPassword: '',
     newPassword: '',
     confirmPassword: ''
   });
-  
+
   const [showPasswords, setShowPasswords] = useState({
     current: false,
     new: false,
     confirm: false
   });
-  
+
+  // Convierte una fecha al formato yyyy-MM-dd que espera un input type=date.
   const formatDateForInput = (dateString) => {
     if (!dateString) return '';
     const date = new Date(dateString);
@@ -105,16 +118,13 @@ const [scheduleLoaded, setScheduleLoaded] = useState(false);
     return date.toISOString().split('T')[0];
   };
 
+  // Carga inicial del perfil y del catálogo de servicios.
   useEffect(() => {
     fetchData();
   }, []);
 
-  // Debug: Monitorear cambios en el schedule
-  useEffect(() => {
-    logger.debug('Schedule actualizado:', schedule);
-  }, [schedule]);
-
   // Sincronizar el formulario del usuario cuando el contexto cambie
+  // Mantiene sincronizado el formulario personal con los datos del contexto.
   useEffect(() => {
     if (user) {
       setUserFormData({
@@ -123,14 +133,15 @@ const [scheduleLoaded, setScheduleLoaded] = useState(false);
         phone: user.phone || '',
         birthdate: formatDateForInput(user.birthdate)
       });
-      
-      // Actualizar también la foto de preview si cambió en el contexto
+
       if (user.profilePicture && !previewImage) {
         setPreviewImage(user.profilePicture);
       }
     }
   }, [user]);
 
+  // Carga en paralelo el perfil del barbero y los servicios disponibles.
+  // Normaliza el horario recibido contra el horario por defecto.
   const fetchData = async () => {
     setLoading(true);
     setScheduleLoaded(false);
@@ -139,32 +150,32 @@ const [scheduleLoaded, setScheduleLoaded] = useState(false);
         barberService.getBarberProfile(),
         serviceService.getAllServices()
       ]);
-      
+
       if (barberData.success) {
         const barberInfo = barberData.data;
         setBarber(barberInfo);
-        
+
         setBarberFormData({
           specialty: barberInfo.specialty || '',
           experience: barberInfo.experience?.toString() || '',
           description: barberInfo.description || '',
           services: barberInfo.services?.map(s => s._id) || []
         });
-        
+
         setUserFormData({
           name: user?.name || '',
           email: user?.email || '',
           phone: user?.phone || '',
           birthdate: formatDateForInput(user?.birthdate)
         });
-        
+
         const profilePicture = user?.profilePicture || barberInfo.user?.profilePicture;
         if (profilePicture) {
           setPreviewImage(profilePicture);
         }
-        
+
         if (barberInfo.schedule) {
-          logger.debug('Cargando horario desde BD:', barberInfo.schedule);
+          // Completa con valores por defecto los días que falten o vengan incompletos.
           // Validar que el schedule tenga la estructura correcta
           const validSchedule = { ...defaultSchedule };
           Object.keys(validSchedule).forEach(day => {
@@ -172,24 +183,23 @@ const [scheduleLoaded, setScheduleLoaded] = useState(false);
               validSchedule[day] = {
                 start: barberInfo.schedule[day].start || validSchedule[day].start,
                 end: barberInfo.schedule[day].end || validSchedule[day].end,
-                available: barberInfo.schedule[day].available !== undefined 
-                  ? barberInfo.schedule[day].available 
+                available: barberInfo.schedule[day].available !== undefined
+                  ? barberInfo.schedule[day].available
                   : validSchedule[day].available
               };
             }
           });
           setSchedule(validSchedule);
         } else {
-          logger.debug('No hay horario en BD, usando horario por defecto');
           setSchedule(defaultSchedule);
         }
         setScheduleLoaded(true);
       }
-      
+
       if (servicesData.success) {
         setAvailableServices(servicesData.data || []);
       }
-      
+
     } catch (error) {
       console.error('Error loading data:', error);
       showError('Error al cargar los datos del perfil');
@@ -198,32 +208,30 @@ const [scheduleLoaded, setScheduleLoaded] = useState(false);
     }
   };
 
+  // Actualiza cualquier campo del formulario personal por su name.
   const handleUserInputChange = (e) => {
     const { name, value } = e.target;
-    setUserFormData(prev => ({
-      ...prev,
-      [name]: value
-    }));
+    setUserFormData(prev => ({ ...prev, [name]: value }));
   };
 
+  // Actualiza cualquier campo del formulario profesional por su name.
   const handleBarberInputChange = (e) => {
     const { name, value } = e.target;
-    setBarberFormData(prev => ({
-      ...prev,
-      [name]: value
-    }));
+    setBarberFormData(prev => ({ ...prev, [name]: value }));
   };
 
+  // Añade o quita un servicio del listado de servicios que ofrece el barbero.
   const handleServiceToggle = (serviceId, isChecked) => {
     setBarberFormData(prev => ({
       ...prev,
-      services: isChecked 
+      services: isChecked
         ? [...prev.services, serviceId]
         : prev.services.filter(id => id !== serviceId)
     }));
   };
 
-  // Función para generar opciones de tiempo
+  // Selector de hora con búsqueda
+  // Genera opciones de hora en punto entre las 7:00 y las 22:00.
   const generateTimeOptions = () => {
     const options = [];
     for (let hour = 7; hour <= 22; hour++) {
@@ -237,19 +245,22 @@ const [scheduleLoaded, setScheduleLoaded] = useState(false);
 
   const timeOptions = generateTimeOptions();
 
-  // Componente de selector personalizado
-  const CustomTimeSelector = ({ value, onChange, options, placeholder, dayKey, field }) => {
+  // Selector de hora personalizado con búsqueda y cierre al hacer clic fuera.
+  // Se usa en la edición del horario semanal.
+  const CustomTimeSelector = ({ value, onChange, options, placeholder }) => {
     const [isOpen, setIsOpen] = useState(false);
     const [searchTerm, setSearchTerm] = useState('');
     const dropdownRef = useRef(null);
     const buttonRef = useRef(null);
 
-    const filteredOptions = options.filter(option => 
+    // Filtra las opciones de hora según el texto de búsqueda.
+    const filteredOptions = options.filter(option =>
       option.label.toLowerCase().includes(searchTerm.toLowerCase())
     );
 
     const selectedOption = options.find(option => option.value === value);
 
+    // Cierra el desplegable al hacer clic fuera del botón o de la lista.
     useEffect(() => {
       const handleClickOutside = (event) => {
         if (dropdownRef.current && !dropdownRef.current.contains(event.target) &&
@@ -263,22 +274,7 @@ const [scheduleLoaded, setScheduleLoaded] = useState(false);
       return () => document.removeEventListener('mousedown', handleClickOutside);
     }, []);
 
-// Agregar clase al contenedor padre cuando se abre
-    useEffect(() => {
-      const dayContainer = document.querySelector(`[data-day="${dayKey}"]`);
-      if (dayContainer) {
-        if (isOpen) {
-          dayContainer.style.zIndex = '99998';
-          dayContainer.style.position = 'relative';
-          dayContainer.style.overflow = 'visible';
-        } else {
-          dayContainer.style.zIndex = '';
-          dayContainer.style.position = '';
-          dayContainer.style.overflow = '';
-        }
-      }
-    }, [isOpen, dayKey]);
-
+    // Confirma la hora elegida, cierra el desplegable y limpia la búsqueda.
     const handleSelect = (option) => {
       onChange(option.value);
       setIsOpen(false);
@@ -286,61 +282,60 @@ const [scheduleLoaded, setScheduleLoaded] = useState(false);
     };
 
     return (
-      <div className="relative w-full" style={{ zIndex: 1000 }}>
+      <div className="relative w-full">
         <button
           ref={buttonRef}
           type="button"
-                    onClick={() => setIsOpen(!isOpen)}
-                    className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-white text-sm backdrop-blur-sm placeholder-gray-400 focus:border-blue-500/50 hover:border-blue-500/50 transition-all duration-300 text-left flex items-center justify-between shadow-xl shadow-blue-500/20"
+          onClick={() => setIsOpen(!isOpen)}
+          className="glassmorphism-input flex items-center justify-between text-left"
         >
-          <span>{selectedOption ? selectedOption.label : placeholder}</span>
-          <ChevronDown 
-            size={16} 
-            className={`text-gray-400 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`} 
+          <span className={selectedOption ? 'text-white' : 'text-gray-500'}>
+            {selectedOption ? selectedOption.label : placeholder}
+          </span>
+          <ChevronDown
+            size={16}
+            className={`text-gray-500 flex-shrink-0 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`}
           />
         </button>
 
         {isOpen && (
-          <div 
+          <div
             ref={dropdownRef}
-            className="absolute w-full mt-1 bg-gradient-to-br from-gray-900/95 to-gray-800/95 backdrop-blur-xl border border-red-500/30 rounded-2xl shadow-2xl shadow-red-500/10 max-h-64 overflow-visible"
-            style={{ zIndex: 99999, position: 'absolute' }}
+            className="absolute w-full mt-1 z-[100] bg-[#1c2030] border border-white/[0.12] rounded-xl shadow-2xl overflow-hidden"
           >
-{/* Barra de búsqueda */}
-            <div className="p-3 border-b border-gray-700/50">
+            {/* Barra de búsqueda */}
+            <div className="p-2 border-b border-white/[0.08]">
               <input
                 type="text"
                 placeholder="Buscar hora..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full px-3 py-2 bg-gray-800/50 border border-gray-600/50 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-1 focus:ring-red-500/50 focus:border-red-500/50 text-sm shadow-xl shadow-blue-500/20"
+                className="w-full px-3 py-2 bg-white/[0.04] border border-white/[0.08] rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-blue-500/50 text-sm"
               />
             </div>
-            
-{/* Lista de opciones */}
-            <div className="max-h-48 overflow-y-auto custom-scrollbar pr-1">
+
+            {/* Lista de opciones */}
+            <div className="max-h-48 overflow-y-auto custom-scrollbar">
               {filteredOptions.length > 0 ? (
                 filteredOptions.map((option) => (
                   <button
                     key={option.value}
                     type="button"
                     onClick={() => handleSelect(option)}
-                    className={`w-full px-4 py-3 text-left hover:bg-gradient-to-r hover:from-red-600/20 hover:to-blue-600/20 transition-all duration-200 text-sm font-medium border-b border-gray-700/30 last:border-b-0 flex items-center justify-between group ${
-                      value === option.value 
-                        ? 'bg-gradient-to-r from-red-600/30 to-blue-600/30 text-white' 
-                        : 'text-gray-300 hover:text-white'
+                    className={`w-full px-4 py-2.5 text-left transition-colors duration-150 text-sm flex items-center justify-between ${
+                      value === option.value
+                        ? 'bg-blue-500/15 text-blue-300'
+                        : 'text-gray-300 hover:bg-white/[0.06] hover:text-white'
                     }`}
                   >
                     <span>{option.label}</span>
-                    {value === option.value && (
-                      <div className="w-2 h-2 bg-gradient-to-r from-red-400 to-blue-400 rounded-full"></div>
-                    )}
+                    {value === option.value && <CheckCircle2 className="w-4 h-4 flex-shrink-0" />}
                   </button>
                 ))
               ) : (
-                <div className="px-4 py-6 text-center text-gray-400 text-sm">
-No se encontraron opciones
-</div>
+                <div className="px-4 py-6 text-center text-gray-500 text-sm">
+                  No se encontraron opciones
+                </div>
               )}
             </div>
           </div>
@@ -349,75 +344,54 @@ No se encontraron opciones
     );
   };
 
-  // Función para ajustar horarios a intervalos de 1 hora
+  // Normaliza cualquier hora al inicio de su hora en punto (09:37 -> 09:00).
   const adjustTimeToInterval = (timeString) => {
     const [hours] = timeString.split(':').map(Number);
     return `${hours.toString().padStart(2, '0')}:00`;
   };
 
-  // Función para validar que el horario sea lógico (hora de fin después de inicio)
-  const validateTimeRange = (timeString, field, currentSchedule) => {
-    // Solo ajustar a intervalos de 30 minutos, sin restricciones de rango
-    return timeString;
-  };
-
+  // Actualiza el horario de un día; si cambia inicio o fin recalcula si el día
+  // queda disponible (se requiere al menos una hora de diferencia).
   const handleScheduleChange = (day, field, value) => {
     if (field === 'available') {
-      // Cambiar disponibilidad del día
       setSchedule(prev => ({
         ...prev,
-        [day]: {
-          ...prev[day],
-          available: value
-        }
+        [day]: { ...prev[day], available: value }
       }));
       return;
     }
 
-    // Ajustar a intervalos de 30 minutos
     let adjustedValue = adjustTimeToInterval(value);
-    
+
     setSchedule(prev => {
       const currentDaySchedule = prev[day];
       let newSchedule = {
         ...prev,
-        [day]: {
-          ...currentDaySchedule,
-          [field]: adjustedValue
-        }
+        [day]: { ...currentDaySchedule, [field]: adjustedValue }
       };
 
-      // Validar que la hora de fin sea después de la hora de inicio
       const startTime = field === 'start' ? adjustedValue : currentDaySchedule.start;
       const endTime = field === 'end' ? adjustedValue : currentDaySchedule.end;
-      
-      // Convertir a minutos para comparar
+
       const getMinutes = (timeStr) => {
         const [hours] = timeStr.split(':').map(Number);
         return hours * 60;
       };
-      
-      const startMinutes = getMinutes(startTime);
-      const endMinutes = getMinutes(endTime);
-      const timeDifference = endMinutes - startMinutes;
-      
-      // Si la diferencia es menor a 1 hora o negativa, desmarcar el día
-      if (timeDifference < 60) {
-        newSchedule[day].available = false;
-      } else {
-        // Si había una diferencia válida, asegurar que el día esté marcado como disponible
-        newSchedule[day].available = true;
-      }
-      
+
+      const timeDifference = getMinutes(endTime) - getMinutes(startTime);
+      newSchedule[day].available = timeDifference >= 60;
+
       return newSchedule;
     });
   };
 
   // Manejo de foto de perfil
+  // Valida tamaño (máx. 5MB) y tipo de imagen, y genera la vista previa
+  // en base64 con FileReader.
   const handleFileSelect = (e) => {
     const file = e.target.files[0];
     if (file) {
-if (file.size > 5 * 1024 * 1024) {
+      if (file.size > 5 * 1024 * 1024) {
         showError('La imagen no puede ser mayor a 5MB');
         return;
       }
@@ -435,6 +409,7 @@ if (file.size > 5 * 1024 * 1024) {
     }
   };
 
+  // Quita la foto seleccionada y limpia el input de archivo.
   const handleRemoveProfilePicture = () => {
     setPreviewImage(null);
     if (fileInputRef.current) {
@@ -442,6 +417,7 @@ if (file.size > 5 * 1024 * 1024) {
     }
   };
 
+  // Sube la imagen al backend y devuelve la URL del archivo guardado.
   const uploadProfilePicture = async (file) => {
     try {
       const formData = new FormData();
@@ -454,10 +430,13 @@ if (file.size > 5 * 1024 * 1024) {
   };
 
   // Guardar información personal
+  // Guarda los datos personales: sube la foto si se eligió una nueva y
+  // envía solo los campos con valor; actualiza el usuario del contexto.
+  // Detecta el error de email duplicado para mostrar un mensaje claro.
   const handlePersonalSave = async () => {
     try {
       setSaving(true);
-      
+
       let profilePictureUrl = user?.profilePicture;
 
       if (fileInputRef.current?.files[0]) {
@@ -465,23 +444,23 @@ if (file.size > 5 * 1024 * 1024) {
       }
 
       const updatedData = {};
-      
+
       if (userFormData.name && userFormData.name.trim()) {
         updatedData.name = userFormData.name.trim();
       }
-      
+
       if (userFormData.email && userFormData.email.trim()) {
         updatedData.email = userFormData.email.trim();
       }
-      
+
       if (userFormData.phone && userFormData.phone.trim()) {
         updatedData.phone = userFormData.phone.trim();
       }
-      
+
       if (userFormData.birthdate && userFormData.birthdate.trim()) {
         updatedData.birthdate = userFormData.birthdate.trim();
       }
-      
+
       if (profilePictureUrl) {
         updatedData.profilePicture = profilePictureUrl;
       }
@@ -493,24 +472,22 @@ if (file.size > 5 * 1024 * 1024) {
         ...userData,
         profilePicture: profilePictureUrl
       };
-      
+
       setUser(updatedUser);
-      
-      // Actualizar el formulario local con los datos actualizados
+
       setUserFormData({
         name: updatedUser.name || '',
         email: updatedUser.email || '',
         phone: updatedUser.phone || '',
         birthdate: formatDateForInput(updatedUser.birthdate)
       });
-      
-      // Si se subió una nueva foto, actualizar el preview para mostrarla
+
       if (profilePictureUrl && profilePictureUrl !== user?.profilePicture) {
         setPreviewImage(profilePictureUrl);
       } else {
         setPreviewImage(null);
-        }
-      
+      }
+
       if (fileInputRef.current) {
         fileInputRef.current.value = '';
       }
@@ -518,8 +495,7 @@ if (file.size > 5 * 1024 * 1024) {
       showSuccess('Información personal actualizada correctamente');
     } catch (error) {
       console.error('Error al actualizar información personal:', error);
-      
-      // Manejo específico para email duplicado
+
       if (error.message && error.message.includes('duplicate key error') && error.message.includes('email')) {
         showError('Este email ya está siendo usado por otro usuario. Por favor, elige un email diferente.');
       } else {
@@ -530,78 +506,68 @@ if (file.size > 5 * 1024 * 1024) {
     }
   };
 
-// Guardar información profesional
+  // Guardar información profesional
+  // Guarda la información profesional (especialidad, experiencia y descripción).
+  // La experiencia se convierte a número antes de enviarla.
   const handleProfessionalSave = async () => {
     try {
       setSaving(true);
-      
+
       const updateData = {
         ...barberFormData,
         experience: parseInt(barberFormData.experience) || 0
       };
-      
+
       const response = await barberService.updateMyProfile(updateData);
-      
+
       if (response.success) {
         showSuccess('Información profesional actualizada exitosamente');
-      
-        // Actualizar el estado local sin necesidad de recargar todo
-        setBarber(prev => ({
-          ...prev,
-          ...updateData
-        }));
-        
-        // Solo recargar si necesitamos datos actualizados del servidor
-        // await fetchData();
+
+        setBarber(prev => ({ ...prev, ...updateData }));
       } else {
         showError(response.message || 'Error al actualizar la información profesional');
       }
     } catch (error) {
       console.error('Error updating professional info:', error);
       showError('Error al actualizar la información profesional');
-          } finally {
+    } finally {
       setSaving(false);
     }
   };
 
-// Guardar horarios
+  // Guardar horarios
+  // Persiste el horario semanal completo y sincroniza el estado local.
   const handleScheduleSave = async () => {
     try {
       setSaving(true);
-      
-const response =       await barberService.updateMyProfile({ schedule });
-      
+
+      const response = await barberService.updateMyProfile({ schedule });
+
       if (response.success) {
         showSuccess('Horarios actualizados exitosamente');
-      
-        // Actualizar el estado local
-        setBarber(prev => ({
-          ...prev,
-          schedule
-        }));
-        
-        // Solo recargar si necesitamos datos actualizados del servidor
-        // await fetchData();
+        setBarber(prev => ({ ...prev, schedule }));
       } else {
         showError(response.message || 'Error al actualizar los horarios');
       }
     } catch (error) {
       console.error('Error updating schedule:', error);
       showError('Error al actualizar los horarios');
-          } finally {
+    } finally {
       setSaving(false);
     }
   };
 
   // Funciones para manejar contraseñas
+  // Actualiza el campo de contraseña correspondiente.
   const handlePasswordChange = (e) => {
     const { name, value } = e.target;
-    setPasswordData(prev => ({
-      ...prev,
-      [name]: value
-    }));
+    setPasswordData(prev => ({ ...prev, [name]: value }));
   };
 
+  // Validación alineada con el backend: 8+ con mayúscula, minúscula y número
+  // Cambia la contraseña validando reglas alineadas con el backend:
+  // campos completos, coincidencia y mínimo 8 caracteres con mayúscula,
+  // minúscula y número.
   const handlePasswordSave = async () => {
     try {
       if (!passwordData.currentPassword || !passwordData.newPassword || !passwordData.confirmPassword) {
@@ -614,8 +580,20 @@ const response =       await barberService.updateMyProfile({ schedule });
         return;
       }
 
-      if (passwordData.newPassword.length < 6) {
-        showError('La nueva contraseña debe tener al menos 6 caracteres');
+      if (passwordData.newPassword.length < 8) {
+        showError('La nueva contraseña debe tener al menos 8 caracteres');
+        return;
+      }
+      if (!/[a-z]/.test(passwordData.newPassword)) {
+        showError('La nueva contraseña debe contener al menos una minúscula');
+        return;
+      }
+      if (!/[A-Z]/.test(passwordData.newPassword)) {
+        showError('La nueva contraseña debe contener al menos una mayúscula');
+        return;
+      }
+      if (!/\d/.test(passwordData.newPassword)) {
+        showError('La nueva contraseña debe contener al menos un número');
         return;
       }
 
@@ -641,675 +619,534 @@ const response =       await barberService.updateMyProfile({ schedule });
     }
   };
 
+  // Esqueleto de carga mientras se obtienen perfil y servicios.
   if (loading) {
     return (
       <PageContainer>
-        <div className="min-h-screen bg-gradient-to-br from-gray-900 via-blue-900/20 to-red-900/20 flex items-center justify-center">
-          <div className="absolute inset-0 bg-black/20"></div>
-          <div className="relative z-10 text-center">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-400 mx-auto"></div>
-            <p className="mt-4 text-white/80">Cargando perfil...</p>
-          </div>
+        <div className="w-full pb-6">
+          <BarberProfileEditSkeleton />
         </div>
       </PageContainer>
     );
   }
 
+  // Foto a mostrar: la vista previa local o la del usuario autenticado.
+  const avatarSrc = previewImage || user?.profilePicture;
+
+  // Editor en pestañas: Personal (foto y datos), Seguridad (contraseña),
+  // Información profesional, Servicios y Horarios, cada una con su botón de guardado.
   return (
-    <div className="relative min-h-screen bg-gradient-to-b from-black via-gray-900 to-black overflow-hidden">
-      {/* Background con efectos de gradientes */}
-      <div className="absolute inset-0 bg-gradient-to-r from-red-900/8 via-blue-900/8 to-red-900/8"></div>
-      
-      {/* Efectos de puntos en toda la página - múltiples capas */}
-      <div className="absolute inset-0 opacity-40" style={{
-        backgroundImage: `radial-gradient(circle, rgba(59, 130, 246, 0.3) 1px, transparent 1px)`,
-        backgroundSize: '30px 30px',
-        backgroundPosition: '0 0, 15px 15px'
-      }}></div>
-      
-      <div className="absolute inset-0 opacity-20" style={{
-        backgroundImage: `radial-gradient(circle, rgba(239, 68, 68, 0.4) 1px, transparent 1px)`,
-        backgroundSize: '20px 20px',
-        backgroundPosition: '10px 10px'
-      }}></div>
-      
-      <div className="absolute inset-0 opacity-15" style={{
-        backgroundImage: `radial-gradient(circle, rgba(168, 85, 247, 0.5) 0.8px, transparent 0.8px)`,
-        backgroundSize: '40px 40px',
-        backgroundPosition: '20px 0'
-      }}></div>
+    <PageContainer>
+      <div className="relative z-10 w-full pb-6 space-y-5">
 
-      {/* Contenido principal */}
-      <div className="relative z-10">
-        <PageContainer>
-          <div className="relative py-6">
-            <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
-
-        {/* Header compacto con estilo de barbería */}
-        <div className="text-center py-8">
-          <button
-              onClick={() => navigate('/profile')}
-              className="group inline-flex items-center gap-2 mb-10 px-4 py-2 bg-white/10 backdrop-blur-lg border border-white/20 rounded-full text-white hover:bg-white/20 hover:border-white/40 transition-all duration-300 shadow-lg hover:scale-105"
-          >
-            <ArrowLeft size={16} className="group-hover:-translate-x-1 transition-transform duration-300" />
-              <span className="font-medium text-sm">Volver al Perfil</span>
-            </button>
-            
-            <h1 className="text-4xl md:text-5xl font-bold mb-4">
-              <GradientText className="text-4xl md:text-5xl font-bold">
-                <User className="w-10 h-10 mx-auto mb-3" />
-                Editar Perfil de Barbero
-              </GradientText>
+        {/* ── Top bar ── */}
+        <div className="flex items-center gap-3">
+          <div className="p-2.5 rounded-xl bg-red-500/10 border border-red-500/20 flex-shrink-0">
+            <Scissors className="w-5 h-5 sm:w-6 sm:h-6 text-red-400" />
+          </div>
+          <div className="min-w-0">
+            <h1 className="text-lg sm:text-xl lg:text-2xl font-bold text-white truncate">
+              Editar Perfil de Barbero
             </h1>
-            <p className="text-gray-300 text-sm max-w-2xl mx-auto leading-relaxed">
-              Gestiona tu información profesional y destaca tus habilidades como barbero
+            <p className="text-xs sm:text-sm text-gray-400 truncate">
+              Gestiona tu información profesional, servicios y horarios
             </p>
-        </div>
-
-        {/* Navegación por pestañas */}
-        <div className="flex justify-center mb-8">
-          <div className="bg-white/5 border border-white/10 rounded-xl backdrop-blur-sm shadow-lg p-1 flex flex-col sm:flex-row gap-1 w-full max-w-xs sm:max-w-lg">
-            {[
-              { id: 'personal', label: 'Personal', icon: User },
-              { id: 'security', label: 'Seguridad', icon: Lock },
-              { id: 'professional', label: 'Profesional', icon: Star },
-              { id: 'services', label: 'Servicios', icon: Scissors },
-              { id: 'schedule', label: 'Horarios', icon: Clock }
-            ].map(({ id, label, icon: Icon }) => (
-              <button
-                key={id}
-                type="button"
-                onClick={() => setActiveTab(id)}
-                className={`group relative px-3 py-2.5 rounded-xl border cursor-pointer transition-all duration-300 hover:scale-105 overflow-hidden backdrop-blur-sm flex-1 flex items-center justify-center gap-1.5 ${
-                  activeTab === id
-                    ? 'border-blue-500/50 bg-blue-500/10 shadow-xl shadow-blue-500/20'
-                    : 'border-white/20 bg-white/5 hover:border-white/40 hover:bg-white/10'
-                }`}
-              >
-                <Icon size={14} className={`transition-all duration-300 ${
-                  activeTab === id ? 'text-blue-300' : 'text-white'
-                }`} />
-                <span className={`font-medium text-xs sm:text-xs whitespace-nowrap ${
-                  activeTab === id ? 'text-blue-300' : 'text-white'
-                }`}>{label}</span>
-              </button>
-            ))}
           </div>
         </div>
 
-        {/* Content */}
-        <div className="bg-transparent border border-white/10 rounded-2xl backdrop-blur-sm shadow-2xl shadow-blue-500/20">
-          <div className="divide-y divide-white/10">
-              
-            {/* Tab: Información Personal */}
-            {activeTab === 'personal' && (
-              <div className="group relative px-4 py-4 transition-colors backdrop-blur-sm border-b border-white/5 overflow-hidden rounded-lg">
-                {/* Efecto de brillo en hover */}
-                <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/[2.5%] to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-1000 ease-out rounded-lg"></div>
-                <div className="relative p-2">
-                  {/* Foto de Perfil con estilo barbería */}
-                  <div className="mb-8">
-                    <h3 className="text-lg font-bold mb-4 flex items-center gap-2">
-                      <div className="p-2 bg-gradient-to-r from-red-600/20 to-blue-600/20 rounded-xl border border-red-500/20 group-hover:border-blue-500/40 transition-all duration-500">
-                        <Upload size={18} className="text-red-400 group-hover:text-blue-400 transition-colors duration-500" />
-                      </div>
-                      <GradientText className="text-lg font-bold">Foto de Perfil</GradientText>
-                    </h3>
-                    
-                    <div className="flex flex-col items-center space-y-3">
-                      <div className="relative group">
-                        <div className="w-20 h-20 rounded-2xl overflow-hidden bg-gradient-to-br from-gray-800 to-blue-900 border-2 border-red-500/30 shadow-xl hover:border-red-500/60 transition-all duration-300">
-                          {(previewImage || user?.profilePicture) ? (
-                            <img
-                              src={previewImage || user?.profilePicture}
-                              alt="Foto de perfil"
-                              className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300"
-                              onError={(e) => {
-                                e.target.style.display = 'none';
-                                const fallback = e.target.parentElement.querySelector('.profile-fallback');
-                                if (fallback) fallback.style.display = 'flex';
-                              }}
-                            />
-                          ) : null}
-                          
-                          {/* Fallback avatar */}
-                          <div 
-                            className="profile-fallback w-full h-full flex items-center justify-center bg-gradient-to-br from-blue-500/20 to-purple-600/20"
-                            style={{ display: (previewImage || user?.profilePicture) ? 'none' : 'flex' }}
-                          >
-                            <span className="text-lg font-bold text-white">
-                              {user?.name?.[0]?.toUpperCase() || user?.email?.[0]?.toUpperCase() || '?'}
-                            </span>
-                          </div>
-                          
-                          {/* Overlay de hover con estilo barbería */}
-                          <div 
-                            className="absolute inset-0 bg-gradient-to-t from-black/60 via-red-600/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center cursor-pointer"
-                            onClick={() => fileInputRef.current?.click()}
-                          >
-                            <div className="p-2 bg-red-600/80 rounded-full backdrop-blur-sm border border-white/30">
-                              <Camera size={16} className="text-white drop-shadow-lg" />
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                      
-                      <div className="flex gap-2">
-                        <button
-                          onClick={() => fileInputRef.current?.click()}
-                          disabled={saving}
-                          className="group relative p-2 bg-gradient-to-r from-blue-600/20 to-red-600/20 rounded-lg border border-blue-500/30 hover:border-red-500/40 transition-all duration-300 backdrop-blur-sm hover:bg-gradient-to-r hover:from-blue-600/30 hover:to-red-600/30 transform hover:scale-110 shadow-xl shadow-blue-500/20"
-                          title="Subir foto"
-                        >
-                          <Upload size={16} className="text-blue-400 group-hover:text-red-400 transition-colors duration-300" />
-                        </button>
-                        
-                        {(user?.profilePicture || previewImage) && (
-                          <button
-                            onClick={handleRemoveProfilePicture}
-                            disabled={saving}
-                            className="group relative p-2 bg-gradient-to-r from-red-600/20 to-blue-600/20 rounded-lg border border-red-500/30 hover:border-blue-500/40 transition-all duration-300 backdrop-blur-sm hover:bg-gradient-to-r hover:from-red-600/30 hover:to-blue-600/30 transform hover:scale-110 shadow-xl shadow-blue-500/20"
-                            title="Eliminar foto"
-                          >
-                            <X size={16} className="text-red-400 group-hover:text-blue-400 transition-colors duration-300" />
-                          </button>
-                        )}
-                      </div>
-                      
-                      <input
-                        ref={fileInputRef}
-                        type="file"
-                        accept="image/*"
-                        onChange={handleFileSelect}
-                        className="hidden"
+        {/* ── Tabs ── */}
+        <div className="inline-flex p-1 rounded-xl bg-white/[0.03] border border-white/[0.08] backdrop-blur-sm max-w-full overflow-x-auto custom-scrollbar">
+          {TABS.map(({ id, label, icon: Icon }) => (
+            <button
+              key={id}
+              type="button"
+              onClick={() => setActiveTab(id)}
+              className={`flex items-center justify-center gap-1.5 px-3 sm:px-4 py-2 rounded-lg text-xs sm:text-sm font-medium transition-colors duration-200 flex-shrink-0 ${
+                activeTab === id
+                  ? 'bg-blue-500/15 text-blue-300 border border-blue-500/30'
+                  : 'text-gray-400 hover:text-white border border-transparent'
+              }`}
+            >
+              <Icon className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+              {label}
+            </button>
+          ))}
+        </div>
+
+        {/* ── Contenido ── */}
+        <div className="rounded-2xl border border-white/[0.08] bg-white/[0.03] backdrop-blur-sm p-5 sm:p-6">
+
+          {/* Tab: Personal */}
+          {activeTab === 'personal' && (
+            <div className="space-y-6">
+              {/* Foto de perfil */}
+              <div className="flex flex-col sm:flex-row sm:items-center gap-5 pb-6 border-b border-white/[0.06]">
+                <div className="relative group mx-auto sm:mx-0 flex-shrink-0">
+                  <div className="w-24 h-24 rounded-full overflow-hidden border-2 border-red-500/30 bg-white/[0.04] flex items-center justify-center">
+                    {avatarSrc ? (
+                      <img
+                        src={avatarSrc}
+                        alt="Foto de perfil"
+                        className="w-full h-full object-cover"
+                        onError={(e) => { e.target.style.display = 'none'; }}
                       />
-                    </div>
+                    ) : (
+                      <span className="text-2xl font-bold text-white">
+                        {user?.name?.[0]?.toUpperCase() || user?.email?.[0]?.toUpperCase() || '?'}
+                      </span>
+                    )}
                   </div>
-
-                  {/* Campos del formulario con estilo barbería */}
-                  <div className="mt-8">
-                    <h3 className="text-xl font-bold mb-6 flex items-center gap-3">
-                      <div className="p-3 bg-gradient-to-r from-blue-600/20 to-red-600/20 rounded-xl border border-blue-500/20 group-hover:border-red-500/40 transition-all duration-500">
-                        <User size={20} className="text-blue-400 group-hover:text-red-400 transition-colors duration-500" />
-                      </div>
-                      <GradientText className="text-xl font-bold">Información Personal</GradientText>
-                    </h3>
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                      <div className="space-y-3">
-                        <label className="block text-xs font-medium text-gray-300 mb-1 flex items-center gap-2">
-                          <User size={16} className="text-red-400" />
-                          Nombre Completo
-                        </label>
-                        <input
-                          type="text"
-                          name="name"
-                          value={userFormData.name}
-                          onChange={handleUserInputChange}
-                          className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-white text-sm backdrop-blur-sm placeholder-gray-400 focus:border-blue-500/50 shadow-xl shadow-blue-500/20"
-                          placeholder="Tu nombre completo"
-                        />
-                      </div>
-
-                      <div className="space-y-3">
-                        <label className="block text-xs font-medium text-gray-300 mb-1 flex items-center gap-2">
-                          <Mail size={16} className="text-blue-400" />
-                          Correo Electrónico
-                        </label>
-                        <input
-                          type="email"
-                          name="email"
-                          value={userFormData.email}
-                          onChange={handleUserInputChange}
-                          className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-white text-sm backdrop-blur-sm placeholder-gray-400 focus:border-blue-500/50 shadow-xl shadow-blue-500/20"
-                          placeholder="tu@email.com"
-                        />
-                      </div>
-
-                      <div className="space-y-3">
-                        <label className="block text-xs font-medium text-gray-300 mb-1 flex items-center gap-2">
-                          <Phone size={16} className="text-blue-400" />
-                          Teléfono
-                        </label>
-                        <input
-                          type="tel"
-                          name="phone"
-                          value={userFormData.phone}
-                          onChange={handleUserInputChange}
-                          className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-white text-sm backdrop-blur-sm placeholder-gray-400 focus:border-blue-500/50 shadow-xl shadow-blue-500/20"
-                          placeholder="+57 300 123 4567"
-                        />
-                      </div>
-
-                      <div className="space-y-3 lg:col-span-2">
-                        <label className="block text-xs font-medium text-gray-300 mb-1 flex items-center gap-2">
-                          <Calendar size={16} className="text-red-400" />
-                          Fecha de Nacimiento
-                        </label>
-                        <input
-                          type="date"
-                          name="birthdate"
-                          value={userFormData.birthdate}
-                          onChange={handleUserInputChange}
-                          className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-white text-sm backdrop-blur-sm placeholder-gray-400 focus:border-blue-500/50 shadow-xl shadow-blue-500/20"
-                        />
-                      </div>
-                    </div>
-
-                    <div className="flex justify-end mt-6">
-                      <GradientButton
-                        onClick={handlePersonalSave}
-                        disabled={saving}
-                        loading={saving}
-                        loadingText="Guardando..."
-                        variant="primary"
-                        size="md"
-                        className="shadow-xl shadow-blue-500/20"
-                      >
-                        <div className="flex items-center gap-2">
-                          <Save size={18} />
-                          <span>Guardar Cambios</span>
-                        </div>
-                      </GradientButton>
-                    </div>
-                  </div>
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={saving}
+                    className="absolute inset-0 rounded-full bg-black/50 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity duration-200 flex items-center justify-center"
+                    title="Cambiar foto"
+                  >
+                    <Camera className="w-6 h-6 text-white" />
+                  </button>
                 </div>
-              </div>
-            )}
 
-            {/* Tab: Seguridad */}
-            {activeTab === 'security' && (
-              <div className="group relative px-4 py-4 transition-colors backdrop-blur-sm border-b border-white/5 overflow-hidden rounded-lg">
-                {/* Efecto de brillo en hover */}
-                <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/[2.5%] to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-1000 ease-out rounded-lg"></div>
-                <div className="relative p-2">
-                  <h3 className="text-xl font-bold mb-6 flex items-center gap-3">
-                    <div className="p-3 bg-gradient-to-r from-red-600/20 to-blue-600/20 rounded-xl border border-red-500/20 hover:border-blue-500/40 transition-all duration-500">
-                      <Lock size={20} className="text-red-400 hover:text-blue-400 transition-colors duration-500" />
-                    </div>
-                    <GradientText className="text-xl font-bold">Cambiar Contraseña</GradientText>
-                  </h3>
-                  
-                  <div className="space-y-6">
-                    <div className="space-y-3">
-                      <label className="block text-sm font-semibold bg-clip-text text-transparent bg-gradient-to-r from-red-400 via-white to-blue-400 flex items-center gap-2">
-                        <Lock size={16} className="text-red-400" />
-                        Contraseña Actual
-                      </label>
-                      <div className="relative">
-                        <input
-                          type={showPasswords.current ? 'text' : 'password'}
-                          name="currentPassword"
-                          value={passwordData.currentPassword}
-                          onChange={handlePasswordChange}
-                          className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-white text-sm backdrop-blur-sm placeholder-gray-400 focus:border-blue-500/50 shadow-xl shadow-blue-500/20 pr-12"
-                          placeholder="Tu contraseña actual"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => setShowPasswords(prev => ({ ...prev, current: !prev.current }))}
-                          className="absolute right-4 top-1/2 transform -translate-y-1/2 text-red-300 hover:text-red-400 transition-colors duration-300"
-                        >
-                          {showPasswords.current ? <EyeOff size={18} /> : <Eye size={18} />}
-                        </button>
-                      </div>
-                    </div>
-
-                    <div className="space-y-3">
-                      <label className="block text-sm font-semibold bg-clip-text text-transparent bg-gradient-to-r from-blue-400 via-white to-red-400 flex items-center gap-2">
-                        <Lock size={16} className="text-blue-400" />
-                        Nueva Contraseña
-                      </label>
-                      <div className="relative">
-                        <input
-                          type={showPasswords.new ? 'text' : 'password'}
-                          name="newPassword"
-                          value={passwordData.newPassword}
-                          onChange={handlePasswordChange}
-                          className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-white text-sm backdrop-blur-sm placeholder-gray-400 focus:border-blue-500/50 shadow-xl shadow-blue-500/20 pr-12"
-                          placeholder="Tu nueva contraseña"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => setShowPasswords(prev => ({ ...prev, new: !prev.new }))}
-                          className="absolute right-4 top-1/2 transform -translate-y-1/2 text-blue-300 hover:text-blue-400 transition-colors duration-300"
-                        >
-                          {showPasswords.new ? <EyeOff size={18} /> : <Eye size={18} />}
-                        </button>
-                      </div>
-                    </div>
-
-                    <div className="space-y-3">
-                      <label className="block text-sm font-semibold bg-clip-text text-transparent bg-gradient-to-r from-red-400 via-white to-blue-400 flex items-center gap-2">
-                        <Lock size={16} className="text-red-400" />
-                        Confirmar Nueva Contraseña
-                      </label>
-                      <div className="relative">
-                        <input
-                          type={showPasswords.confirm ? 'text' : 'password'}
-                          name="confirmPassword"
-                          value={passwordData.confirmPassword}
-                          onChange={handlePasswordChange}
-                          className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-white text-sm backdrop-blur-sm placeholder-gray-400 focus:border-blue-500/50 shadow-xl shadow-blue-500/20 pr-12"
-                          placeholder="Confirma tu nueva contraseña"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => setShowPasswords(prev => ({ ...prev, confirm: !prev.confirm }))}
-                          className="absolute right-4 top-1/2 transform -translate-y-1/2 text-red-300 hover:text-red-400 transition-colors duration-300"
-                        >
-                          {showPasswords.confirm ? <EyeOff size={18} /> : <Eye size={18} />}
-                        </button>
-                      </div>
-                    </div>
-
-                    <div className="flex justify-end mt-6">
-                      <GradientButton
-                        onClick={handlePasswordSave}
-                        disabled={saving}
-                        loading={saving}
-                        loadingText="Actualizando..."
-                        variant="primary"
-                        size="md"
-                        className="shadow-xl shadow-blue-500/20"
-                      >
-                        <div className="flex items-center gap-2">
-                          <Save size={18} />
-                          <span>Cambiar Contraseña</span>
-                        </div>
-                      </GradientButton>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Tab: Información Profesional */}
-            {activeTab === 'professional' && (
-              <div className="group relative px-4 py-4 transition-colors backdrop-blur-sm border-b border-white/5 overflow-hidden rounded-lg">
-                {/* Efecto de brillo en hover */}
-                <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/[2.5%] to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-1000 ease-out rounded-lg"></div>
-                <div className="relative p-2">
-                  <h3 className="text-xl font-bold mb-6 flex items-center gap-3">
-                    <div className="p-3 bg-gradient-to-r from-red-600/20 to-blue-600/20 rounded-xl border border-red-500/20 group-hover:border-blue-500/40 transition-all duration-500">
-                      <Star size={20} className="text-red-400 group-hover:text-blue-400 transition-colors duration-500" />
-                    </div>
-                    <GradientText className="text-xl font-bold">Información Profesional</GradientText>
-                  </h3>
-
-                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                    <div className="space-y-3">
-                      <label className="block text-xs font-medium text-gray-300 mb-1 flex items-center gap-2">
-                        <Scissors size={16} className="text-red-400" />
-                        Especialidad
-                      </label>
-                      <input
-                        type="text"
-                        name="specialty"
-                        value={barberFormData.specialty}
-                        onChange={handleBarberInputChange}
-                        className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-white text-sm backdrop-blur-sm placeholder-gray-400 focus:border-blue-500/50 shadow-xl shadow-blue-500/20"
-                        placeholder="Ej: Cortes clásicos, barbas, etc."
-                      />
-                    </div>
-
-                    <div className="space-y-3">
-                      <label className="block text-xs font-medium text-gray-300 mb-1 flex items-center gap-2">
-                        <Star size={16} className="text-blue-400" />
-                        Años de Experiencia
-                      </label>
-                      <input
-                        type="number"
-                        name="experience"
-                        min="0"
-                        value={barberFormData.experience}
-                        onChange={handleBarberInputChange}
-                        className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-white text-sm backdrop-blur-sm placeholder-gray-400 focus:border-blue-500/50 shadow-xl shadow-blue-500/20"
-                        placeholder="0"
-                      />
-                    </div>
-
-                    <div className="space-y-3 lg:col-span-2">
-                      <label className="block text-xs font-medium text-gray-300 mb-1 flex items-center gap-2">
-                        <FileText size={16} className="text-red-400" />
-                        Descripción
-                      </label>
-                      <textarea
-                        name="description"
-                        value={barberFormData.description}
-                        onChange={handleBarberInputChange}
-                        rows={3}
-                        className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-white text-sm backdrop-blur-sm placeholder-gray-400 focus:border-blue-500/50 resize-none shadow-xl shadow-blue-500/20"
-                        placeholder="Cuéntanos sobre tu experiencia y estilo de trabajo..."
-                      />
-                    </div>
-                  </div>
-
-                  <div className="flex justify-end mt-6">
-                    <GradientButton
-                      onClick={handleProfessionalSave}
+                <div className="flex-1 text-center sm:text-left">
+                  <h3 className="text-sm font-semibold text-white">Foto de perfil</h3>
+                  <p className="text-xs text-gray-500 mt-0.5">JPG o PNG, máximo 5MB</p>
+                  <div className="flex items-center justify-center sm:justify-start gap-2 mt-3">
+                    <button
+                      type="button"
+                      onClick={() => fileInputRef.current?.click()}
                       disabled={saving}
-                      loading={saving}
-                      loadingText="Guardando..."
-                      variant="primary"
-                      size="md"
-                      className="shadow-xl shadow-blue-500/20"
+                      className="inline-flex min-h-11 items-center gap-1.5 px-3 py-2.5 rounded-lg bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.08] hover:border-white/[0.16] text-gray-300 hover:text-white text-xs font-medium transition-colors duration-200"
                     >
-                      <div className="flex items-center gap-2">
-                        <Save size={18} />
-                        <span>Guardar Cambios</span>
-                      </div>
-                    </GradientButton>
+                      <Upload className="w-3.5 h-3.5" />
+                      Subir foto
+                    </button>
+                    {avatarSrc && (
+                      <button
+                        type="button"
+                        onClick={handleRemoveProfilePicture}
+                        disabled={saving}
+                        className="inline-flex min-h-11 items-center gap-1.5 px-3 py-2.5 rounded-lg bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 hover:border-red-500/40 text-red-300 text-xs font-medium transition-colors duration-200"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                        Quitar
+                      </button>
+                    )}
                   </div>
                 </div>
               </div>
-            )}
 
-            {/* Tab: Servicios */}
-            {activeTab === 'services' && (
-              <div className="group relative px-4 py-4 transition-colors backdrop-blur-sm border-b border-white/5 overflow-hidden rounded-lg">
-                {/* Efecto de brillo en hover */}
-                <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/[2.5%] to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-1000 ease-out rounded-lg"></div>
-                <div className="relative p-2">
-                  <h3 className="text-xl font-bold mb-6 flex items-center gap-3">
-                    <div className="p-3 bg-gradient-to-r from-red-600/20 to-blue-600/20 rounded-xl border border-red-500/20 group-hover:border-blue-500/40 transition-all duration-500">
-                      <Scissors size={20} className="text-red-400 group-hover:text-blue-400 transition-colors duration-500" />
-                    </div>
-                    <GradientText className="text-xl font-bold">Servicios que Ofreces</GradientText>
-                  </h3>
+              {/* Campos */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-5">
+                <div>
+                  <label className="flex items-center gap-2 text-xs sm:text-sm font-medium text-gray-300 mb-2">
+                    <User className="w-3.5 h-3.5 text-gray-500" />
+                    Nombre Completo
+                  </label>
+                  <input
+                    type="text"
+                    name="name"
+                    value={userFormData.name}
+                    onChange={handleUserInputChange}
+                    className="glassmorphism-input"
+                    placeholder="Tu nombre completo"
+                  />
+                </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
-                    {availableServices.map((service) => (
-                        <label
-                          key={service._id}
-                          className={`group relative p-4 rounded-xl border cursor-pointer transition-all duration-300 hover:scale-105 overflow-hidden backdrop-blur-sm ${
-                            barberFormData.services.includes(service._id)
-                              ? 'border-blue-500/50 bg-blue-500/10 shadow-xl shadow-blue-500/20'
-                              : 'border-white/20 bg-white/5 hover:border-white/40 hover:bg-white/10'
+                <div>
+                  <label className="flex items-center gap-2 text-xs sm:text-sm font-medium text-gray-300 mb-2">
+                    <Mail className="w-3.5 h-3.5 text-gray-500" />
+                    Correo Electrónico
+                  </label>
+                  <input
+                    type="email"
+                    name="email"
+                    value={userFormData.email}
+                    onChange={handleUserInputChange}
+                    className="glassmorphism-input"
+                    placeholder="tu@email.com"
+                  />
+                </div>
+
+                <div>
+                  <label className="flex items-center gap-2 text-xs sm:text-sm font-medium text-gray-300 mb-2">
+                    <Phone className="w-3.5 h-3.5 text-gray-500" />
+                    Teléfono
+                  </label>
+                  <input
+                    type="tel"
+                    name="phone"
+                    value={userFormData.phone}
+                    onChange={handleUserInputChange}
+                    className="glassmorphism-input"
+                    placeholder="+57 300 123 4567"
+                  />
+                </div>
+
+                <div>
+                  <label className="flex items-center gap-2 text-xs sm:text-sm font-medium text-gray-300 mb-2">
+                    <Calendar className="w-3.5 h-3.5 text-gray-500" />
+                    Fecha de Nacimiento
+                  </label>
+                  <input
+                    type="date"
+                    name="birthdate"
+                    value={userFormData.birthdate}
+                    onChange={handleUserInputChange}
+                    className="glassmorphism-input"
+                  />
+                </div>
+              </div>
+
+              <div className="flex justify-end pt-4 border-t border-white/[0.06]">
+                <GradientButton
+                  onClick={handlePersonalSave}
+                  disabled={saving}
+                  loading={saving}
+                  loadingText="Guardando..."
+                  variant="primary"
+                  size="md"
+                >
+                  <div className="flex items-center gap-2">
+                    <Save size={16} />
+                    <span>Guardar Cambios</span>
+                  </div>
+                </GradientButton>
+              </div>
+            </div>
+          )}
+
+          {/* Tab: Seguridad */}
+          {activeTab === 'security' && (
+            <div className="space-y-5">
+              <div>
+                <h3 className="text-sm font-semibold text-white mb-1">Cambiar contraseña</h3>
+                <p className="text-xs text-gray-500">
+                  Mínimo 8 caracteres, con mayúscula, minúscula y número
+                </p>
+              </div>
+
+              {[
+                { key: 'current', name: 'currentPassword', label: 'Contraseña Actual', placeholder: 'Tu contraseña actual' },
+                { key: 'new', name: 'newPassword', label: 'Nueva Contraseña', placeholder: 'Tu nueva contraseña' },
+                { key: 'confirm', name: 'confirmPassword', label: 'Confirmar Nueva Contraseña', placeholder: 'Confirma tu nueva contraseña' }
+              ].map(({ key, name, label, placeholder }) => (
+                <div key={key}>
+                  <label className="flex items-center gap-2 text-xs sm:text-sm font-medium text-gray-300 mb-2">
+                    <Lock className="w-3.5 h-3.5 text-gray-500" />
+                    {label}
+                  </label>
+                  <div className="relative">
+                    <input
+                      type={showPasswords[key] ? 'text' : 'password'}
+                      name={name}
+                      value={passwordData[name]}
+                      onChange={handlePasswordChange}
+                      className="glassmorphism-input pr-11"
+                      placeholder={placeholder}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPasswords(prev => ({ ...prev, [key]: !prev[key] }))}
+                      className="absolute right-1 top-1/2 -translate-y-1/2 flex min-h-11 min-w-11 items-center justify-center rounded-lg p-2 text-gray-500 hover:text-gray-300 transition-colors"
+                      tabIndex={-1}
+                    >
+                      {showPasswords[key] ? <EyeOff size={16} /> : <Eye size={16} />}
+                    </button>
+                  </div>
+                </div>
+              ))}
+
+              <div className="flex justify-end pt-4 border-t border-white/[0.06]">
+                <GradientButton
+                  onClick={handlePasswordSave}
+                  disabled={saving}
+                  loading={saving}
+                  loadingText="Actualizando..."
+                  variant="primary"
+                  size="md"
+                >
+                  <div className="flex items-center gap-2">
+                    <Save size={16} />
+                    <span>Cambiar Contraseña</span>
+                  </div>
+                </GradientButton>
+              </div>
+            </div>
+          )}
+
+          {/* Tab: Profesional */}
+          {activeTab === 'professional' && (
+            <div className="space-y-5">
+              <div>
+                <h3 className="text-sm font-semibold text-white mb-1">Información profesional</h3>
+                <p className="text-xs text-gray-500">
+                  Estos datos se muestran en tu perfil público
+                </p>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-5">
+                <div>
+                  <label className="flex items-center gap-2 text-xs sm:text-sm font-medium text-gray-300 mb-2">
+                    <Scissors className="w-3.5 h-3.5 text-gray-500" />
+                    Especialidad
+                  </label>
+                  <input
+                    type="text"
+                    name="specialty"
+                    value={barberFormData.specialty}
+                    onChange={handleBarberInputChange}
+                    className="glassmorphism-input"
+                    placeholder="Ej: Cortes clásicos, barbas, etc."
+                  />
+                </div>
+
+                <div>
+                  <label className="flex items-center gap-2 text-xs sm:text-sm font-medium text-gray-300 mb-2">
+                    <Star className="w-3.5 h-3.5 text-gray-500" />
+                    Años de Experiencia
+                  </label>
+                  <input
+                    type="number"
+                    name="experience"
+                    min="0"
+                    value={barberFormData.experience}
+                    onChange={handleBarberInputChange}
+                    className="glassmorphism-input"
+                    placeholder="0"
+                  />
+                </div>
+
+                <div className="md:col-span-2">
+                  <label className="flex items-center gap-2 text-xs sm:text-sm font-medium text-gray-300 mb-2">
+                    <FileText className="w-3.5 h-3.5 text-gray-500" />
+                    Descripción
+                  </label>
+                  <textarea
+                    name="description"
+                    value={barberFormData.description}
+                    onChange={handleBarberInputChange}
+                    rows={4}
+                    className="glassmorphism-textarea"
+                    placeholder="Cuéntanos sobre tu experiencia y estilo de trabajo..."
+                  />
+                </div>
+              </div>
+
+              <div className="flex justify-end pt-4 border-t border-white/[0.06]">
+                <GradientButton
+                  onClick={handleProfessionalSave}
+                  disabled={saving}
+                  loading={saving}
+                  loadingText="Guardando..."
+                  variant="primary"
+                  size="md"
+                >
+                  <div className="flex items-center gap-2">
+                    <Save size={16} />
+                    <span>Guardar Cambios</span>
+                  </div>
+                </GradientButton>
+              </div>
+            </div>
+          )}
+
+          {/* Tab: Servicios */}
+          {activeTab === 'services' && (
+            <div className="space-y-5">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <h3 className="text-sm font-semibold text-white mb-1">Servicios que ofreces</h3>
+                  <p className="text-xs text-gray-500">
+                    Selecciona los servicios que puedes realizar
+                  </p>
+                </div>
+                <span className="text-xs text-gray-500 flex-shrink-0">
+                  {barberFormData.services.length} de {availableServices.length}
+                </span>
+              </div>
+
+              {availableServices.length === 0 ? (
+                <p className="text-sm text-gray-500 text-center py-6">
+                  No hay servicios disponibles. Contacta al administrador.
+                </p>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                  {availableServices.map((service) => {
+                    // Marca visualmente los servicios seleccionados y permite alternarlos.
+                    const isSelected = barberFormData.services.includes(service._id);
+                    return (
+                      <label
+                        key={service._id}
+                        className={`relative rounded-xl border p-4 cursor-pointer transition-colors duration-200 ${
+                          isSelected
+                            ? 'border-blue-500/40 bg-blue-500/10'
+                            : 'border-white/[0.08] bg-white/[0.02] hover:border-white/[0.16] hover:bg-white/[0.04]'
                         }`}
                       >
                         <input
                           type="checkbox"
-                          checked={barberFormData.services.includes(service._id)}
+                          checked={isSelected}
                           onChange={(e) => handleServiceToggle(service._id, e.target.checked)}
                           className="sr-only"
                         />
-                        
-                        <div className="relative z-10 flex flex-col space-y-3">
-                          <div className="flex items-center justify-between">
-                            <h4 className={`font-medium text-base group-hover:scale-105 transition-transform duration-300 ${
-                              barberFormData.services.includes(service._id)
-                                ? 'text-blue-300'
-                                : 'text-white'
-                            }`}>
-                              <GradientText className="font-medium text-base">{service.name}</GradientText>
-                            </h4>
-                              <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all duration-300 ${
-                              barberFormData.services.includes(service._id)
-                                ? 'border-blue-400 bg-blue-500 shadow-lg'
-                                : 'border-gray-400 group-hover:border-white'
-                            }`}>
-                            {barberFormData.services.includes(service._id) && (
-                              <div className="w-2 h-2 bg-white rounded-full animate-pulse"></div>
-                            )}
+
+                        <div className="flex items-start justify-between gap-3 mb-3">
+                          <div className="p-2 rounded-lg bg-white/[0.04] border border-white/[0.08] flex-shrink-0">
+                            <Scissors className={`w-4 h-4 ${isSelected ? 'text-blue-300' : 'text-gray-400'}`} />
+                          </div>
+                          <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 transition-colors ${
+                            isSelected ? 'border-blue-400 bg-blue-500' : 'border-gray-600'
+                          }`}>
+                            {isSelected && <CheckCircle2 className="w-3.5 h-3.5 text-white" />}
                           </div>
                         </div>
-                      
-                          <p className={`text-sm leading-relaxed ${
-                            barberFormData.services.includes(service._id)
-                              ? 'text-blue-200'
-                              : 'text-gray-300'
-                          }`}>
-                            {service.description}
-                          </p>
-                          
-                          <div className="flex justify-between items-center pt-2 border-t border-white/20">
-                            <span className={`font-bold text-base ${
-                              barberFormData.services.includes(service._id)
-                                ? 'text-blue-400'
-                                : 'text-blue-400'
-                            }`}>
-                              ${service.price}
-                            </span>
-                            <span className={`text-xs px-2 py-1 rounded-full ${
-                              barberFormData.services.includes(service._id)
-                                ? 'bg-white/20 text-white'
-                                : 'bg-gray-600/50 text-gray-400'
-                            }`}>
-                              {service.duration} min
-                            </span>
-                          </div>
+
+                        <h4 className={`text-sm font-medium truncate ${isSelected ? 'text-blue-200' : 'text-white'}`}>
+                          {service.name}
+                        </h4>
+                        {service.description && (
+                          <p className="text-xs text-gray-500 mt-0.5 line-clamp-2">{service.description}</p>
+                        )}
+
+                        <div className="flex items-center justify-between gap-2 mt-3 pt-3 border-t border-white/[0.06]">
+                          <span className="text-xs font-semibold text-brand-300">
+                            ${service.price}
+                          </span>
+                          <span className="inline-flex items-center gap-1 text-[11px] text-gray-500">
+                            <Clock className="w-3 h-3" />
+                            {service.duration} min
+                          </span>
                         </div>
                       </label>
-                    ))}
-                  </div>
-
-                  <div className="flex justify-end">
-                    <GradientButton
-                      onClick={handleProfessionalSave}
-                      disabled={saving}
-                      loading={saving}
-                      loadingText="Guardando..."
-                      variant="primary"
-                      size="md"
-                      className="shadow-xl shadow-blue-500/20"
-                    >
-                      <div className="flex items-center gap-2">
-                        <Save size={18} />
-                        <span>Guardar Servicios</span>
-                      </div>
-                    </GradientButton>
-                  </div>
+                    );
+                  })}
                 </div>
+              )}
+
+              <div className="flex justify-end pt-4 border-t border-white/[0.06]">
+                <GradientButton
+                  onClick={handleProfessionalSave}
+                  disabled={saving}
+                  loading={saving}
+                  loadingText="Guardando..."
+                  variant="primary"
+                  size="md"
+                >
+                  <div className="flex items-center gap-2">
+                    <Save size={16} />
+                    <span>Guardar Servicios</span>
+                  </div>
+                </GradientButton>
               </div>
-            )}
+            </div>
+          )}
 
-            {/* Tab: Horarios */}
-            {activeTab === 'schedule' && (
-              <div className="group relative px-4 py-4 transition-colors backdrop-blur-sm border-b border-white/5 rounded-lg overflow-hidden">
-                {/* Efecto de brillo en hover */}
-                <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/[2.5%] to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-1000 ease-out rounded-lg"></div>
-                <div className="relative p-2" style={{ overflow: 'visible', zIndex: 10 }}>
-                  <h3 className="text-xl font-bold mb-6 flex items-center gap-3">
-                    <div className="p-3 bg-gradient-to-r from-blue-600/20 to-red-600/20 rounded-xl border border-blue-500/20 group-hover:border-red-500/40 transition-all duration-500">
-                      <Clock size={20} className="text-blue-400 group-hover:text-red-400 transition-colors duration-500" />
-                    </div>
-                    <GradientText className="text-xl font-bold">Horarios de Trabajo</GradientText>
-                  </h3>
+          {/* Tab: Horarios */}
+          {activeTab === 'schedule' && (
+            <div className="space-y-5">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <h3 className="text-sm font-semibold text-white mb-1">Horarios de trabajo</h3>
+                  <p className="text-xs text-gray-500">
+                    Define tu disponibilidad semanal
+                  </p>
+                </div>
+                {scheduleLoaded && (
+                  <span className="text-xs text-gray-500 flex-shrink-0">
+                    {Object.values(schedule).filter(d => d.available).length} de 7 días
+                  </span>
+                )}
+              </div>
 
-                  <div className="space-y-3 mb-6 relative" style={{ zIndex: 100 }}>
-                    {Object.entries(schedule).map(([day, daySchedule], index) => (
-                      <div
-                        key={day}
-                        data-day={day}
-                        className="group relative px-4 py-4 transition-colors backdrop-blur-sm border border-white/10 rounded-lg shadow-lg hover:shadow-xl overflow-hidden"
-                        style={{ zIndex: 100 + index, position: 'relative' }}
-                      >
-                        {/* Efecto de brillo en hover para cada día */}
-                        <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/[2.5%] to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-1000 ease-out rounded-lg"></div>
-                        <div className="relative flex flex-col md:flex-row md:items-center gap-3">
-                          <div className="flex items-center gap-3 min-w-0 md:w-40">
+              {!scheduleLoaded ? (
+                <ScheduleListSkeleton rows={7} />
+              ) : (
+                <div className="space-y-2">
+                  {Object.entries(schedule).map(([day, daySchedule]) => (
+                    <div
+                      key={day}
+                      className={`rounded-xl border p-3 sm:p-4 transition-colors duration-200 ${
+                        daySchedule.available
+                          ? 'border-white/[0.08] bg-white/[0.02]'
+                          : 'border-white/[0.06] bg-white/[0.01] opacity-70'
+                      }`}
+                    >
+                      <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+                        {/* Toggle del día */}
+                        <label className="flex min-h-11 items-center gap-3 sm:w-44 flex-shrink-0 cursor-pointer">
+                          <span className="relative inline-flex items-center">
                             <input
                               type="checkbox"
                               checked={daySchedule.available}
                               onChange={(e) => handleScheduleChange(day, 'available', e.target.checked)}
-                              className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                              className="sr-only peer"
                             />
-                            <span className="text-white font-medium text-base">
-                              {daysInSpanish[day]}
-                            </span>
+                            <div className="w-9 h-5 bg-white/10 border border-white/[0.12] rounded-full peer peer-checked:bg-emerald-500/50 peer-checked:border-emerald-500/40 after:content-[''] after:absolute after:top-[3px] after:left-[3px] after:bg-white after:rounded-full after:h-3.5 after:w-3.5 after:transition-all peer-checked:after:translate-x-4 transition-colors duration-200"></div>
+                          </span>
+                          <span className={`text-sm font-medium ${daySchedule.available ? 'text-white' : 'text-gray-500'}`}>
+                            {daysInSpanish[day]}
+                          </span>
+                        </label>
+
+                        {/* Horas */}
+                        {daySchedule.available ? (
+                          <div className="flex items-center gap-2 flex-1 min-w-0">
+                            <CustomTimeSelector
+                              value={daySchedule.start || '09:00'}
+                              onChange={(value) => handleScheduleChange(day, 'start', value)}
+                              options={timeOptions}
+                              placeholder="Inicio"
+                            />
+                            <span className="text-gray-500 text-sm flex-shrink-0">–</span>
+                            <CustomTimeSelector
+                              value={daySchedule.end || '19:00'}
+                              onChange={(value) => handleScheduleChange(day, 'end', value)}
+                              options={timeOptions}
+                              placeholder="Fin"
+                            />
                           </div>
-
-                        {daySchedule.available && (
-                          <div className="flex items-center gap-3 flex-1">
-                              <CustomTimeSelector
-                                value={daySchedule.start || '07:00'}
-                                onChange={(value) => handleScheduleChange(day, 'start', value)}
-                                options={timeOptions}
-                                placeholder="Hora de inicio"
-                                dayKey={day}
-                                field="start"
-                              />
-                            <span className="text-gray-300 font-medium text-sm px-2">a</span>
-                              <CustomTimeSelector
-                                value={daySchedule.end || '19:00'}
-                                onChange={(value) => handleScheduleChange(day, 'end', value)}
-                                options={timeOptions}
-                                placeholder="Hora de fin"
-                                dayKey={day}
-                                field="end"
-                              />
-                            </div>
-                          )}
-                          
-                          {!daySchedule.available && (
-                            <div className="flex-1">
-                              <span className="text-gray-400 italic text-sm">No disponible</span>
-                            </div>
-                          )}
-                        </div>
+                        ) : (
+                          <span className="text-sm text-gray-600 italic">Descanso</span>
+                        )}
                       </div>
-                    ))}
-                  </div>
-
-                  <div className="flex justify-between items-center">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setSchedule(defaultSchedule);
-                        showSuccess('Horarios restablecidos a 7AM-10PM');
-                      }}
-                      className="px-4 py-2 bg-gradient-to-r from-yellow-600/20 to-orange-600/20 border border-yellow-500/50 rounded-lg text-yellow-400 hover:from-yellow-600/30 hover:to-orange-600/30 transition-all duration-300 text-sm font-medium shadow-xl shadow-blue-500/20"
-                    >
-                      🔄 Restablecer a 7AM-10PM
-                    </button>
-                    
-                    <GradientButton
-                      onClick={handleScheduleSave}
-                      disabled={saving}
-                      loading={saving}
-                      loadingText="Guardando..."
-                      variant="primary"
-                      size="md"
-                      className="shadow-xl shadow-blue-500/20"
-                    >
-                      <div className="flex items-center gap-2">
-                        <Save size={18} />
-                        <span>Guardar Horarios</span>
-                      </div>
-                    </GradientButton>
-                  </div>
+                    </div>
+                  ))}
                 </div>
+              )}
+
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-4 border-t border-white/[0.06]">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSchedule(defaultSchedule);
+                    showSuccess('Horarios restablecidos a 9AM-7PM');
+                  }}
+                  className="inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.08] hover:border-white/[0.16] text-gray-300 hover:text-white text-xs font-medium transition-colors duration-200"
+                >
+                  <RotateCcw className="w-3.5 h-3.5" />
+                  Restablecer a 9AM-7PM
+                </button>
+
+                <GradientButton
+                  onClick={handleScheduleSave}
+                  disabled={saving}
+                  loading={saving}
+                  loadingText="Guardando..."
+                  variant="primary"
+                  size="md"
+                >
+                  <div className="flex items-center gap-2">
+                    <Save size={16} />
+                    <span>Guardar Horarios</span>
+                  </div>
+                </GradientButton>
               </div>
-            )}
-          </div>
-        </div>
             </div>
-          </div>
-        </PageContainer>
+          )}
+        </div>
       </div>
-    </div>
+    </PageContainer>
   );
 };
 
 export default BarberProfileEdit;
-

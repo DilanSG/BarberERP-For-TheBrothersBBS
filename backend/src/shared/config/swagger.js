@@ -69,6 +69,7 @@ const swaggerUiOptions = {
   }
 };
 
+// Monta Swagger UI en /api/docs y expone el spec JSON en /api/docs.json.
 export const setupSwagger = (app) => {
   // Ruta para la documentación
   app.use('/api/docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec, swaggerUiOptions));

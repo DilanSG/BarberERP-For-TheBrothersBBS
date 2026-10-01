@@ -1,10 +1,15 @@
 import { useState } from 'react';
 import { useNotification } from '../../contexts/NotificationContext';
 
+// Contenedor de notificaciones tipo toast (arriba a la derecha; en móvil a lo ancho).
+// Consume el NotificationContext y gestiona la animación de salida antes de
+// remover cada toast, además del tamaño según la longitud del mensaje.
 const NotificationContainer = () => {
   const { notifications, removeNotification } = useNotification();
+  // IDs de toasts en animación de salida (200ms antes de removerlos del contexto).
   const [animatingOut, setAnimatingOut] = useState(new Set());
 
+  // Marca el toast como saliente, espera la animación y lo elimina.
   const handleClose = (id) => {
     setAnimatingOut(prev => new Set([...prev, id]));
     setTimeout(() => {
@@ -19,6 +24,7 @@ const NotificationContainer = () => {
 
   if (notifications.length === 0) return null;
 
+  // Ajusta el ancho (min/max) según la longitud del mensaje y si hay título.
   const getNotificationSize = (message, title) => {
     const hasTitle = title && title.trim().length > 0;
     const messageLength = message.length;
@@ -43,27 +49,29 @@ const NotificationContainer = () => {
     return 'w-auto min-w-[250px] max-w-[320px]';
   };
 
+  // Estilos base + color semántico según el tipo (success/error/warning/info).
   const getNotificationStyles = (type) => {
     const baseStyles = "relative overflow-hidden backdrop-blur-md border rounded-lg shadow-xl transition-all duration-300 ease-in-out transform hover:scale-105";
     
     switch (type) {
       case 'success':
-        return `${baseStyles} bg-green-500/10 border-green-500/30 text-green-100 shadow-green-500/20`;
+        return `${baseStyles} bg-emerald-500/10 border-emerald-500/30 text-emerald-100 shadow-soft`;
       case 'error':
-        return `${baseStyles} bg-red-500/10 border-red-500/30 text-red-100 shadow-red-500/20`;
+        return `${baseStyles} bg-red-500/10 border-red-500/30 text-red-100 shadow-soft`;
       case 'warning':
-        return `${baseStyles} bg-yellow-500/10 border-yellow-500/30 text-yellow-100 shadow-yellow-500/20`;
+        return `${baseStyles} bg-amber-500/10 border-amber-500/30 text-amber-100 shadow-soft`;
       case 'info':
       default:
-        return `${baseStyles} bg-blue-500/10 border-blue-500/30 text-blue-100 shadow-blue-500/20`;
+        return `${baseStyles} bg-blue-500/10 border-blue-500/30 text-blue-100 shadow-soft`;
     }
   };
 
+  // Icono SVG por tipo de notificación.
   const getIcon = (type) => {
     switch (type) {
       case 'success':
         return (
-          <svg className="w-4 h-4 text-green-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg className="w-4 h-4 text-emerald-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
           </svg>
         );
@@ -75,7 +83,7 @@ const NotificationContainer = () => {
         );
       case 'warning':
         return (
-          <svg className="w-4 h-4 text-yellow-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg className="w-4 h-4 text-amber-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.268 16.5c-.77.833.192 2.5 1.732 2.5z" />
           </svg>
         );
@@ -89,11 +97,12 @@ const NotificationContainer = () => {
     }
   };
 
+  // Color de la barra de progreso del auto-cierre.
   const getProgressBarColor = (type) => {
     switch (type) {
-      case 'success': return 'bg-green-400';
+      case 'success': return 'bg-emerald-400';
       case 'error': return 'bg-red-400';
-      case 'warning': return 'bg-yellow-400';
+      case 'warning': return 'bg-amber-400';
       case 'info':
       default: return 'bg-blue-400';
     }

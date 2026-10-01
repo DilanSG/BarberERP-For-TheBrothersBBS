@@ -1,9 +1,9 @@
 import cacheService from '../../core/application/usecases/CacheUseCases.js';
 import { logger } from '../../barrel.js';
 
-/**
- * Genera una key de caché basada en la request
- */
+// Genera una key de caché basada en la request
+// Combina URL + método + usuario y normaliza la query para que distintas
+// variaciones de orden de parámetros compartan la misma entrada.
 const generateCacheKey = (req) => {
   const parts = [
     req.originalUrl,
@@ -11,9 +11,11 @@ const generateCacheKey = (req) => {
     req.user ? req.user._id : 'anonymous'
   ];
 
-  // Añadir query params ordenados si existen
-  if (Object.keys(req.query).length > 0) {
-    const sortedQuery = Object.keys(req.query)
+  // Añadir query params ordenados si existen (ignorando cache-busters)
+  const IGNORED_PARAMS = new Set(['_t', '_', 'timestamp']);
+  const queryKeys = Object.keys(req.query).filter((key) => !IGNORED_PARAMS.has(key));
+  if (queryKeys.length > 0) {
+    const sortedQuery = queryKeys
       .sort()
       .reduce((acc, key) => {
         acc[key] = req.query[key];
@@ -30,9 +32,8 @@ const generateCacheKey = (req) => {
   return parts.join('|');
 };
 
-/**
- * Middleware de caché para rutas
- */
+// Middleware de caché para rutas
+// @param {number|null} duration - TTL en segundos (null usa el TTL por defecto del servicio)
 export const cacheMiddleware = (duration = null) => {
   return (req, res, next) => {
     // Skip cache en desarrollo si se especifica
@@ -73,9 +74,8 @@ export const cacheMiddleware = (duration = null) => {
   };
 };
 
-/**
- * Middleware para invalidar caché
- */
+// Middleware para invalidar caché
+// @param {string[]} patterns - Patrones (strings de expresiones regulares) de keys a invalidar
 export const invalidateCacheMiddleware = (patterns) => {
   return (req, res, next) => {
     const originalSend = res.json;
@@ -111,9 +111,8 @@ export const invalidateCacheMiddleware = (patterns) => {
   };
 };
 
-/**
- * Middleware para caché condicional basado en headers
- */
+// Middleware para caché condicional basado en headers
+// Responde 304 Not Modified si el ETag o Last-Modified del cliente coinciden con la entrada cacheada.
 export const conditionalCache = () => {
   return (req, res, next) => {
     const key = generateCacheKey(req);
@@ -166,9 +165,10 @@ export const conditionalCache = () => {
   };
 };
 
-/**
- * Middleware para caché parcial (campos específicos)
- */
+// Middleware para caché parcial (campos específicos)
+// Solo guarda y reinyecta los campos indicados, dejando el resto de la respuesta intacto.
+// @param {string[]} fields - Campos de la respuesta a cachear
+// @param {number|null} duration - TTL en segundos
 export const partialCache = (fields, duration = null) => {
   return (req, res, next) => {
     const key = generateCacheKey(req) + '|' + fields.join(',');

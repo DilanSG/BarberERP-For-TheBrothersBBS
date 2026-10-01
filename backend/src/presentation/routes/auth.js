@@ -1,8 +1,8 @@
 import { Router } from 'express';
-import { 
-  register, 
-  login, 
-  changePassword, 
+import {
+  register,
+  login,
+  changePassword,
   requestPasswordReset,
   resetPasswordWithToken,
   refreshToken,
@@ -11,6 +11,7 @@ import {
 } from '../controllers/authController.js';
 import { protect } from '../middleware/auth.js';
 import { validateRegister, validatePasswordChange } from '../middleware/authValidation.js';
+import { authLimiter } from '../middleware/rateLimiting.js';
 
 const router = Router();
 
@@ -43,7 +44,7 @@ const router = Router();
  *                 format: email
  *               password:
  *                 type: string
- *                 minLength: 6
+ *                 minLength: 8
  *               name:
  *                 type: string
  *               phone:
@@ -63,7 +64,7 @@ const router = Router();
  *       400:
  *         $ref: '#/components/responses/ValidationError'
  */
-router.post('/register', validateRegister, register);
+router.post('/register', authLimiter, validateRegister, register);
 
 /**
  * @swagger
@@ -101,7 +102,7 @@ router.post('/register', validateRegister, register);
  *       401:
  *         $ref: '#/components/responses/Unauthorized'
  */
-router.post('/login', login);
+router.post('/login', authLimiter, login);
 
 /**
  * @swagger
@@ -164,8 +165,8 @@ router.post('/refresh-token', refreshToken);
  *       404:
  *         $ref: '#/components/responses/NotFound'
  */
-router.post('/reset-password', requestPasswordReset);
-router.post('/reset-password/:token', resetPasswordWithToken);
+router.post('/reset-password', authLimiter, requestPasswordReset);
+router.post('/reset-password/:token', authLimiter, resetPasswordWithToken);
 
 // Rutas protegidas
 router.use(protect);

@@ -1,31 +1,37 @@
 ﻿import React, { useState, useEffect } from 'react';
 import { 
   Plus, Edit, Trash2, Search, Package2, AlertTriangle, CheckCircle, 
-  TrendingUp, TrendingDown, BarChart3, Calculator, RotateCcw, 
-  ShoppingCart, Minus, ChevronDown, ChevronUp, User, Users, 
-  DollarSign, Activity, Eye, Calendar, Clock, Download, Camera, FileText, XCircle
+  Calculator, RotateCcw, 
+  ShoppingCart, Minus, ChevronDown, 
+  DollarSign, Calendar, Download, Camera, FileText,
+  PackagePlus, Save
 } from 'lucide-react';
-import ExcelJS from 'exceljs';
-import { inventoryService } from '@services/api';
+import { inventoryService } from '@services/inventoryService';
 import { useInventoryRefresh } from '@contexts/InventoryContext';
 import { useAuth } from '@contexts/AuthContext';
 import { usePaymentMethods } from '@shared/config/paymentMethods';
 import { PageContainer } from '@components/layout/PageContainer';
 import GradientButton from '@components/ui/GradientButton';
-import GradientText from '@components/ui/GradientText';
+import Modal from '@components/ui/Modal';
 import InventorySnapshot from '@components/inventory/InventorySnapshot';
 import SavedInventoriesModal from '@components/modals/SavedInventoriesModal';
 import InventoryLogsModal from '@components/modals/InventoryLogsModal';
+import { Skeleton, InventorySkeleton } from '@components/ui/Skeleton';
 
 import logger from '@utils/logger';
-/**
- * Componente moderno de gestión de inventario para The Brothers Barber Shop
- * Diseño moderno con fondo de puntos, gradient text y diseño tipo lista lateral
- */
+
+// Límite de filas visibles en el flujo de la página antes de activar scroll interno
+const MAX_VISIBLE_PRODUCTS = 100;
+
+// Componente moderno de gestión de inventario para The Brothers Barber Shop.
+// Diseño moderno con fondo de puntos, gradient text y diseño tipo lista lateral.
+// Carga el inventario, permite CRUD de productos, movimientos (entrada/salida/
+// venta/conteo), exportación a Excel, snapshots e historial.
 const Inventory = () => {
   const { user } = useAuth();
   const { refreshTrigger, needsRefresh, markRefreshed } = useInventoryRefresh();
   const { paymentMethods, getOptions: getPaymentMethodOptions, mapToBackend: mapPaymentMethodToBackend } = usePaymentMethods();
+  // Lista de productos y estados de carga/mensajes de la página
   const [inventory, setInventory] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -33,7 +39,13 @@ const Inventory = () => {
   const [lastRefreshTime, setLastRefreshTime] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [sortBy, setSortBy] = useState('alphabetical'); // 'alphabetical', 'createdAt'
-  const [expandedSection, setExpandedSection] = useState(null); // 'form', 'movement', 'sale'
+  // Visibilidad de cada modal de la página (producto, entrada, salida, venta, conteo, etc.)
+  const [showProductModal, setShowProductModal] = useState(false);
+  const [showEntryModal, setShowEntryModal] = useState(false);
+  const [showExitModal, setShowExitModal] = useState(false);
+  const [showSaleModal, setShowSaleModal] = useState(false);
+  const [showCountModal, setShowCountModal] = useState(false);
+  // Datos del formulario de producto (crear/editar)
   const [formData, setFormData] = useState({
     name: '',
     code: '',
@@ -46,6 +58,7 @@ const Inventory = () => {
     price: '',
     description: ''
   });
+  // Ítem en edición, ítem seleccionado para movimientos y datos de cada modal
   const [editingItem, setEditingItem] = useState(null);
   const [selectedItem, setSelectedItem] = useState(null);
   const [movementData, setMovementData] = useState({
@@ -72,6 +85,7 @@ const Inventory = () => {
   const [itemToDelete, setItemToDelete] = useState(null);
   const [deletionReason, setDeletionReason] = useState('');
 
+  // Categorías disponibles para clasificar productos
   const categories = [
     'cannabicos', 'gorras', 'insumos', 'productos_pelo', 'lociones',
     'ceras', 'geles', 'maquinas', 'accesorios', 'otros'
@@ -104,14 +118,13 @@ const Inventory = () => {
     }
   }, []);
 
+  // Carga el inventario desde el servicio y normaliza los distintos formatos de respuesta
   const loadInventory = async () => {
     try {
       setLoading(true);
       logger.debug('🔄 InventoryAdmin: Cargando inventario...');
       
-      // Añadir timestamp para evitar caché
-      const timestamp = Date.now();
-      const response = await inventoryService.getInventory({ _t: timestamp });
+      const response = await inventoryService.getInventory();
       
       let inventoryData = [];
       // La API devuelve { success: true, data: { products: [...], total, page, ... } }
@@ -135,6 +148,8 @@ const Inventory = () => {
     }
   };
 
+  // Crea o actualiza un producto según haya editingItem.
+  // Convierte los campos numéricos del formulario antes de enviarlos al API.
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
@@ -158,7 +173,7 @@ const Inventory = () => {
       }
       
       resetForm();
-      setExpandedSection(null);
+      setShowProductModal(false);
       loadInventory();
       
       setTimeout(() => setSuccess(''), 3000);
@@ -169,6 +184,7 @@ const Inventory = () => {
     }
   };
 
+  // Restablece el formulario de producto y sale del modo edición
   const resetForm = () => {
     setFormData({
       name: '',
@@ -185,6 +201,7 @@ const Inventory = () => {
     setEditingItem(null);
   };
 
+  // Prellena el formulario con el ítem y abre el modal en modo edición
   const handleEdit = (item) => {
     setFormData({
       name: item.name,
@@ -199,15 +216,17 @@ const Inventory = () => {
       description: item.description || ''
     });
     setEditingItem(item);
-    setExpandedSection('form');
+    setShowProductModal(true);
   };
 
+  // Abre el modal de confirmación de eliminación del producto
   const handleDelete = (item) => {
     setItemToDelete(item);
     setDeletionReason('');
     setShowDeleteModal(true);
   };
 
+  // Elimina el producto confirmado y recarga el inventario
   const handleConfirmDelete = async () => {
     if (!itemToDelete) return;
     
@@ -226,29 +245,46 @@ const Inventory = () => {
     }
   };
 
+  // Cancela la eliminación y limpia el estado del modal
   const handleCancelDelete = () => {
     setShowDeleteModal(false);
     setItemToDelete(null);
     setDeletionReason('');
   };
 
+  // Abre el modal de producto en modo creación con el formulario limpio
   const handleNewProduct = () => {
     resetForm();
-    setExpandedSection('form');
+    setShowProductModal(true);
   };
 
-  const handleMovement = (item) => {
+  // Reinicia los datos del formulario de movimiento (entrada o salida)
+  const resetMovementData = (type = 'entry') => {
+    setMovementData({ type, quantity: '', reason: '', notes: '', cost: '', paymentMethod: 'efectivo' });
+  };
+
+  // Abre el modal de entrada de stock para el ítem
+  const handleEntry = (item) => {
     setSelectedItem(item);
-    setMovementData({ type: 'entry', quantity: '', reason: '', notes: '', cost: '', paymentMethod: 'efectivo' });
-    setExpandedSection('movement');
+    resetMovementData('entry');
+    setShowEntryModal(true);
   };
 
+  // Abre el modal de salida de stock para el ítem
+  const handleExit = (item) => {
+    setSelectedItem(item);
+    resetMovementData('exit');
+    setShowExitModal(true);
+  };
+
+  // Abre el modal de venta directa (cantidad inicial 1)
   const handleSale = (item) => {
     setSelectedItem(item);
     setSaleData({ quantity: '1' });
-    setExpandedSection('sale');
+    setShowSaleModal(true);
   };
 
+  // Abre el modal de conteo físico, precargando el stock real actual
   const handleCount = (item) => {
     setSelectedItem(item);
     setCountData({
@@ -257,24 +293,27 @@ const Inventory = () => {
       exits: '',
       notes: ''
     });
-    setExpandedSection('count');
+    setShowCountModal(true);
   };
 
+  // Cierra el modal de snapshot y recarga el inventario tras crearlo
   const handleSnapshotCreated = () => {
     setShowSnapshotModal(false);
     loadInventory(); // Recargar inventario después de crear snapshot
   };
 
+  // Determina el estado visual del stock (sin stock, bajo o normal) según el mínimo
   const getStockStatus = (item) => {
     const realStock = item.realStock || item.stock || item.currentStock || item.quantity || 0;
     const minStock = item.minStock || 0;
     
     if (realStock <= 0) return { status: 'out', label: 'Sin stock', color: 'text-red-400', bgColor: 'bg-red-500/10' };
-    if (realStock <= minStock) return { status: 'low', label: 'Stock bajo', color: 'text-yellow-400', bgColor: 'bg-yellow-500/10' };
-    return { status: 'good', label: 'Stock normal', color: 'text-green-400', bgColor: 'bg-green-500/10' };
+    if (realStock <= minStock) return { status: 'low', label: 'Stock bajo', color: 'text-amber-400', bgColor: 'bg-amber-500/10' };
+    return { status: 'good', label: 'Stock normal', color: 'text-emerald-400', bgColor: 'bg-emerald-500/10' };
   };
 
   // Función para filtrar y ordenar el inventario
+  // Búsqueda por nombre/categoría y orden por alfabético, fecha, categoría o stock
   const filteredAndSortedInventory = () => {
     let filtered = Array.isArray(inventory) ? inventory.filter(item =>
       item.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -308,6 +347,15 @@ const Inventory = () => {
 
   const filteredInventory = filteredAndSortedInventory();
 
+  // Mostrar máximo 100 productos en el flujo normal de la página.
+  // Si hay más, se limita a 100 y el grid habilita scroll interno.
+  const exceedsVisibleLimit = filteredInventory.length > MAX_VISIBLE_PRODUCTS;
+  const visibleInventory = exceedsVisibleLimit
+    ? filteredInventory.slice(0, MAX_VISIBLE_PRODUCTS)
+    : filteredInventory;
+
+  // Registra una entrada o salida de stock.
+  // Si es entrada con costo, el backend también registra el gasto asociado.
   const handleMovementSubmit = async (e) => {
     e.preventDefault();
     try {
@@ -336,7 +384,8 @@ const Inventory = () => {
       setSuccess(successMessage);
       
       setMovementData({ type: 'entry', quantity: '', reason: '', notes: '', cost: '', paymentMethod: 'efectivo' });
-      setExpandedSection(null);
+      setShowEntryModal(false);
+      setShowExitModal(false);
       loadInventory();
       
       setTimeout(() => setSuccess(''), 3000);
@@ -347,6 +396,8 @@ const Inventory = () => {
     }
   };
 
+  // Registra una venta directa del producto: valida stock, crea la venta vía API
+  // y actualiza el inventario (stock, salidas y contador de ventas).
   const handleSaleSubmit = async (e) => {
     e.preventDefault();
     try {
@@ -396,7 +447,7 @@ const Inventory = () => {
       
       setSuccess(`Venta registrada exitosamente: ${quantity} unidades`);
       setSaleData({ quantity: '1' });
-      setExpandedSection(null);
+      setShowSaleModal(false);
       loadInventory();
       
       setTimeout(() => setSuccess(''), 3000);
@@ -407,6 +458,7 @@ const Inventory = () => {
     }
   };
 
+  // Registra un conteo físico: guarda el stock real y acumula entradas/salidas manuales
   const handleCountSubmit = async (e) => {
     e.preventDefault();
     try {
@@ -426,7 +478,7 @@ const Inventory = () => {
       
       setSuccess(`Conteo registrado exitosamente para ${selectedItem.name}`);
       setCountData({ realStock: '', entries: '', exits: '', notes: '' });
-      setExpandedSection(null);
+      setShowCountModal(false);
       loadInventory();
       
       setTimeout(() => setSuccess(''), 3000);
@@ -437,9 +489,11 @@ const Inventory = () => {
     }
   };
 
-  // Función para exportar inventario a Excel
+  // Función para exportar inventario a Excel — dynamic import para no bloquear bundle (Fase 5 polish)
+  // Calcula stock esperado/diferencia por producto, aplica estilos y descarga el .xlsx
   const exportToExcel = async () => {
     try {
+      const { default: ExcelJS } = await import('exceljs');
       // Preparar datos para Excel
       const excelData = filteredInventory.map(item => {
         const initialStock = item.initialStock || 0;
@@ -544,6 +598,7 @@ const Inventory = () => {
     }
   };
 
+  // Pide confirmación y ejecuta la corrección de inconsistencias de stock en el backend
   const handleFixConsistency = async () => {
     if (!window.confirm('¿Estás seguro de que deseas corregir las inconsistencias del inventario?\n\nEsto ajustará los stocks para que coincidan con las ventas registradas.')) {
       return;
@@ -556,7 +611,7 @@ const Inventory = () => {
       const response = await inventoryService.fixConsistency();
       
       if (response.success) {
-        setSuccess(`✅ Inconsistencias corregidas: ${response.fixed || 0} productos actualizados`);
+        setSuccess(`Inconsistencias corregidas: ${response.fixed || 0} productos actualizados`);
         loadInventory(); // Recargar inventario para ver los cambios
       } else {
         setError('Error al corregir inconsistencias');
@@ -572,57 +627,141 @@ const Inventory = () => {
     }
   };
 
+  // Formulario reutilizable para entrada/salida de stock (cambia según el tipo;
+  // las entradas permiten registrar costo y método de pago como gasto).
+  const renderMovementForm = (type) => {
+    const isEntry = type === 'entry';
+    return (
+      <form id={`movement-form-${type}`} onSubmit={handleMovementSubmit} className="space-y-5">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-300 mb-2">Cantidad</label>
+            <input
+              type="number"
+              value={movementData.quantity}
+              onChange={(e) => setMovementData({...movementData, quantity: e.target.value})}
+              className="glassmorphism-input w-full"
+              min="1"
+              placeholder="0"
+              required
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-300 mb-2">Motivo</label>
+            <input
+              type="text"
+              value={movementData.reason}
+              onChange={(e) => setMovementData({...movementData, reason: e.target.value})}
+              className="glassmorphism-input w-full"
+              placeholder={isEntry ? 'Ej: Compra, Devolución, Reposición' : 'Ej: Pérdida, Daño, Uso interno'}
+              required
+            />
+          </div>
+        </div>
+
+        {isEntry && (
+          <div className="bg-emerald-500/5 border border-emerald-500/20 rounded-xl p-4 space-y-4">
+            <h4 className="text-sm font-medium text-emerald-300 flex items-center gap-2">
+              <DollarSign size={16} />
+              Información de Costo (Opcional)
+            </h4>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">
+                  Costo Total
+                  <span className="text-gray-500 text-xs ml-1">(Se registrará como gasto automáticamente)</span>
+                </label>
+                <input
+                  type="number"
+                  value={movementData.cost}
+                  onChange={(e) => setMovementData({...movementData, cost: e.target.value})}
+                  className="glassmorphism-input w-full"
+                  min="0"
+                  step="0.01"
+                  placeholder="0.00"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">Método de Pago</label>
+                <select
+                  value={movementData.paymentMethod}
+                  onChange={(e) => setMovementData({...movementData, paymentMethod: e.target.value})}
+                  className="glassmorphism-select w-full"
+                >
+                  {paymentMethods.map(method => (
+                    <option key={method.id} value={method.id}>
+                      {method.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+          </div>
+        )}
+
+        <div>
+          <label className="block text-sm font-medium text-gray-300 mb-2">
+            Notas Adicionales
+            <span className="text-gray-500 text-xs ml-1">(Opcional)</span>
+          </label>
+          <textarea
+            value={movementData.notes}
+            onChange={(e) => setMovementData({...movementData, notes: e.target.value})}
+            className="glassmorphism-textarea w-full"
+            rows={3}
+            placeholder="Observaciones adicionales del movimiento..."
+          />
+        </div>
+
+        <div className="bg-blue-500/5 border border-blue-500/20 rounded-xl p-4">
+          <h4 className="text-sm font-medium text-blue-300 mb-3">Producto Seleccionado</h4>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-sm">
+            <div>
+              <span className="text-gray-400">Stock actual:</span>
+              <span className="text-white ml-2">{selectedItem?.stock ?? 0}</span>
+            </div>
+            <div>
+              <span className="text-gray-400">Categoría:</span>
+              <span className="text-white ml-2">{selectedItem?.category?.replace('_', ' ').toUpperCase()}</span>
+            </div>
+            <div>
+              <span className="text-gray-400">Precio:</span>
+              <span className="text-emerald-400 ml-2 font-semibold">${selectedItem?.price || 0}</span>
+            </div>
+          </div>
+        </div>
+      </form>
+    );
+  };
+
   return (
     <>
       <PageContainer>
-        <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-6 space-y-8">
-          {/* Header */}
-          <div className="text-center mb-6">
-            <div className="flex items-center justify-center gap-3 mb-2">
-              <div className="p-3 bg-gradient-to-r from-purple-600/20 to-blue-600/20 rounded-xl border border-purple-500/20 shadow-xl shadow-blue-500/20">
-                <Package2 className="w-6 h-6 sm:w-7 sm:h-7 lg:w-8 lg:h-8 text-purple-400" />
+        <div className="relative z-10 w-full pb-6 space-y-5">
+          {/* ── Top bar ── */}
+          <div className="flex flex-col lg:flex-row lg:items-center gap-4">
+            {/* Título */}
+            <div className="flex items-center gap-3 flex-shrink-0">
+              <div className="p-2.5 rounded-xl bg-brand-500/10 border border-brand-500/20">
+                <Package2 className="w-5 h-5 sm:w-6 sm:h-6 text-brand-300" />
               </div>
-              <GradientText className="text-xl sm:text-2xl lg:text-3xl font-bold">
-                Gestión de Inventario
-              </GradientText>
+              <div>
+                <h1 className="text-lg sm:text-xl lg:text-2xl font-bold text-white">Gestión de Inventario</h1>
+                <p className="text-xs sm:text-sm text-gray-400">
+                  {exceedsVisibleLimit
+                    ? `Mostrando ${MAX_VISIBLE_PRODUCTS} de ${filteredInventory.length} productos`
+                    : `${filteredInventory.length} producto${filteredInventory.length !== 1 ? 's' : ''} en inventario`}
+                </p>
+              </div>
             </div>
-          </div>
 
-        {/* Mensajes de error y éxito */}
-        {error && (
-          <div className="bg-red-500/10 border border-red-500/30 text-red-400 px-4 py-2 rounded-xl backdrop-blur-sm flex items-center gap-2 shadow-xl shadow-blue-500/20">
-            <AlertTriangle className="w-4 h-4" />
-            {error}
-          </div>
-        )}
-        
-        {success && (
-          <div className="bg-green-500/10 border border-green-500/30 text-green-400 px-4 py-2 rounded-xl backdrop-blur-sm flex items-center gap-2 shadow-xl shadow-blue-500/20">
-            <CheckCircle className="w-4 h-4" />
-            {success}
-          </div>
-        )}        {/* Container principal transparente */}
-        <div className="bg-transparent border border-white/10 rounded-2xl backdrop-blur-sm shadow-2xl shadow-blue-500/20 relative">
-          
-          {/* Botón de corrección discreto en esquina superior derecha */}
-          {user?.role === 'admin' && (
-            <button
-              onClick={handleFixConsistency}
-              className="absolute top-2 right-2 p-1 bg-red-500/5 hover:bg-red-500/20 text-red-400/40 hover:text-red-400 rounded transition-all opacity-30 hover:opacity-100 z-10"
-              title="Corregir inconsistencias en el inventario"
-            >
-              <RotateCcw className="w-3 h-3" />
-            </button>
-          )}
-          
-          {/* Header de controles */}
-          <div className="p-4 sm:p-6 border-b border-white/10 space-y-4">
-            {/* Botones de acción - Responsivos */}
-            <div className="flex flex-col sm:flex-row gap-3 justify-center sm:justify-start">
+            {/* Acciones */}
+            {/* Botones de administrador: crear, exportar, snapshot, inventarios guardados e historial */}
+            <div className="flex-1 flex flex-wrap items-center gap-2 lg:justify-end">
               {user?.role === 'admin' && (
                 <GradientButton
                   onClick={handleNewProduct}
-                  className="text-sm px-6 py-3 w-full sm:w-auto min-w-[160px] shadow-xl shadow-blue-500/20"
+                  className="text-sm px-4 py-2.5 shadow-soft"
                 >
                   <div className="flex items-center justify-center gap-2">
                     <Plus className="w-4 h-4" />
@@ -630,721 +769,194 @@ const Inventory = () => {
                   </div>
                 </GradientButton>
               )}
-              
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 w-full sm:w-auto">
-                {user?.role === 'admin' && (
-                  <button
-                    onClick={exportToExcel}
-                    className="flex items-center justify-center gap-2 px-4 py-3 bg-green-500/20 hover:bg-green-500/30 text-green-400 border border-green-500/30 rounded-lg transition-colors text-sm shadow-xl shadow-blue-500/20"
-                    disabled={filteredInventory.length === 0}
-                  >
-                    <Download className="w-4 h-4" />
-                    <span>Exportar Excel</span>
-                  </button>
-                )}
-                
-                {user?.role === 'admin' && (
-                  <button
-                    onClick={() => setShowSnapshotModal(true)}
-                    className="flex items-center justify-center gap-2 px-4 py-3 bg-blue-500/20 hover:bg-blue-500/30 text-blue-400 border border-blue-500/30 rounded-lg transition-colors text-sm shadow-xl shadow-blue-500/20"
-                    disabled={filteredInventory.length === 0}
-                  >
-                    <Camera className="w-4 h-4" />
-                    <span className="hidden sm:inline">Guardar</span>
-                    <span className="sm:hidden">Inventario</span>
-                  </button>
-                )}
-                
-                {user?.role === 'admin' && (
-                  <button
-                    onClick={() => setShowSavedInventoriesModal(true)}
-                    className="flex items-center justify-center gap-2 px-4 py-3 bg-purple-500/20 hover:bg-purple-500/30 text-purple-400 border border-purple-500/30 rounded-lg transition-colors text-sm shadow-xl shadow-blue-500/20"
-                  >
-                    <Calendar className="w-4 h-4" />
-                    <span className="hidden sm:inline">Ver</span>
-                    <span className="sm:hidden">Inventarios</span>
-                  </button>
-                )}
 
-                {user?.role === 'admin' && (
-                  <button
-                    onClick={() => setShowLogsModal(true)}
-                    className="flex items-center justify-center gap-2 px-4 py-3 bg-orange-500/20 hover:bg-orange-500/30 text-orange-400 border border-orange-500/30 rounded-lg transition-colors text-sm shadow-xl shadow-blue-500/20"
-                  >
-                    <FileText className="w-4 h-4" />
-                    <span className="hidden sm:inline">Historial</span>
-                    <span className="sm:hidden">Logs</span>
-                  </button>
-                )}
-              </div>
-            </div>
-
-            {/* Búsqueda y Ordenamiento */}
-            <div className="flex flex-col sm:flex-row gap-4 justify-center sm:justify-end items-center">
-              {/* Selector de Ordenamiento */}
-              <div className="w-full sm:w-40">
-                <select
-                  value={sortBy}
-                  onChange={(e) => setSortBy(e.target.value)}
-                  className="glassmorphism-select w-full shadow-xl shadow-blue-500/20"
+              {user?.role === 'admin' && (
+                <button
+                  onClick={exportToExcel}
+                  disabled={filteredInventory.length === 0}
+                  className="inline-flex items-center gap-1.5 px-3 py-2.5 bg-white/[0.03] hover:bg-white/[0.07] border border-white/[0.08] hover:border-emerald-500/30 rounded-xl text-gray-300 hover:text-emerald-300 text-xs sm:text-sm font-medium transition-colors duration-200 disabled:opacity-40 disabled:cursor-not-allowed"
                 >
-                  <option value="alphabetical">Alfabético (A-Z)</option>
-                  <option value="createdAt">Fecha de Creación</option>
-                  <option value="category">Por Categoría</option>
-                  <option value="stock">Por Stock</option>
-                </select>
-              </div>
-              
-              {/* Campo de Búsqueda */}
-              <div className="relative w-full sm:w-44">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-                <input
-                  type="text"
-                  placeholder="Buscar productos..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="glassmorphism-input pl-9 pr-4 w-full shadow-xl shadow-blue-500/20"
-                />
-              </div>
+                  <Download className="w-4 h-4" />
+                  <span className="hidden sm:inline">Exportar</span>
+                </button>
+              )}
+
+              {user?.role === 'admin' && (
+                <button
+                  onClick={() => setShowSnapshotModal(true)}
+                  disabled={filteredInventory.length === 0}
+                  className="inline-flex items-center gap-1.5 px-3 py-2.5 bg-white/[0.03] hover:bg-white/[0.07] border border-white/[0.08] hover:border-blue-500/30 rounded-xl text-gray-300 hover:text-blue-300 text-xs sm:text-sm font-medium transition-colors duration-200 disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  <Camera className="w-4 h-4" />
+                  <span className="hidden sm:inline">Guardar</span>
+                </button>
+              )}
+
+              {user?.role === 'admin' && (
+                <button
+                  onClick={() => setShowSavedInventoriesModal(true)}
+                  className="inline-flex items-center gap-1.5 px-3 py-2.5 bg-white/[0.03] hover:bg-white/[0.07] border border-white/[0.08] hover:border-brand-500/30 rounded-xl text-gray-300 hover:text-brand-300 text-xs sm:text-sm font-medium transition-colors duration-200"
+                >
+                  <Calendar className="w-4 h-4" />
+                  <span className="hidden sm:inline">Ver</span>
+                </button>
+              )}
+
+              {user?.role === 'admin' && (
+                <button
+                  onClick={() => setShowLogsModal(true)}
+                  className="inline-flex items-center gap-1.5 px-3 py-2.5 bg-white/[0.03] hover:bg-white/[0.07] border border-white/[0.08] hover:border-amber-500/30 rounded-xl text-gray-300 hover:text-amber-300 text-xs sm:text-sm font-medium transition-colors duration-200"
+                >
+                  <FileText className="w-4 h-4" />
+                  <span className="hidden sm:inline">Historial</span>
+                </button>
+              )}
             </div>
           </div>
 
-              {/* Formularios expandibles en el lugar correcto - Solo Admin */}
-              {expandedSection === 'form' && user?.role === 'admin' && (
-                <div className="mx-4 mt-4 bg-white/5 border border-white/10 rounded-xl p-6 backdrop-blur-md shadow-2xl shadow-blue-500/20">
-                  <div className="flex items-center justify-between mb-4">
-                    <h3 className="text-lg font-semibold">
-                      <GradientText className="text-lg font-semibold">
-                        {editingItem ? 'Editar Producto' : 'Nuevo Producto'}
-                      </GradientText>
-                    </h3>
-                    <button
-                      onClick={() => setExpandedSection(null)}
-                      className="text-gray-400 hover:text-white transition-colors"
-                    >
-                      <ChevronUp className="w-5 h-5" />
-                    </button>
+        {/* Mensajes de error y éxito */}
+        {/* Alertas temporales de la página (se autolimpian a los pocos segundos) */}
+        {error && (
+          <div className="bg-red-500/10 border border-red-500/30 text-red-400 px-4 py-2 rounded-xl backdrop-blur-sm flex items-center gap-2 shadow-soft">
+            <AlertTriangle className="w-4 h-4" />
+            {error}
+          </div>
+        )}
+        
+        {success && (
+          <div className="bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 px-4 py-2 rounded-xl backdrop-blur-sm flex items-center gap-2 shadow-soft">
+            <CheckCircle className="w-4 h-4" />
+            {success}
+          </div>
+        )}
+
+        {/* Container principal */}
+        <div className="rounded-2xl border border-white/[0.08] bg-white/[0.02] backdrop-blur-sm overflow-hidden">
+
+          {/* Toolbar: búsqueda + orden + corrección */}
+          {/* Filtros de la tabla; "Corregir" solo para admin */}
+          <div className="flex flex-col sm:flex-row gap-3 sm:items-center p-4 border-b border-white/[0.08]">
+            <div className="relative flex-1 min-w-0">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 w-4 h-4 pointer-events-none" />
+              <input
+                type="text"
+                placeholder="Buscar productos..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="glassmorphism-input pl-9"
+              />
+            </div>
+
+            <select
+              value={sortBy}
+              onChange={(e) => setSortBy(e.target.value)}
+              className="glassmorphism-select sm:w-48"
+            >
+              <option value="alphabetical">Alfabético (A-Z)</option>
+              <option value="createdAt">Fecha de Creación</option>
+              <option value="category">Por Categoría</option>
+              <option value="stock">Por Stock</option>
+            </select>
+
+            {user?.role === 'admin' && (
+              <button
+                onClick={handleFixConsistency}
+                className="inline-flex items-center justify-center gap-1.5 px-3 py-2.5 bg-white/[0.03] hover:bg-red-500/10 border border-white/[0.08] hover:border-red-500/30 rounded-xl text-gray-400 hover:text-red-300 text-xs sm:text-sm font-medium transition-colors duration-200 flex-shrink-0"
+                title="Corregir inconsistencias en el inventario"
+              >
+                <RotateCcw className="w-4 h-4" />
+                <span className="hidden sm:inline">Corregir</span>
+              </button>
+            )}
+          </div>
+
+              {/* ── Tabla tipo Excel (fluye con la página; scroll interno solo si supera el límite) ── */}
+              <div
+                className={`overflow-x-auto custom-scrollbar ${exceedsVisibleLimit ? 'max-h-[70vh] overflow-y-auto' : ''}`}
+              >
+                <div className="min-w-[940px]">
+                  {/* Encabezado */}
+                  <div className={`grid grid-cols-12 bg-[#151821] border-b border-white/[0.10] text-[11px] font-semibold uppercase tracking-wide sticky top-0 z-20`}>
+                    <div className="sticky left-0 z-10 col-span-2 px-3 py-3 border-r border-white/[0.06] text-gray-400 bg-[#151821]">Producto</div>
+                    <div className="col-span-1 px-2 py-3 border-r border-white/[0.06] text-center text-gray-400">Inicial</div>
+                    <div className="col-span-1 px-2 py-3 border-r border-white/[0.06] text-center text-emerald-400">Entradas</div>
+                    <div className="col-span-1 px-2 py-3 border-r border-white/[0.06] text-center text-red-400">Salidas</div>
+                    <div className="col-span-1 px-2 py-3 border-r border-white/[0.06] text-center text-amber-400">Ventas</div>
+                    <div className="col-span-1 px-2 py-3 border-r border-white/[0.06] text-center text-brand-300">Esperado</div>
+                    <div className="col-span-1 px-2 py-3 border-r border-white/[0.06] text-center text-blue-400">Real</div>
+                    <div className="col-span-1 px-2 py-3 border-r border-white/[0.06] text-center text-amber-400">Dif.</div>
+                    <div className="col-span-1 px-2 py-3 border-r border-white/[0.06] text-center text-blue-400">Estado</div>
+                    <div className="col-span-2 px-3 py-3 text-center text-gray-400">Acciones</div>
                   </div>
 
-                  <form onSubmit={handleSubmit} className="space-y-6">
-                    {/* Fila 1: Información básica */}
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                      <div>
-                        <label className="block text-sm font-medium text-gray-300 mb-2">Nombre</label>
-                        <input
-                          type="text"
-                          value={formData.name}
-                          onChange={(e) => setFormData({...formData, name: e.target.value})}
-                          className="glassmorphism-input w-full shadow-xl shadow-blue-500/20"
-                          placeholder="Nombre del producto"
-                          required
-                        />
-                      </div>
+                  {/* Filas */}
+                  {loading ? (
+                    <InventorySkeleton rows={8} />
+                  ) : visibleInventory.length === 0 ? (
+                    <div className="p-12 text-center">
+                      <Package2 className="w-12 h-12 text-gray-600 mx-auto mb-3" />
+                      <p className="text-gray-400 text-sm">No hay productos en el inventario</p>
+                    </div>
+                  ) : (
+                    visibleInventory.map((item) => {
+                      // Métricas de la fila: esperado = inicial + entradas - salidas - ventas
+                      const stockStatus = getStockStatus(item);
+                      const currentStock = item.stock || item.currentStock || item.quantity || 0;
+                      const initialStock = item.initialStock || 0;
+                      const entries = item.entries || 0;
+                      const exits = item.exits || 0;
+                      const sales = item.sales || 0;
+                      const realStock = item.realStock || currentStock;
+                      const expectedStock = initialStock + entries - exits - sales;
+                      const difference = realStock - expectedStock;
 
-                      <div>
-                        <label className="block text-sm font-medium text-gray-300 mb-2">Código</label>
-                        <input
-                          type="text"
-                          value={formData.code}
-                          onChange={(e) => setFormData({...formData, code: e.target.value})}
-                          className="glassmorphism-input w-full shadow-xl shadow-blue-500/20"
-                          placeholder="Ej: PRD001"
-                          required
-                        />
-                      </div>
-
-                      <div>
-                        <label className="block text-sm font-medium text-gray-300 mb-2">Categoría</label>
-                        <select
-                          value={formData.category}
-                          onChange={(e) => setFormData({...formData, category: e.target.value})}
-                          className="glassmorphism-select w-full shadow-xl shadow-blue-500/20"
+                      return (
+                        <div
+                          key={item._id}
+                          className="grid grid-cols-12 border-b border-white/[0.05] last:border-b-0 hover:bg-white/[0.04] transition-colors duration-150 odd:bg-white/[0.015]"
                         >
-                          {categories.map(cat => (
-                            <option key={cat} value={cat}>
-                              {cat.replace('_', ' ').toUpperCase()}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                    </div>
-
-                    {/* Fila 2: Stocks */}
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                      <div>
-                        <label className="block text-sm font-medium text-gray-300 mb-2">Stock Inicial</label>
-                        <input
-                          type="number"
-                          value={formData.initialStock}
-                          onChange={(e) => setFormData({...formData, initialStock: e.target.value})}
-                          className="glassmorphism-input w-full shadow-xl shadow-blue-500/20"
-                          min="0"
-                          placeholder="0"
-                        />
-                      </div>
-
-                      <div>
-                        <label className="block text-sm font-medium text-gray-300 mb-2">Stock Mínimo</label>
-                        <input
-                          type="number"
-                          value={formData.minStock}
-                          onChange={(e) => setFormData({...formData, minStock: e.target.value})}
-                          className="glassmorphism-input w-full shadow-xl shadow-blue-500/20"
-                          min="0"
-                          placeholder="0"
-                        />
-                      </div>
-
-                      {/* Campo Stock Real - Solo para administradores */}
-                      {user?.role === 'admin' && (
-                        <div>
-                          <label className="block text-sm font-medium text-gray-300 mb-2">Stock Real (Conteo)</label>
-                          <input
-                            type="number"
-                            value={formData.realStock || ''}
-                            onChange={(e) => setFormData({...formData, realStock: e.target.value})}
-                            className="glassmorphism-input w-full shadow-xl shadow-blue-500/20"
-                            min="0"
-                            placeholder="Stock físico contado"
-                          />
-                          <p className="text-xs text-blue-400/70 mt-1">Stock físico verificado por conteo manual</p>
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Fila 3: Precio y Descripción */}
-                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-                      <div>
-                        <label className="block text-sm font-medium text-gray-300 mb-2">Precio</label>
-                        <input
-                          type="number"
-                          step="0.01"
-                          value={formData.price}
-                          onChange={(e) => setFormData({...formData, price: e.target.value})}
-                          className="glassmorphism-input w-full shadow-xl shadow-blue-500/20"
-                          min="0"
-                          placeholder="0.00"
-                        />
-                      </div>
-
-                      <div className="lg:col-span-2">
-                        <label className="block text-sm font-medium text-gray-300 mb-2">Descripción</label>
-                        <input
-                          type="text"
-                          value={formData.description}
-                          onChange={(e) => setFormData({...formData, description: e.target.value})}
-                          className="glassmorphism-input w-full shadow-xl shadow-blue-500/20"
-                          placeholder="Descripción del producto (opcional)"
-                        />
-                      </div>
-                    </div>
-
-                    {/* Botones de acción */}
-                    <div className="flex flex-col sm:flex-row gap-3 pt-4 border-t border-white/10">
-                      <GradientButton type="submit" className="text-sm px-6 py-3 w-full sm:w-auto shadow-xl shadow-blue-500/20">
-                        {editingItem ? 'Actualizar Producto' : 'Crear Producto'}
-                      </GradientButton>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          resetForm();
-                          setExpandedSection(null);
-                        }}
-                        className="px-6 py-3 w-full sm:w-auto bg-white/5 text-gray-300 rounded-lg hover:bg-white/10 transition-colors text-sm backdrop-blur-sm shadow-xl shadow-blue-500/20"
-                      >
-                        Cancelar
-                      </button>
-                    </div>
-                  </form>
-                </div>
-              )}
-
-              {/* Formulario de Movimientos - Solo Admin */}
-              {expandedSection === 'movement' && selectedItem && user?.role === 'admin' && (
-                <div className="mx-4 mt-4 bg-white/5 border border-white/10 rounded-xl p-6 backdrop-blur-md shadow-2xl shadow-blue-500/20">
-                  <div className="flex items-center justify-between mb-4">
-                    <h3 className="text-lg font-semibold">
-                      <GradientText className="text-lg font-semibold">
-                        Movimiento - {selectedItem.name}
-                      </GradientText>
-                    </h3>
-                    <button
-                      onClick={() => setExpandedSection(null)}
-                      className="text-gray-400 hover:text-white transition-colors"
-                    >
-                      <ChevronUp className="w-5 h-5" />
-                    </button>
-                  </div>
-
-                  <form onSubmit={handleMovementSubmit} className="space-y-6">
-                    {/* Información del movimiento */}
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                      <div>
-                        <label className="block text-sm font-medium text-gray-300 mb-2">Tipo de Movimiento</label>
-                        <select
-                          value={movementData.type}
-                          onChange={(e) => setMovementData({...movementData, type: e.target.value})}
-                          className="glassmorphism-select w-full shadow-xl shadow-blue-500/20"
-                        >
-                          <option value="entry">Entrada</option>
-                          <option value="exit">Salida</option>
-                        </select>
-                      </div>
-
-                      <div>
-                        <label className="block text-sm font-medium text-gray-300 mb-2">Cantidad</label>
-                        <input
-                          type="number"
-                          value={movementData.quantity}
-                          onChange={(e) => setMovementData({...movementData, quantity: e.target.value})}
-                          className="glassmorphism-input w-full shadow-xl shadow-blue-500/20"
-                          min="1"
-                          placeholder="0"
-                          required
-                        />
-                      </div>
-
-                      <div>
-                        <label className="block text-sm font-medium text-gray-300 mb-2">Motivo</label>
-                        <input
-                          type="text"
-                          value={movementData.reason}
-                          onChange={(e) => setMovementData({...movementData, reason: e.target.value})}
-                          className="glassmorphism-input w-full shadow-xl shadow-blue-500/20"
-                          placeholder="Ej: Compra, Devolución, Ajuste"
-                          required
-                        />
-                      </div>
-                    </div>
-
-                    {/* Campos de costo - solo para entradas */}
-                    {movementData.type === 'entry' && (
-                      <div className="bg-green-500/5 border border-green-500/20 rounded-lg p-4 space-y-4">
-                        <h4 className="text-sm font-medium text-green-300 mb-2 flex items-center gap-2">
-                          <DollarSign size={16} />
-                          Información de Costo (Opcional)
-                        </h4>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                          <div>
-                            <label className="block text-sm font-medium text-gray-300 mb-2">
-                              Costo Total
-                              <span className="text-gray-500 text-xs ml-1">(Se registrará como gasto automáticamente)</span>
-                            </label>
-                            <input
-                              type="number"
-                              value={movementData.cost}
-                              onChange={(e) => setMovementData({...movementData, cost: e.target.value})}
-                              className="glassmorphism-input w-full shadow-xl shadow-blue-500/20"
-                              min="0"
-                              step="0.01"
-                              placeholder="0.00"
-                            />
-                          </div>
-
-                          <div>
-                            <label className="block text-sm font-medium text-gray-300 mb-2">Método de Pago</label>
-                            <select
-                              value={movementData.paymentMethod}
-                              onChange={(e) => setMovementData({...movementData, paymentMethod: e.target.value})}
-                              className="glassmorphism-select w-full shadow-xl shadow-blue-500/20"
-                            >
-                              {paymentMethods.map(method => (
-                                <option key={method.id} value={method.id}>
-                                  {method.emoji} {method.name}
-                                </option>
-                              ))}
-                            </select>
-                          </div>
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Notas adicionales */}
-                    <div>
-                      <label className="block text-sm font-medium text-gray-300 mb-2">
-                        Notas Adicionales 
-                        <span className="text-gray-500 text-xs ml-1">(Opcional)</span>
-                      </label>
-                      <textarea
-                        value={movementData.notes}
-                        onChange={(e) => setMovementData({...movementData, notes: e.target.value})}
-                        className="glassmorphism-textarea w-full shadow-xl shadow-blue-500/20"
-                        rows="3"
-                        placeholder="Observaciones adicionales del movimiento..."
-                      />
-                    </div>
-
-                    {/* Información del producto seleccionado */}
-                    <div className="bg-blue-500/5 border border-blue-500/20 rounded-lg p-4">
-                      <h4 className="text-sm font-medium text-blue-300 mb-2">Producto Seleccionado</h4>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 text-sm">
-                        <div>
-                          <span className="text-gray-400">Nombre:</span>
-                          <span className="text-white ml-2">{selectedItem.name}</span>
-                        </div>
-                        <div>
-                          <span className="text-gray-400">Stock Actual:</span>
-                          <span className="text-white ml-2">{selectedItem.stock}</span>
-                        </div>
-                        <div>
-                          <span className="text-gray-400">Categoría:</span>
-                          <span className="text-white ml-2">{selectedItem.category?.replace('_', ' ').toUpperCase()}</span>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Botones de acción */}
-                    <div className="flex flex-col sm:flex-row gap-3 pt-4 border-t border-white/10">
-                      <GradientButton type="submit" className="text-sm px-6 py-3 w-full sm:w-auto shadow-xl shadow-blue-500/20">
-                        Registrar Movimiento
-                      </GradientButton>
-                      <button
-                        type="button"
-                        onClick={() => setExpandedSection(null)}
-                        className="px-6 py-3 w-full sm:w-auto bg-white/5 text-gray-300 rounded-lg hover:bg-white/10 transition-colors text-sm backdrop-blur-sm shadow-xl shadow-blue-500/20"
-                      >
-                        Cancelar
-                      </button>
-                    </div>
-                  </form>
-                </div>
-              )}
-
-              {/* Formulario de Ventas - Solo Admin */}
-              {expandedSection === 'sale' && selectedItem && user?.role === 'admin' && (
-                <div className="mx-4 mt-4 bg-white/5 border border-white/10 rounded-xl p-6 backdrop-blur-md shadow-2xl shadow-blue-500/20">
-                  <div className="flex flex-col lg:flex-row lg:items-center justify-between mb-6 gap-4">
-                    <div>
-                      <h3 className="text-lg font-semibold">
-                        <GradientText className="text-lg font-semibold">
-                          Venta - {selectedItem.name}
-                        </GradientText>
-                      </h3>
-                      <div className="mt-2">
-                        <span className="text-3xl font-bold text-green-400">
-                          ${selectedItem.price || 0}
-                        </span>
-                        <span className="text-sm text-gray-400 ml-2">por unidad</span>
-                      </div>
-                    </div>
-                    <button
-                      onClick={() => setExpandedSection(null)}
-                      className="text-gray-400 hover:text-white transition-colors lg:self-start"
-                    >
-                      <ChevronUp className="w-5 h-5" />
-                    </button>
-                  </div>
-
-                  <form onSubmit={handleSaleSubmit} className="space-y-6">
-                    {/* Información de la venta */}
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                      <div className="space-y-4">
-                        <div>
-                          <label className="block text-sm font-medium text-gray-300 mb-2">Cantidad a Vender</label>
-                          <input
-                            type="number"
-                            value={saleData.quantity}
-                            onChange={(e) => setSaleData({...saleData, quantity: e.target.value})}
-                            className="glassmorphism-input w-full text-lg text-center font-semibold shadow-xl shadow-blue-500/20"
-                            min="1"
-                            max={selectedItem.stock || selectedItem.currentStock || selectedItem.quantity || 0}
-                            placeholder="0"
-                            required
-                          />
-                          <p className="text-xs text-gray-400 mt-2 text-center">
-                            Stock disponible: <span className="text-green-400 font-medium">{selectedItem.stock || selectedItem.currentStock || selectedItem.quantity || 0}</span> unidades
-                          </p>
-                        </div>
-                      </div>
-
-                      <div className="flex flex-col justify-center">
-                        <label className="block text-sm font-medium text-gray-300 mb-2">Total a Pagar</label>
-                        <div className="bg-gradient-to-r from-green-500/10 to-emerald-500/10 border border-green-500/30 rounded-xl p-6 text-center backdrop-blur-sm shadow-xl shadow-green-500/20">
-                          <div className="text-xs text-green-300 mb-1">Total</div>
-                          <span className="text-4xl font-bold text-green-400">
-                            ${((parseFloat(saleData.quantity) || 0) * (parseFloat(selectedItem.price) || 0)).toFixed(2)}
-                          </span>
-                          <div className="text-xs text-gray-400 mt-2">
-                            {saleData.quantity || 0} × ${selectedItem.price || 0}
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Información del producto */}
-                    <div className="bg-blue-500/5 border border-blue-500/20 rounded-lg p-4">
-                      <h4 className="text-sm font-medium text-blue-300 mb-3">Detalles del Producto</h4>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 text-sm">
-                        <div>
-                          <span className="text-gray-400">Precio unitario:</span>
-                          <span className="text-green-400 ml-2 font-semibold">${selectedItem.price || 0}</span>
-                        </div>
-                        <div>
-                          <span className="text-gray-400">Categoría:</span>
-                          <span className="text-white ml-2">{selectedItem.category?.replace('_', ' ').toUpperCase()}</span>
-                        </div>
-                        <div>
-                          <span className="text-gray-400">Stock después:</span>
-                          <span className="text-blue-400 ml-2 font-semibold">
-                            {(selectedItem.stock || 0) - (parseInt(saleData.quantity) || 0)} unidades
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Botones de acción */}
-                    <div className="flex flex-col sm:flex-row gap-3 pt-4 border-t border-white/10">
-                      <GradientButton type="submit" className="text-sm px-6 py-3 w-full sm:w-auto shadow-xl shadow-green-500/20">
-                        <div className="flex items-center justify-center gap-2">
-                          <Package2 className="w-4 h-4" />
-                          <span>Registrar Venta</span>
-                        </div>
-                      </GradientButton>
-                      <button
-                        type="button"
-                        onClick={() => setExpandedSection(null)}
-                        className="px-6 py-3 w-full sm:w-auto bg-white/5 text-gray-300 rounded-lg hover:bg-white/10 transition-colors text-sm backdrop-blur-sm shadow-xl shadow-blue-500/20"
-                      >
-                        Cancelar
-                      </button>
-                    </div>
-                  </form>
-                </div>
-              )}
-
-              {/* Formulario de Conteo */}
-              {expandedSection === 'count' && selectedItem && (
-                <div className="mx-4 mt-4 bg-white/5 border border-white/10 rounded-xl p-6 backdrop-blur-md shadow-2xl shadow-yellow-500/20">
-                  <div className="flex flex-col lg:flex-row lg:items-center justify-between mb-6 gap-4">
-                    <div>
-                      <h3 className="text-lg font-semibold">
-                        <GradientText className="text-lg font-semibold">
-                          Conteo de Stock - {selectedItem.name}
-                        </GradientText>
-                      </h3>
-                      <div className="mt-2 text-sm text-gray-400">
-                        <div>Stock Esperado: <span className="text-purple-400 font-medium">{selectedItem.initialStock + (selectedItem.entries || 0) - (selectedItem.exits || 0) - (selectedItem.sales || 0)}</span></div>
-                        <div>Stock Actual: <span className="text-blue-400 font-medium">{selectedItem.realStock || selectedItem.stock || 0}</span></div>
-                      </div>
-                    </div>
-                    <button
-                      onClick={() => setExpandedSection(null)}
-                      className="text-gray-400 hover:text-white transition-colors lg:self-start"
-                    >
-                      <ChevronUp className="w-5 h-5" />
-                    </button>
-                  </div>
-
-                  <form onSubmit={handleCountSubmit} className="space-y-6">
-                    {/* Información del conteo */}
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                      <div>
-                        <label className="block text-sm font-medium text-gray-300 mb-2">Stock Físico Contado</label>
-                        <input
-                          type="number"
-                          value={countData.realStock}
-                          onChange={(e) => setCountData({...countData, realStock: e.target.value})}
-                          className="glassmorphism-input w-full text-lg text-center font-semibold shadow-xl shadow-blue-500/20"
-                          min="0"
-                          placeholder="Ingrese stock real"
-                          required
-                        />
-                        <p className="text-xs text-gray-400 mt-1 text-center">Stock verificado físicamente</p>
-                      </div>
-
-                      <div>
-                        <label className="block text-sm font-medium text-gray-300 mb-2">Entradas Adicionales</label>
-                        <input
-                          type="number"
-                          value={countData.entries}
-                          onChange={(e) => setCountData({...countData, entries: e.target.value})}
-                          className="glassmorphism-input w-full text-lg text-center shadow-xl shadow-blue-500/20"
-                          min="0"
-                          placeholder="0"
-                        />
-                        <p className="text-xs text-gray-400 mt-1 text-center">Productos recibidos</p>
-                      </div>
-
-                      <div>
-                        <label className="block text-sm font-medium text-gray-300 mb-2">Salidas Adicionales</label>
-                        <input
-                          type="number"
-                          value={countData.exits}
-                          onChange={(e) => setCountData({...countData, exits: e.target.value})}
-                          className="glassmorphism-input w-full text-lg text-center shadow-xl shadow-blue-500/20"
-                          min="0"
-                          placeholder="0"
-                        />
-                        <p className="text-xs text-gray-400 mt-1 text-center">Productos enviados</p>
-                      </div>
-                    </div>
-
-                    {/* Comparativa de stocks */}
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 p-4 bg-yellow-500/5 border border-yellow-500/20 rounded-lg">
-                      <div className="text-center">
-                        <div className="text-xs text-gray-400 mb-1">Stock Esperado</div>
-                        <div className="text-lg font-bold text-purple-400">
-                          {selectedItem.initialStock + (selectedItem.entries || 0) - (selectedItem.exits || 0) - (selectedItem.sales || 0)}
-                        </div>
-                      </div>
-                      <div className="text-center">
-                        <div className="text-xs text-gray-400 mb-1">Stock Actual</div>
-                        <div className="text-lg font-bold text-blue-400">
-                          {selectedItem.realStock || selectedItem.stock || 0}
-                        </div>
-                      </div>
-                      <div className="text-center">
-                        <div className="text-xs text-gray-400 mb-1">Diferencia</div>
-                        <div className={`text-lg font-bold ${
-                          ((selectedItem.realStock || selectedItem.stock || 0) - (selectedItem.initialStock + (selectedItem.entries || 0) - (selectedItem.exits || 0) - (selectedItem.sales || 0))) >= 0 
-                            ? 'text-green-400' : 'text-red-400'
-                        }`}>
-                          {((selectedItem.realStock || selectedItem.stock || 0) - (selectedItem.initialStock + (selectedItem.entries || 0) - (selectedItem.exits || 0) - (selectedItem.sales || 0))) >= 0 ? '+' : ''}
-                          {(selectedItem.realStock || selectedItem.stock || 0) - (selectedItem.initialStock + (selectedItem.entries || 0) - (selectedItem.exits || 0) - (selectedItem.sales || 0))}
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Notas del conteo */}
-                    <div>
-                      <label className="block text-sm font-medium text-gray-300 mb-2">
-                        Notas del Conteo 
-                        <span className="text-gray-500 text-xs ml-1">(Opcional)</span>
-                      </label>
-                      <textarea
-                        value={countData.notes}
-                        onChange={(e) => setCountData({...countData, notes: e.target.value})}
-                        className="glassmorphism-textarea w-full shadow-xl shadow-blue-500/20"
-                        rows="3"
-                        placeholder="Observaciones del conteo, discrepancias encontradas, etc."
-                      />
-                    </div>
-
-                    {/* Botones de acción */}
-                    <div className="flex flex-col sm:flex-row gap-3 pt-4 border-t border-white/10">
-                      <GradientButton type="submit" className="text-sm px-6 py-3 w-full sm:w-auto shadow-xl shadow-yellow-500/20">
-                        <div className="flex items-center justify-center gap-2">
-                          <Calculator className="w-4 h-4" />
-                          <span>Guardar Conteo</span>
-                        </div>
-                      </GradientButton>
-                      <button
-                        type="button"
-                        onClick={() => setExpandedSection(null)}
-                        className="px-6 py-3 w-full sm:w-auto bg-white/5 text-gray-300 rounded-lg hover:bg-white/10 transition-colors text-sm backdrop-blur-sm shadow-xl shadow-blue-500/20"
-                      >
-                        Cancelar
-                      </button>
-                    </div>
-                  </form>
-                </div>
-              )}
-
-              {/* Header de tabla tipo Excel */}
-              <div className="px-4 py-3 bg-gradient-to-r from-white/10 to-white/5 border-b border-white/20 backdrop-blur-sm shadow-xl shadow-blue-500/20">
-                {/* Desktop Header */}
-                <div className="hidden md:grid grid-cols-12 gap-2 text-xs font-semibold text-gray-200 uppercase tracking-wide">
-                  <div className="col-span-2 text-purple-300">Producto</div>
-                  <div className="col-span-1 text-center text-gray-300">Inicial</div>
-                  <div className="col-span-1 text-center text-green-300">Entradas</div>
-                  <div className="col-span-1 text-center text-red-300">Salidas</div>
-                  <div className="col-span-1 text-center text-orange-300">Ventas</div>
-                  <div className="col-span-1 text-center text-purple-300">Esperado</div>
-                  <div className="col-span-1 text-center text-blue-300">Real</div>
-                  <div className="col-span-1 text-center text-yellow-300">Diferencia</div>
-                  <div className="col-span-1 text-center text-cyan-300">Estado</div>
-                  <div className="col-span-2 text-center text-pink-300">Acciones</div>
-                </div>
-                {/* Mobile Header */}
-                <div className="block md:hidden text-center">
-                  <GradientText className="text-sm font-semibold">
-                    Inventario de Productos
-                  </GradientText>
-                </div>
-              </div>
-
-              {/* Lista de productos */}
-              {loading ? (
-                <div className="p-8 text-center">
-                  <div className="inline-block animate-spin rounded-full h-6 w-6 border-b-2 border-blue-500"></div>
-                  <p className="mt-2 text-gray-400 text-sm">Cargando...</p>
-                </div>
-              ) : filteredInventory.length === 0 ? (
-                <div className="p-8 text-center">
-                  <Package2 className="w-12 h-12 text-gray-600 mx-auto mb-3" />
-                  <p className="text-gray-400 text-sm">No hay productos en el inventario</p>
-                </div>
-              ) : (
-                <div className="space-y-4 p-4">
-                  {filteredInventory.map((item) => {
-                    const stockStatus = getStockStatus(item);
-                    const currentStock = item.stock || item.currentStock || item.quantity || 0;
-                    const initialStock = item.initialStock || 0;
-                    const entries = item.entries || 0;
-                    const exits = item.exits || 0;
-                    const sales = item.sales || 0; 
-                    const minStock = item.minStock || 0;
-                    const realStock = item.realStock || currentStock; // Stock real ingresado por barbero
-                    // Stock esperado: lo que debería haber para diferencia = 0
-                    const expectedStock = initialStock + entries - exits - sales;
-                    // Diferencia: Stock real - Stock esperado
-                    const difference = realStock - expectedStock;
-                    
-                    return (
-                      <div key={item._id} className="bg-white/5 border border-white/10 rounded-xl px-4 py-4 md:py-3 hover:bg-white/10 hover:border-white/20 transition-all duration-300 backdrop-blur-sm shadow-lg shadow-blue-500/10 group">
-                        {/* Desktop Layout */}
-                        <div className="hidden md:grid grid-cols-12 gap-2 items-center">
                           {/* Producto */}
-                          <div className="col-span-2">
-                            <div className="space-y-1">
-                              <GradientText className="font-semibold text-sm group-hover:text-purple-300 transition-colors">
-                                {item.name}
-                              </GradientText>
-                              <p className="text-xs text-gray-400 capitalize">
-                                {item.category?.replace('_', ' ')}
-                              </p>
-                            </div>
+                          <div className="sticky left-0 z-10 col-span-2 px-3 py-2.5 border-r border-white/[0.05] flex flex-col justify-center min-w-0 bg-[#14171d]">
+                            <p className="text-sm font-medium text-white truncate" title={item.name}>{item.name}</p>
+                            <p className="text-[11px] text-gray-500 capitalize truncate">{item.category?.replace('_', ' ')}</p>
                           </div>
-                          
-                          {/* Stock Inicial */}
-                          <div className="col-span-1 text-center">
-                            <span className="px-2 py-1 bg-gray-600/20 text-gray-300 font-semibold text-sm rounded-md">{initialStock}</span>
+
+                          {/* Inicial */}
+                          <div className="col-span-1 px-2 py-2.5 border-r border-white/[0.05] flex items-center justify-center">
+                            <span className="text-sm font-medium text-gray-300 tabular-nums">{initialStock}</span>
                           </div>
-                          
+
                           {/* Entradas */}
-                          <div className="col-span-1 text-center">
-                            <span className="px-2 py-1 bg-green-600/20 text-green-400 font-semibold text-sm rounded-md">{entries}</span>
+                          <div className="col-span-1 px-2 py-2.5 border-r border-white/[0.05] flex items-center justify-center">
+                            <span className="text-sm font-medium text-emerald-400 tabular-nums">{entries}</span>
                           </div>
-                          
+
                           {/* Salidas */}
-                          <div className="col-span-1 text-center">
-                            <span className="px-2 py-1 bg-red-600/20 text-red-400 font-semibold text-sm rounded-md">{exits}</span>
+                          <div className="col-span-1 px-2 py-2.5 border-r border-white/[0.05] flex items-center justify-center">
+                            <span className="text-sm font-medium text-red-400 tabular-nums">{exits}</span>
                           </div>
-                          
+
                           {/* Ventas */}
-                          <div className="col-span-1 text-center">
-                            <span className="px-2 py-1 bg-orange-600/20 text-orange-400 font-semibold text-sm rounded-md">{sales}</span>
+                          <div className="col-span-1 px-2 py-2.5 border-r border-white/[0.05] flex items-center justify-center">
+                            <span className="text-sm font-medium text-amber-400 tabular-nums">{sales}</span>
                           </div>
-                          
-                          {/* Stock Esperado */}
-                          <div className="col-span-1 text-center">
-                            <span className="px-2 py-1 bg-purple-600/20 text-purple-400 font-semibold text-sm rounded-md">{expectedStock}</span>
+
+                          {/* Esperado */}
+                          <div className="col-span-1 px-2 py-2.5 border-r border-white/[0.05] flex items-center justify-center">
+                            <span className="text-sm font-medium text-brand-300 tabular-nums">{expectedStock}</span>
                           </div>
-                          
-                          {/* Stock Real */}
-                          <div className="col-span-1 text-center">
-                            <span className="px-2 py-1 bg-blue-600/20 text-blue-400 font-semibold text-sm rounded-md">
-                              {realStock}
-                            </span>
+
+                          {/* Real */}
+                          <div className="col-span-1 px-2 py-2.5 border-r border-white/[0.05] flex items-center justify-center">
+                            <span className="text-sm font-medium text-blue-400 tabular-nums">{realStock}</span>
                           </div>
-                          
+
                           {/* Diferencia */}
-                          <div className="col-span-1 text-center">
-                            <span 
-                              className={`px-2 py-1 font-semibold text-sm rounded-md cursor-help ${
-                                difference === 0 ? 'bg-gray-600/20 text-gray-300' :
-                                difference > 0 ? 'bg-green-600/20 text-green-400' : 
-                                'bg-red-600/20 text-red-400'
+                          <div className="col-span-1 px-2 py-2.5 border-r border-white/[0.05] flex items-center justify-center">
+                            <span
+                              className={`text-sm font-semibold tabular-nums cursor-help ${
+                                difference === 0 ? 'text-gray-500' :
+                                difference > 0 ? 'text-emerald-400' : 'text-red-400'
                               }`}
                               title={
                                 difference === 0 ? 'Inventario consistente' :
@@ -1352,51 +964,57 @@ const Inventory = () => {
                                 `Faltante de ${Math.abs(difference)} unidades. Puede deberse a reembolsos o conteos manuales.`
                               }
                             >
-                              {difference === 0 ? 'OK' : 
-                               difference > 0 ? `+${difference}` : 
-                               `${difference}`}
+                              {difference === 0 ? '0' : difference > 0 ? `+${difference}` : `${difference}`}
                             </span>
                           </div>
-                          
+
                           {/* Estado */}
-                          <div className="col-span-1 text-center">
-                            <span className={`px-2 py-1 rounded-full text-xs font-medium ${stockStatus.bgColor} ${stockStatus.color}`}>
-                              {stockStatus.status === 'out' ? 'Sin' : 
-                               stockStatus.status === 'low' ? 'Bajo' : 'OK'}
+                          <div className="col-span-1 px-2 py-2.5 border-r border-white/[0.05] flex items-center justify-center">
+                            <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-medium ${stockStatus.bgColor} ${stockStatus.color}`}>
+                              <span className={`w-1.5 h-1.5 rounded-full ${
+                                stockStatus.status === 'out' ? 'bg-red-400' :
+                                stockStatus.status === 'low' ? 'bg-amber-400' : 'bg-emerald-400'
+                              }`} />
+                              {stockStatus.status === 'out' ? 'Sin' : stockStatus.status === 'low' ? 'Bajo' : 'OK'}
                             </span>
                           </div>
-                          
+
                           {/* Acciones */}
-                          <div className="col-span-2 flex justify-center gap-1">
+                          {/* Admin: editar, entrada, salida, venta y eliminar; otros roles: solo conteo */}
+                          <div className="col-span-2 px-3 py-2.5 flex items-center justify-center gap-1">
                             {user?.role === 'admin' ? (
                               <>
                                 <button
                                   onClick={() => handleEdit(item)}
-                                  className="p-2 bg-blue-600/20 text-blue-400 rounded-lg hover:bg-blue-600/30 transition-all duration-200 shadow-lg shadow-blue-500/20 hover:shadow-xl hover:shadow-blue-500/30"
+                                  className="p-2 min-h-11 min-w-11 flex items-center justify-center rounded-md text-blue-400 hover:bg-blue-500/15 transition-colors duration-150"
                                   title="Editar"
                                 >
                                   <Edit className="w-4 h-4" />
                                 </button>
-                                
                                 <button
-                                  onClick={() => handleMovement(item)}
-                                  className="p-2 bg-purple-600/20 text-purple-400 rounded-lg hover:bg-purple-600/30 transition-all duration-200 shadow-lg shadow-purple-500/20 hover:shadow-xl hover:shadow-purple-500/30"
-                                  title="Movimiento"
+                                  onClick={() => handleEntry(item)}
+                                  className="p-2 min-h-11 min-w-11 flex items-center justify-center rounded-md text-emerald-400 hover:bg-emerald-500/15 transition-colors duration-150"
+                                  title="Agregar stock (entrada)"
                                 >
-                                  <RotateCcw className="w-4 h-4" />
+                                  <Plus className="w-4 h-4" />
                                 </button>
-                                
+                                <button
+                                  onClick={() => handleExit(item)}
+                                  className="p-2 min-h-11 min-w-11 flex items-center justify-center rounded-md text-red-400 hover:bg-red-500/15 transition-colors duration-150"
+                                  title="Retirar stock (salida)"
+                                >
+                                  <Minus className="w-4 h-4" />
+                                </button>
                                 <button
                                   onClick={() => handleSale(item)}
-                                  className="p-2 bg-green-600/20 text-green-400 rounded-lg hover:bg-green-600/30 transition-all duration-200 shadow-lg shadow-green-500/20 hover:shadow-xl hover:shadow-green-500/30"
+                                  className="p-1.5 rounded-md text-brand-300 hover:bg-brand-500/15 transition-colors duration-150"
                                   title="Venta"
                                 >
                                   <ShoppingCart className="w-4 h-4" />
                                 </button>
-                                
                                 <button
                                   onClick={() => handleDelete(item)}
-                                  className="p-2 bg-red-600/20 text-red-400 rounded-lg hover:bg-red-600/30 transition-all duration-200 shadow-lg shadow-red-500/20 hover:shadow-xl hover:shadow-red-500/30"
+                                  className="p-2 min-h-11 min-w-11 flex items-center justify-center rounded-md text-red-400 hover:bg-red-500/15 transition-colors duration-150"
                                   title="Eliminar"
                                 >
                                   <Trash2 className="w-4 h-4" />
@@ -1405,7 +1023,7 @@ const Inventory = () => {
                             ) : (
                               <button
                                 onClick={() => handleCount(item)}
-                                className="p-2 bg-yellow-600/20 text-yellow-400 rounded-lg hover:bg-yellow-600/30 transition-all duration-200 shadow-lg shadow-yellow-500/20 hover:shadow-xl hover:shadow-yellow-500/30"
+                                className="p-1.5 rounded-md text-amber-400 hover:bg-amber-500/15 transition-colors duration-150"
                                 title="Conteo de Stock"
                               >
                                 <Calculator className="w-4 h-4" />
@@ -1413,137 +1031,11 @@ const Inventory = () => {
                             )}
                           </div>
                         </div>
-
-                        {/* Mobile Layout - Card Style */}
-                        <div className="block md:hidden space-y-4">
-                          {/* Producto Header */}
-                          <div className="flex items-center justify-between pb-3 border-b border-white/10">
-                            <div className="flex-1">
-                              <GradientText className="font-semibold text-base group-hover:text-purple-300 transition-colors">
-                                {item.name}
-                              </GradientText>
-                              <p className="text-sm text-gray-400 capitalize mt-1">
-                                {item.category?.replace('_', ' ')}
-                              </p>
-                            </div>
-                            <div className="ml-4">
-                              <span className={`px-3 py-1.5 rounded-full text-sm font-medium ${stockStatus.bgColor} ${stockStatus.color}`}>
-                                {stockStatus.status === 'out' ? 'Sin Stock' : 
-                                 stockStatus.status === 'low' ? 'Stock Bajo' : 'En Stock'}
-                              </span>
-                            </div>
-                          </div>
-
-                          {/* Stock Information Grid */}
-                          <div className="grid grid-cols-3 gap-3">
-                            {/* Primera fila */}
-                            <div>
-                              <label className="text-xs font-medium text-gray-400 uppercase tracking-wide block text-center">Inicial</label>
-                              <div className="mt-1">
-                                <span className="px-2 py-1.5 bg-gray-600/20 text-gray-300 font-semibold text-xs rounded block text-center">{initialStock}</span>
-                              </div>
-                            </div>
-                            <div>
-                              <label className="text-xs font-medium text-green-400 uppercase tracking-wide block text-center">Entradas</label>
-                              <div className="mt-1">
-                                <span className="px-2 py-1.5 bg-green-600/20 text-green-400 font-semibold text-xs rounded block text-center">{entries}</span>
-                              </div>
-                            </div>
-                            <div>
-                              <label className="text-xs font-medium text-red-400 uppercase tracking-wide block text-center">Salidas</label>
-                              <div className="mt-1">
-                                <span className="px-2 py-1.5 bg-red-600/20 text-red-400 font-semibold text-xs rounded block text-center">{exits}</span>
-                              </div>
-                            </div>
-                            
-                            {/* Segunda fila */}
-                            <div>
-                              <label className="text-xs font-medium text-orange-400 uppercase tracking-wide block text-center">Ventas</label>
-                              <div className="mt-1">
-                                <span className="px-2 py-1.5 bg-orange-600/20 text-orange-400 font-semibold text-xs rounded block text-center">{sales}</span>
-                              </div>
-                            </div>
-                            <div>
-                              <label className="text-xs font-medium text-purple-400 uppercase tracking-wide block text-center">Esperado</label>
-                              <div className="mt-1">
-                                <span className="px-2 py-1.5 bg-purple-600/20 text-purple-400 font-semibold text-xs rounded block text-center">{expectedStock}</span>
-                              </div>
-                            </div>
-                            <div>
-                              <label className="text-xs font-medium text-blue-400 uppercase tracking-wide block text-center">Real</label>
-                              <div className="mt-1">
-                                <span className="px-2 py-1.5 bg-blue-600/20 text-blue-400 font-semibold text-xs rounded block text-center">{realStock}</span>
-                              </div>
-                            </div>
-                          </div>
-
-                          {/* Difference Row */}
-                          <div className="pt-3 border-t border-white/10 flex justify-center">
-                            <div className="text-center">
-                              <label className="text-xs font-medium text-yellow-400 uppercase tracking-wide block">Diferencia</label>
-                              <div className="mt-1">
-                                <span className={`px-3 py-1.5 font-semibold text-xs rounded block text-center ${difference >= 0 ? 'bg-green-600/20 text-green-400' : 'bg-red-600/20 text-red-400'}`}>
-                                  {difference > 0 ? '+' : ''}{difference}
-                                </span>
-                              </div>
-                            </div>
-                          </div>
-
-                          {/* Actions */}
-                          <div className="pt-4 border-t border-white/10">
-                            <label className="text-xs font-medium text-pink-400 uppercase tracking-wide mb-3 block">Acciones</label>
-                            <div className="flex justify-center gap-2">
-                              {user?.role === 'admin' ? (
-                                <>
-                                  <button
-                                    onClick={() => handleEdit(item)}
-                                    className="p-2 bg-blue-600/20 text-blue-400 rounded-lg hover:bg-blue-600/30 transition-all duration-200 shadow-lg shadow-blue-500/20 hover:shadow-xl hover:shadow-blue-500/30"
-                                    title="Editar"
-                                  >
-                                    <Edit className="w-4 h-4" />
-                                  </button>
-                                  
-                                  <button
-                                    onClick={() => handleMovement(item)}
-                                    className="p-2 bg-purple-600/20 text-purple-400 rounded-lg hover:bg-purple-600/30 transition-all duration-200 shadow-lg shadow-purple-500/20 hover:shadow-xl hover:shadow-purple-500/30"
-                                    title="Movimiento"
-                                  >
-                                    <RotateCcw className="w-4 h-4" />
-                                  </button>
-                                  
-                                  <button
-                                    onClick={() => handleSale(item)}
-                                    className="p-2 bg-green-600/20 text-green-400 rounded-lg hover:bg-green-600/30 transition-all duration-200 shadow-lg shadow-green-500/20 hover:shadow-xl hover:shadow-green-500/30"
-                                    title="Venta"
-                                  >
-                                    <ShoppingCart className="w-4 h-4" />
-                                  </button>
-                                  
-                                  <button
-                                    onClick={() => handleDelete(item)}
-                                    className="p-2 bg-red-600/20 text-red-400 rounded-lg hover:bg-red-600/30 transition-all duration-200 shadow-lg shadow-red-500/20 hover:shadow-xl hover:shadow-red-500/30"
-                                    title="Eliminar"
-                                  >
-                                    <Trash2 className="w-4 h-4" />
-                                  </button>
-                                </>
-                              ) : (
-                                <button
-                                  onClick={() => handleCount(item)}
-                                  className="p-2 bg-yellow-600/20 text-yellow-400 rounded-lg hover:bg-yellow-600/30 transition-all duration-200 shadow-lg shadow-yellow-500/20 hover:shadow-xl hover:shadow-yellow-500/30"
-                                  title="Conteo de Stock"
-                                >
-                                  <Calculator className="w-4 h-4" />
-                                </button>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
+                      );
+                    })
+                  )}
                 </div>
-              )}
+              </div>
             </div>
           </div>
       </PageContainer>
@@ -1570,87 +1062,464 @@ const Inventory = () => {
         onRefresh={loadInventory}
       />
 
-      {/* Modal de Confirmación de Eliminación */}
-      {showDeleteModal && itemToDelete && (
-        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-[9999] p-4 sm:p-6 lg:p-8">
-          <div className="relative w-full max-w-sm sm:max-w-md lg:max-w-lg mx-auto">
-            <div className="relative backdrop-blur-md bg-red-500/5 border border-red-500/20 shadow-red-500/20 rounded-2xl shadow-2xl flex flex-col overflow-hidden">
-              {/* Header del modal */}
-              <div className="relative z-10 flex-shrink-0 p-4 sm:p-6">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2 sm:gap-3">
-                    <div className="p-1.5 sm:p-2 rounded-lg bg-red-500/20">
-                      <XCircle className="w-4 h-4 sm:w-5 sm:h-5 text-red-400" />
-                    </div>
-                    <h3 className="text-base sm:text-lg font-semibold text-white">Eliminar Producto</h3>
-                  </div>
-                  <button
-                    onClick={handleCancelDelete}
-                    className="p-1 text-gray-400 hover:text-white transition-colors duration-200"
-                  >
-                    <XCircle className="w-4 h-4 sm:w-5 sm:h-5" />
-                  </button>
-                </div>
-              </div>
+      {/* Modal: Nuevo / Editar Producto */}
+      <Modal
+        isOpen={showProductModal}
+        onClose={() => { resetForm(); setShowProductModal(false); }}
+        title={editingItem ? 'Editar Producto' : 'Nuevo Producto'}
+        subtitle={editingItem ? editingItem.name : 'Completa los datos del producto'}
+        icon={editingItem ? Edit : PackagePlus}
+        iconClassName="text-brand-300"
+        iconBoxClassName="bg-brand-500/10 border-brand-500/20"
+        accentClassName="bg-[#151821] border-white/[0.10]"
+        size="2xl"
+        footer={
+          <div className="flex flex-col sm:flex-row gap-3 sm:justify-end">
+            <button
+              type="button"
+              onClick={() => { resetForm(); setShowProductModal(false); }}
+              className="px-5 py-2.5 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.08] text-gray-300 hover:text-white text-sm font-medium transition-colors"
+            >
+              Cancelar
+            </button>
+            <GradientButton type="submit" form="product-form" size="sm" className="shadow-soft">
+              <span className="flex items-center gap-2">
+                <Save className="w-4 h-4" />
+                {editingItem ? 'Actualizar Producto' : 'Crear Producto'}
+              </span>
+            </GradientButton>
+          </div>
+        }
+      >
+        <form id="product-form" onSubmit={handleSubmit} className="space-y-5">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-2">Nombre</label>
+              <input
+                type="text"
+                value={formData.name}
+                onChange={(e) => setFormData({...formData, name: e.target.value})}
+                className="glassmorphism-input w-full"
+                placeholder="Nombre del producto"
+                required
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-2">Código</label>
+              <input
+                type="text"
+                value={formData.code}
+                onChange={(e) => setFormData({...formData, code: e.target.value})}
+                className="glassmorphism-input w-full"
+                placeholder="Ej: PRD001"
+                required
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-2">Categoría</label>
+              <select
+                value={formData.category}
+                onChange={(e) => setFormData({...formData, category: e.target.value})}
+                className="glassmorphism-select w-full"
+              >
+                {categories.map(cat => (
+                  <option key={cat} value={cat}>
+                    {cat.replace('_', ' ').toUpperCase()}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
 
-              {/* Contenido */}
-              <div className="flex-1 px-4 sm:px-6 pb-4 sm:pb-6">
-                <div className="space-y-3 sm:space-y-4">
-                  {/* Información del producto */}
-                  <div className="p-3 sm:p-4 bg-white/5 rounded-lg border border-white/10">
-                    <p className="text-white/80 text-sm sm:text-base leading-relaxed mb-2">
-                      ¿Estás seguro de que quieres eliminar este producto?
-                    </p>
-                    <div className="bg-white/10 rounded-lg p-3 border border-white/20">
-                      <div className="flex items-center gap-3">
-                        <Package2 className="w-5 h-5 text-blue-400 flex-shrink-0" />
-                        <div>
-                          <p className="text-white font-medium">{itemToDelete.name}</p>
-                          <p className="text-white/60 text-sm">
-                            {itemToDelete.category} • Stock: {itemToDelete.realStock || itemToDelete.stock || itemToDelete.currentStock || 0}
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                  
-                  {/* Textarea opcional para razón */}
-                  <div className="relative">
-                    <label className="block text-white/80 text-sm font-medium mb-2">
-                      Motivo de eliminación (opcional)
-                    </label>
-                    <textarea
-                      value={deletionReason}
-                      onChange={(e) => setDeletionReason(e.target.value)}
-                      placeholder="Escriba el motivo de la eliminación..."
-                      className="glassmorphism-textarea h-20 sm:h-24 text-xs sm:text-sm shadow-xl shadow-red-500/20"
-                      maxLength={200}
-                    />
-                    <div className="text-right text-xs text-white/60 mt-1">
-                      {deletionReason.length}/200 caracteres
-                    </div>
-                  </div>
-                  
-                  <div className="flex justify-end gap-2 sm:gap-3 pt-2 sm:pt-4">
-                    <button
-                      onClick={handleCancelDelete}
-                      className="px-3 sm:px-4 py-2 text-white/80 hover:text-white transition-all duration-200 text-xs sm:text-sm font-medium"
-                    >
-                      Cancelar
-                    </button>
-                    <button
-                      onClick={handleConfirmDelete}
-                      className="px-4 sm:px-6 py-2 bg-gradient-to-r from-red-500 to-red-600 text-white rounded-xl hover:from-red-600 hover:to-red-700 transition-all duration-200 text-xs sm:text-sm font-medium shadow-lg"
-                    >
-                      Confirmar Eliminación
-                    </button>
-                  </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-2">Stock Inicial</label>
+              <input
+                type="number"
+                value={formData.initialStock}
+                onChange={(e) => setFormData({...formData, initialStock: e.target.value})}
+                className="glassmorphism-input w-full"
+                min="0"
+                placeholder="0"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-2">Stock Mínimo</label>
+              <input
+                type="number"
+                value={formData.minStock}
+                onChange={(e) => setFormData({...formData, minStock: e.target.value})}
+                className="glassmorphism-input w-full"
+                min="0"
+                placeholder="0"
+              />
+            </div>
+            {user?.role === 'admin' && (
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">Stock Real (Conteo)</label>
+                <input
+                  type="number"
+                  value={formData.realStock || ''}
+                  onChange={(e) => setFormData({...formData, realStock: e.target.value})}
+                  className="glassmorphism-input w-full"
+                  min="0"
+                  placeholder="Stock físico contado"
+                />
+                <p className="text-xs text-blue-400/70 mt-1">Stock físico verificado por conteo manual</p>
+              </div>
+            )}
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-2">Precio</label>
+              <input
+                type="number"
+                step="0.01"
+                value={formData.price}
+                onChange={(e) => setFormData({...formData, price: e.target.value})}
+                className="glassmorphism-input w-full"
+                min="0"
+                placeholder="0.00"
+              />
+            </div>
+            <div className="lg:col-span-2">
+              <label className="block text-sm font-medium text-gray-300 mb-2">Descripción</label>
+              <input
+                type="text"
+                value={formData.description}
+                onChange={(e) => setFormData({...formData, description: e.target.value})}
+                className="glassmorphism-input w-full"
+                placeholder="Descripción del producto (opcional)"
+              />
+            </div>
+          </div>
+        </form>
+      </Modal>
+
+      {/* Modal: Entrada de Stock */}
+      <Modal
+        isOpen={showEntryModal && !!selectedItem}
+        onClose={() => { setShowEntryModal(false); resetMovementData('entry'); }}
+        title="Entrada de Stock"
+        subtitle={selectedItem?.name}
+        icon={Plus}
+        iconClassName="text-emerald-400"
+        iconBoxClassName="bg-emerald-500/10 border-emerald-500/20"
+        accentClassName="bg-emerald-500/5 border-emerald-500/20"
+        size="xl"
+        footer={
+          <div className="flex flex-col sm:flex-row gap-3 sm:justify-end">
+            <button
+              type="button"
+              onClick={() => { setShowEntryModal(false); resetMovementData('entry'); }}
+              className="px-5 py-2.5 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.08] text-gray-300 hover:text-white text-sm font-medium transition-colors"
+            >
+              Cancelar
+            </button>
+            <GradientButton type="submit" form="movement-form-entry" size="sm" className="shadow-soft">
+              <span className="flex items-center gap-2">
+                <Plus className="w-4 h-4" />
+                Registrar Entrada
+              </span>
+            </GradientButton>
+          </div>
+        }
+      >
+        {renderMovementForm('entry')}
+      </Modal>
+
+      {/* Modal: Salida de Stock */}
+      <Modal
+        isOpen={showExitModal && !!selectedItem}
+        onClose={() => { setShowExitModal(false); resetMovementData('exit'); }}
+        title="Salida de Stock"
+        subtitle={selectedItem?.name}
+        icon={Minus}
+        iconClassName="text-red-400"
+        iconBoxClassName="bg-red-500/10 border-red-500/20"
+        accentClassName="bg-red-500/5 border-red-500/20"
+        size="xl"
+        footer={
+          <div className="flex flex-col sm:flex-row gap-3 sm:justify-end">
+            <button
+              type="button"
+              onClick={() => { setShowExitModal(false); resetMovementData('exit'); }}
+              className="px-5 py-2.5 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.08] text-gray-300 hover:text-white text-sm font-medium transition-colors"
+            >
+              Cancelar
+            </button>
+            <GradientButton type="submit" form="movement-form-exit" size="sm" className="shadow-soft">
+              <span className="flex items-center gap-2">
+                <Minus className="w-4 h-4" />
+                Registrar Salida
+              </span>
+            </GradientButton>
+          </div>
+        }
+      >
+        {renderMovementForm('exit')}
+      </Modal>
+
+      {/* Modal: Venta Directa */}
+      <Modal
+        isOpen={showSaleModal && !!selectedItem}
+        onClose={() => { setShowSaleModal(false); setSaleData({ quantity: '1' }); }}
+        title="Registrar Venta"
+        subtitle={selectedItem?.name}
+        icon={ShoppingCart}
+        iconClassName="text-emerald-400"
+        iconBoxClassName="bg-emerald-500/10 border-emerald-500/20"
+        accentClassName="bg-[#151821] border-white/[0.10]"
+        size="xl"
+        footer={
+          <div className="flex flex-col sm:flex-row gap-3 sm:justify-end">
+            <button
+              type="button"
+              onClick={() => { setShowSaleModal(false); setSaleData({ quantity: '1' }); }}
+              className="px-5 py-2.5 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.08] text-gray-300 hover:text-white text-sm font-medium transition-colors"
+            >
+              Cancelar
+            </button>
+            <GradientButton type="submit" form="sale-form" size="sm" className="shadow-soft">
+              <span className="flex items-center gap-2">
+                <ShoppingCart className="w-4 h-4" />
+                Registrar Venta
+              </span>
+            </GradientButton>
+          </div>
+        }
+      >
+        <form id="sale-form" onSubmit={handleSaleSubmit} className="space-y-5">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-2">Cantidad a Vender</label>
+              <input
+                type="number"
+                value={saleData.quantity}
+                onChange={(e) => setSaleData({...saleData, quantity: e.target.value})}
+                className="glassmorphism-input w-full text-lg text-center font-semibold"
+                min="1"
+                max={selectedItem?.stock || selectedItem?.currentStock || selectedItem?.quantity || 0}
+                placeholder="0"
+                required
+              />
+              <p className="text-xs text-gray-400 mt-2 text-center">
+                Stock disponible: <span className="text-emerald-400 font-medium">{selectedItem?.stock || selectedItem?.currentStock || selectedItem?.quantity || 0}</span> unidades
+              </p>
+            </div>
+            <div className="flex flex-col justify-center">
+              <label className="block text-sm font-medium text-gray-300 mb-2">Total a Pagar</label>
+              <div className="bg-emerald-500/5 border border-emerald-500/20 rounded-xl p-5 text-center">
+                <div className="text-xs text-emerald-300 mb-1">Total</div>
+                <span className="text-3xl font-bold text-emerald-400">
+                  ${((parseFloat(saleData.quantity) || 0) * (parseFloat(selectedItem?.price) || 0)).toFixed(2)}
+                </span>
+                <div className="text-xs text-gray-400 mt-2">
+                  {saleData.quantity || 0} × ${selectedItem?.price || 0}
                 </div>
               </div>
             </div>
           </div>
-        </div>
-      )}
+
+          <div className="bg-blue-500/5 border border-blue-500/20 rounded-xl p-4">
+            <h4 className="text-sm font-medium text-blue-300 mb-3">Detalles del Producto</h4>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-sm">
+              <div>
+                <span className="text-gray-400">Precio unitario:</span>
+                <span className="text-emerald-400 ml-2 font-semibold">${selectedItem?.price || 0}</span>
+              </div>
+              <div>
+                <span className="text-gray-400">Categoría:</span>
+                <span className="text-white ml-2">{selectedItem?.category?.replace('_', ' ').toUpperCase()}</span>
+              </div>
+              <div>
+                <span className="text-gray-400">Stock después:</span>
+                <span className="text-blue-400 ml-2 font-semibold">
+                  {(selectedItem?.stock || 0) - (parseInt(saleData.quantity) || 0)} unidades
+                </span>
+              </div>
+            </div>
+          </div>
+        </form>
+      </Modal>
+
+      {/* Modal: Conteo de Stock */}
+      <Modal
+        isOpen={showCountModal && !!selectedItem}
+        onClose={() => { setShowCountModal(false); setCountData({ realStock: '', entries: '', exits: '', notes: '' }); }}
+        title="Conteo de Stock"
+        subtitle={selectedItem?.name}
+        icon={Calculator}
+        iconClassName="text-amber-400"
+        iconBoxClassName="bg-amber-500/10 border-amber-500/20"
+        accentClassName="bg-[#151821] border-white/[0.10]"
+        size="xl"
+        footer={
+          <div className="flex flex-col sm:flex-row gap-3 sm:justify-end">
+            <button
+              type="button"
+              onClick={() => { setShowCountModal(false); setCountData({ realStock: '', entries: '', exits: '', notes: '' }); }}
+              className="px-5 py-2.5 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.08] text-gray-300 hover:text-white text-sm font-medium transition-colors"
+            >
+              Cancelar
+            </button>
+            <GradientButton type="submit" form="count-form" size="sm" className="shadow-soft">
+              <span className="flex items-center gap-2">
+                <Calculator className="w-4 h-4" />
+                Guardar Conteo
+              </span>
+            </GradientButton>
+          </div>
+        }
+      >
+        <form id="count-form" onSubmit={handleCountSubmit} className="space-y-5">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-2">Stock Físico Contado</label>
+              <input
+                type="number"
+                value={countData.realStock}
+                onChange={(e) => setCountData({...countData, realStock: e.target.value})}
+                className="glassmorphism-input w-full text-lg text-center font-semibold"
+                min="0"
+                placeholder="Ingrese stock real"
+                required
+              />
+              <p className="text-xs text-gray-400 mt-1 text-center">Stock verificado físicamente</p>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-2">Entradas Adicionales</label>
+              <input
+                type="number"
+                value={countData.entries}
+                onChange={(e) => setCountData({...countData, entries: e.target.value})}
+                className="glassmorphism-input w-full text-lg text-center"
+                min="0"
+                placeholder="0"
+              />
+              <p className="text-xs text-gray-400 mt-1 text-center">Productos recibidos</p>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-2">Salidas Adicionales</label>
+              <input
+                type="number"
+                value={countData.exits}
+                onChange={(e) => setCountData({...countData, exits: e.target.value})}
+                className="glassmorphism-input w-full text-lg text-center"
+                min="0"
+                placeholder="0"
+              />
+              <p className="text-xs text-gray-400 mt-1 text-center">Productos enviados</p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 p-4 bg-amber-500/5 border border-amber-500/20 rounded-xl">
+            {/* Comparativa: stock esperado (sistema) vs stock actual vs diferencia */}
+            <div className="text-center">
+              <div className="text-xs text-gray-400 mb-1">Stock Esperado</div>
+              <div className="text-lg font-bold text-brand-300">
+                {(selectedItem?.initialStock || 0) + (selectedItem?.entries || 0) - (selectedItem?.exits || 0) - (selectedItem?.sales || 0)}
+              </div>
+            </div>
+            <div className="text-center">
+              <div className="text-xs text-gray-400 mb-1">Stock Actual</div>
+              <div className="text-lg font-bold text-blue-400">
+                {selectedItem?.realStock || selectedItem?.stock || 0}
+              </div>
+            </div>
+            <div className="text-center">
+              <div className="text-xs text-gray-400 mb-1">Diferencia</div>
+              <div className={`text-lg font-bold ${
+                ((selectedItem?.realStock || selectedItem?.stock || 0) - ((selectedItem?.initialStock || 0) + (selectedItem?.entries || 0) - (selectedItem?.exits || 0) - (selectedItem?.sales || 0))) >= 0
+                  ? 'text-emerald-400' : 'text-red-400'
+              }`}>
+                {((selectedItem?.realStock || selectedItem?.stock || 0) - ((selectedItem?.initialStock || 0) + (selectedItem?.entries || 0) - (selectedItem?.exits || 0) - (selectedItem?.sales || 0))) >= 0 ? '+' : ''}
+                {(selectedItem?.realStock || selectedItem?.stock || 0) - ((selectedItem?.initialStock || 0) + (selectedItem?.entries || 0) - (selectedItem?.exits || 0) - (selectedItem?.sales || 0))}
+              </div>
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-300 mb-2">
+              Notas del Conteo
+              <span className="text-gray-500 text-xs ml-1">(Opcional)</span>
+            </label>
+            <textarea
+              value={countData.notes}
+              onChange={(e) => setCountData({...countData, notes: e.target.value})}
+              className="glassmorphism-textarea w-full"
+              rows={3}
+              placeholder="Observaciones del conteo, discrepancias encontradas, etc."
+            />
+          </div>
+        </form>
+      </Modal>
+
+      {/* Modal de Confirmación de Eliminación */}
+      <Modal
+        isOpen={showDeleteModal && !!itemToDelete}
+        onClose={handleCancelDelete}
+        title="Eliminar Producto"
+        icon={Trash2}
+        iconClassName="text-red-400"
+        iconBoxClassName="bg-red-500/10 border-red-500/20"
+        accentClassName="bg-red-500/5 border-red-500/20"
+        size="lg"
+        footer={
+          <div className="flex flex-col-reverse sm:flex-row gap-3 sm:justify-end">
+            <button
+              type="button"
+              onClick={handleCancelDelete}
+              className="px-5 py-2.5 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.08] text-gray-300 hover:text-white text-sm font-medium transition-colors"
+            >
+              Cancelar
+            </button>
+            <button
+              type="button"
+              onClick={handleConfirmDelete}
+              className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-red-500/80 hover:bg-red-500 border border-red-500/50 text-white text-sm font-medium transition-colors"
+            >
+              <Trash2 className="w-4 h-4" />
+              Confirmar Eliminación
+            </button>
+          </div>
+        }
+      >
+        {itemToDelete && (
+          <div className="space-y-4">
+            <p className="text-sm text-gray-300 leading-relaxed">
+              ¿Estás seguro de que quieres eliminar este producto? Esta acción no se puede deshacer.
+            </p>
+            <div className="flex items-center gap-3 rounded-xl border border-white/[0.08] bg-white/[0.02] p-4">
+              <Package2 className="w-5 h-5 text-blue-400 flex-shrink-0" />
+              <div className="min-w-0">
+                <p className="text-white font-medium truncate">{itemToDelete.name}</p>
+                <p className="text-gray-500 text-xs capitalize">
+                  {itemToDelete.category?.replace('_', ' ')} • Stock: {itemToDelete.realStock || itemToDelete.stock || itemToDelete.currentStock || 0}
+                </p>
+              </div>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-2">
+                Motivo de eliminación <span className="text-gray-500">(opcional)</span>
+              </label>
+              <textarea
+                value={deletionReason}
+                onChange={(e) => setDeletionReason(e.target.value)}
+                placeholder="Escribe el motivo de la eliminación..."
+                className="glassmorphism-textarea w-full"
+                rows={3}
+                maxLength={200}
+              />
+              <div className="text-right text-[11px] text-gray-500 mt-1">
+                {deletionReason.length}/200 caracteres
+              </div>
+            </div>
+          </div>
+        )}
+      </Modal>
+
     </>
   );
 };

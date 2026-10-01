@@ -13,10 +13,15 @@ import { now, today } from '../../../shared/utils/dateUtils.js';
 import { SALE_TYPES, getSaleTypeDisplayName } from '../../../shared/constants/salesConstants.js';
 import emailService from '../../../services/emailService.js';
 
+// Casos de uso de ventas.
+// Cubre ventas de productos, walk-in (servicios sin cita), carrito con métodos
+// de pago por ítem, reportes/estadísticas con caché y el resumen financiero.
+// Los descuentos de inventario y las estadísticas del barbero son efectos
+// secundarios de las ventas.
 class SaleUseCases {
-  /**
-   * Obtener métodos de pago válidos desde la base de datos
-   */
+  // Obtener métodos de pago válidos desde la base de datos
+  // Devuelve los backendId de los métodos activos; si falla la consulta usa
+  // un fallback hardcodeado para no bloquear la venta.
   static async getValidPaymentMethods() {
     try {
       const paymentMethods = await PaymentMethod.find({ isActive: true });
@@ -28,9 +33,9 @@ class SaleUseCases {
     }
   }
 
-  /**
-   * Buscar barbero por ID de barbero o ID de usuario
-   */
+  // Buscar barbero por ID de barbero o ID de usuario
+  // Primero intenta por _id de Barber; si no, por el campo user (populado).
+  // Lanza 404 si no encuentra ninguno.
   static async findBarberByIdOrUserId(id) {
     // Debug: logger.debug(`?? Buscando barbero con ID: ${id}`);
     
@@ -60,13 +65,15 @@ class SaleUseCases {
     return barber;
   }
 
-  /**
-   * Crear una nueva venta (puede ser de m�ltiples productos)
-   */
+  // Crear una nueva venta (puede ser de m�ltiples productos)
+  // Dos caminos: (a) productId único por compatibilidad (valida stock y precio,
+  // crea la venta y descuenta stock/realStock/sales), y (b) items[] repitiendo
+  // la validación por producto. Al final actualiza stats del barbero y registra
+  // UN log de inventario por carrito (un fallo del log no aborta la venta).
   static async createSale(saleData) {
     const { items, barberId, total, notes } = saleData;
 
-    logger.info('?? Iniciando creaci�n de venta', {
+    logger.debug('?? Iniciando creaci�n de venta', {
       barberId,
       hasItems: !!items,
       itemsCount: items?.length || 0,
@@ -108,7 +115,7 @@ class SaleUseCases {
         throw new AppError('El precio del producto debe ser mayor a 0', 400);
       }
 
-      logger.info('? Validaciones pasadas para venta de producto �nico', {
+      logger.debug('? Validaciones pasadas para venta de producto �nico', {
         productId,
         productName: product.name,
         quantity,
@@ -135,7 +142,7 @@ class SaleUseCases {
 
       await sale.save();
 
-      logger.info('? Venta de producto �nico creada exitosamente', {
+      logger.debug('? Venta de producto �nico creada exitosamente', {
         saleId: sale._id,
         productId,
         productName: product.name,
@@ -147,7 +154,8 @@ class SaleUseCases {
       });
 
       // Descontar del inventario con logging detallado
-      logger.info(`?? Actualizando inventario - Producto: ${productId}, Cantidad a descontar: ${quantity}`);
+      // En la venta de producto único también se ajusta realStock (conteo físico).
+      logger.debug(`?? Actualizando inventario - Producto: ${productId}, Cantidad a descontar: ${quantity}`);
       const productBefore = await Inventory.findById(productId);
       logger.debug(`?? Stock antes: currentStock=${productBefore.currentStock}, stock=${productBefore.stock}`);
       
@@ -304,13 +312,13 @@ class SaleUseCases {
     return sales;
   }
 
-  /**
-   * Crear una venta walk-in (servicio sin cita previa)
-   */
+  // Crear una venta walk-in (servicio sin cita previa)
+  // Valida precio y total (>0), método de pago activo y crea la venta de tipo
+  // SERVICIO con cantidad 1; luego actualiza las estadísticas del barbero.
   static async createWalkInSale(saleData) {
     const { serviceId, serviceName, price, barberId, total, notes } = saleData;
 
-    logger.info('?? Iniciando creaci�n de venta walk-in', {
+    logger.debug('?? Iniciando creaci�n de venta walk-in', {
       serviceId,
       serviceName,
       price,
@@ -357,7 +365,7 @@ class SaleUseCases {
 
     await sale.save();
 
-    logger.info('? Venta walk-in creada exitosamente', {
+    logger.debug('? Venta walk-in creada exitosamente', {
       saleId: sale._id,
       serviceId,
       serviceName,
@@ -374,9 +382,9 @@ class SaleUseCases {
     return sale;
   }
 
-  /**
-   * Actualizar estad�sticas del barbero despu�s de una venta
-   */
+  // Actualizar estadísticas del barbero después de una venta
+  // Incrementa totalSales (+1) y totalRevenue (+monto) y setea la fecha de
+  // última venta. Si falla solo loguea y retorna null (no interrumpe la venta).
   static async updateBarberStats(barberId, saleAmount, saleType = SALE_TYPES.PRODUCT) {
     try {
       logger.debug(`?? Actualizando stats - BarberId: ${barberId}, Amount: ${saleAmount}, Type: ${saleType}`);
@@ -399,7 +407,7 @@ class SaleUseCases {
             totalRevenue: saleAmount
           },
           $set: {
-            lastsaleDate: now()
+            lastSaleDate: now()
           }
         },
         { new: true } // Devolver el documento actualizado
@@ -417,11 +425,12 @@ class SaleUseCases {
     }
   }
 
-  /**
-   * Obtener reporte por per�odo (diario, semanal, mensual)
-   * Para reportes semanales y mensuales, la fecha seleccionada es el punto final
-   * y se calcula hacia atr�s desde esa fecha
-   */
+  // Obtener reporte por per�odo (diario, semanal, mensual)
+  // Para reportes semanales y mensuales, la fecha seleccionada es el punto final
+  // y se calcula hacia atr�s desde esa fecha
+  // Dos agregaciones: ventas de productos (group por barberId) y citas
+  // completadas (lookup a barbers/services); ambas se combinan en un mapa por
+  // barbero sumando totalRevenue = productos + cortes.
   static async getReportByPeriod(type, date) {
     let startDate, endDate;
     const selectedDate = new Date(date);
@@ -489,7 +498,7 @@ class SaleUseCases {
     ]);
 
     // Obtener citas (cortes) del per�odo por barbero
-    const Appointment = (await import('../models/Appointment.js')).default;
+    const Appointment = (await import('../../domain/entities/Appointment.js')).default;
     const appointments = await Appointment.aggregate([
       {
         $match: {
@@ -597,9 +606,9 @@ class SaleUseCases {
     };
   }
 
-  /**
-   * Generar etiqueta del per�odo
-   */
+  // Generar etiqueta del per�odo
+  // Formatea start/end en es-CO con zona America/Bogota; mensual muestra solo
+  // el mes y anual el año.
   static getPeriodLabel(type, startDate, endDate) {
     const options = { 
       year: 'numeric', 
@@ -624,18 +633,17 @@ class SaleUseCases {
     }
   }
 
-  /**
-   * Obtener reporte diario (mantener compatibilidad)
-   */
-  /**
-   * Obtener reporte diario espec�fico para frontend
-   */
+  // Obtener reporte diario (mantener compatibilidad)
+  // Obtener reporte diario espec�fico para frontend
+  // Toma el día completo en hora Colombia (UTC-5, 00:00 a 23:59), junta ventas
+  // completadas y citas completadas, las formatea y suma totales (walk-ins
+  // quedan vacío por ahora). Ante error retorna la estructura con ceros.
   static async getDailyReport(date) {
     try {
-      // CORREGIDO: Manejar zona horaria correctamente 
-      const dateStr = typeof date === 'string' ? date : date.toISOString().split('T')[0];
-      const startDate = new Date(dateStr + 'T00:00:00.000Z');
-      const endDate = new Date(dateStr + 'T23:59:59.999Z');
+      // CORREGIDO: Manejar zona horaria correctamente (America/Bogota, UTC-5)
+      const dateStr = typeof date === 'string' ? date.slice(0, 10) : date.toISOString().split('T')[0];
+      const startDate = new Date(`${dateStr}T00:00:00.000-05:00`);
+      const endDate = new Date(`${dateStr}T23:59:59.999-05:00`);
 
       // Obtener ventas del d�a
       const sales = await Sale.find({
@@ -675,7 +683,7 @@ class SaleUseCases {
         select: 'name price'
       });
 
-      logger.debug(`?? Encontradas ${appointments.length} citas completadas en la fecha ${selectedDate.toISOString()}`);
+      logger.debug(`Encontradas ${appointments.length} citas completadas en la fecha ${dateStr}`);
 
       // Formatear citas para el frontend
       const formattedAppointments = appointments.map(apt => {
@@ -728,9 +736,11 @@ class SaleUseCases {
     }
   }
 
-  /**
-   * Obtener todas las ventas con filtros
-   */
+  // Obtener todas las ventas con filtros
+  // Solo ventas 'completed' (excluye reembolsadas/canceladas): filtra por
+  // barbero (resolviendo barberId o userId), producto, método de pago y rango
+  // UTC de saleDate. Además trae citas completadas con método de pago y las
+  // unifica en formato de venta, ordenando el resultado por fecha descendente.
   static async getAllSales(filters = {}) {
     const query = {
       status: 'completed' // Solo ventas completadas, no reembolsadas
@@ -790,7 +800,7 @@ class SaleUseCases {
     // Obtener citas completadas (tambi�n son "ventas")
     const appointmentQuery = {
       status: 'completed',
-      paymentMethod: { $exists: true, $ne: null, $ne: '' }
+      paymentMethod: { $exists: true, $nin: [null, ''] }
     };
 
     // Aplicar filtros similares para citas
@@ -856,11 +866,12 @@ class SaleUseCases {
     return allSales;
   }
 
-  /**
-   * Obtener facturas de carrito (TODAS las ventas desde carrito, con o sin clientData)
-   * @param {String} barberId - ID del barbero (opcional, si es null retorna todas)
-   * @returns {Array} Ventas creadas desde el carrito
-   */
+  // Obtener facturas de carrito (TODAS las ventas desde carrito, con o sin clientData)
+  // @param {String} barberId - ID del barbero (opcional, si es null retorna todas)
+  // @returns {Array} Ventas creadas desde el carrito
+  // Filtra por notas que contengan "Venta desde carrito" e incluye también las
+  // reembolsadas; agrega flags isRefunded/displayQuantity/displayTotal (0 si fue
+  // reembolsada) conservando originalQuantity/originalTotal.
   static async getCartInvoices(barberId = null) {
     const query = {
       status: { $in: ['completed', 'refunded'] }, // Incluir ventas reembolsadas
@@ -870,12 +881,12 @@ class SaleUseCases {
     // Si es barbero, filtrar solo sus ventas
     if (barberId) {
       query.barberId = barberId;
-      logger.info('🔍 Buscando TODAS las ventas de carrito para barbero:', { barberId });
+      logger.debug('🔍 Buscando TODAS las ventas de carrito para barbero:', { barberId });
     } else {
-      logger.info('🔍 Buscando TODAS las ventas de carrito (admin)');
+      logger.debug('🔍 Buscando TODAS las ventas de carrito (admin)');
     }
 
-    logger.info('📊 Query de MongoDB:', JSON.stringify(query));
+    logger.debug('📊 Query de MongoDB:', JSON.stringify(query));
 
     const sales = await Sale.find(query)
       .populate('productId', 'name category price')
@@ -884,7 +895,7 @@ class SaleUseCases {
       .sort({ saleDate: -1 })
       .lean(); // .lean() para objetos planos
 
-    logger.info(`✅ Ventas de carrito encontradas: ${sales.length}`);
+    logger.debug(`✅ Ventas de carrito encontradas: ${sales.length}`);
 
     // Agregar información de reembolso a cada venta
     const salesWithRefundInfo = sales.map(sale => ({
@@ -898,7 +909,7 @@ class SaleUseCases {
 
     // Log de las primeras 3 ventas para diagnóstico
     if (salesWithRefundInfo.length > 0) {
-      logger.info('🔍 Muestra de ventas encontradas:', 
+      logger.debug('🔍 Muestra de ventas encontradas:', 
         salesWithRefundInfo.slice(0, 3).map(sale => ({
           id: sale._id,
           hasClientData: !!sale.clientData,
@@ -930,9 +941,8 @@ class SaleUseCases {
     return salesWithRefundInfo;
   }
 
-  /**
-   * Obtener venta por ID
-   */
+  // Obtener venta por ID
+  // Popula producto y barbero; lanza 404 si no existe.
   static async getSaleById(id) {
     const sale = await Sale.findById(id)
       .populate('productId', 'name category')
@@ -945,9 +955,9 @@ class SaleUseCases {
     return sale;
   }
 
-  /**
-   * Cancelar venta (cambiar estado)
-   */
+  // Cancelar venta (cambiar estado)
+  // Marca status 'cancelled' (NO revierte inventario ni totales; para eso existe
+  // el flujo de reembolso).
   static async cancelSale(id) {
     const sale = await Sale.findById(id);
     if (!sale) {
@@ -960,12 +970,14 @@ class SaleUseCases {
     return sale;
   }
 
-  /**
-   * Obtener estad�sticas de ventas por barbero
-   */
+  // Obtener estad�sticas de ventas por barbero
+  // Cachea 5 min en reportsCacheService con clave normalizada (fechas Date →
+  // string) para reutilizar entre consultas equivalentes. Filtra por barbero y
+  // estado completed, con día/rango en UTC; agrupa por tipo: ventas (productos)
+  // y cortes (walk-ins). totalQuantity solo suma productos. Ante error, ceros.
   static async getBarberSalesStats(barberId, dateFilter = {}) {
     try {
-      logger.info(`🔍 [SaleUseCases] getBarberSalesStats INICIO - barberId: ${barberId}, dateFilter:`, dateFilter);
+      logger.debug(`🔍 [SaleUseCases] getBarberSalesStats INICIO - barberId: ${barberId}, dateFilter:`, dateFilter);
       
       //Normalizar fechas para clave consistente
       const normalizedFilter = {};
@@ -987,17 +999,17 @@ class SaleUseCases {
       
       //Generar clave única basada en parámetros
       const cacheKey = `barber-sales-stats:${barberId}:${JSON.stringify(normalizedFilter)}`;
-      logger.info(`🔍 [SaleUseCases] cacheKey: ${cacheKey}`);
+      logger.debug(`🔍 [SaleUseCases] cacheKey: ${cacheKey}`);
       
       // ✅ CACHE: Intentar obtener del cache primero (TTL: 5 minutos)
       const cached = reportsCacheService.cache.get(cacheKey);
       if (cached) {
         logger.debug(`📦 Cache HIT para stats de barbero ${barberId}`);
-        logger.info(`🔍 [SaleUseCases] Retornando desde CACHE:`, cached);
+        logger.debug(`🔍 [SaleUseCases] Retornando desde CACHE:`, cached);
         return cached;
       }
       
-      logger.info(`🔍 [SaleUseCases] Cache MISS - consultando BD...`);
+      logger.debug(`🔍 [SaleUseCases] Cache MISS - consultando BD...`);
 
       // Construir filtros de fecha
       const matchConditions = {
@@ -1014,7 +1026,7 @@ class SaleUseCases {
         const endOfDay = new Date(targetDate);
         endOfDay.setUTCHours(23, 59, 59, 999);
         
-        logger.info(`🔍 [SaleUseCases] Filtro por fecha específica:`, {
+        logger.debug(`🔍 [SaleUseCases] Filtro por fecha específica:`, {
           dateFilter: dateFilter.date,
           targetDate: targetDate.toISOString(),
           startOfDay: startOfDay.toISOString(),
@@ -1032,7 +1044,7 @@ class SaleUseCases {
         const endDate = new Date(dateFilter.endDate + 'T23:59:59.999Z'); // UTC para evitar desfases
         endDate.setUTCHours(23, 59, 59, 999);
         
-        logger.info(`🔍 [SaleUseCases] Filtro por rango:`, {
+        logger.debug(`🔍 [SaleUseCases] Filtro por rango:`, {
           startDateFilter: dateFilter.startDate,
           endDateFilter: dateFilter.endDate,
           startDate: startDate.toISOString(),
@@ -1050,7 +1062,7 @@ class SaleUseCases {
         dateFilter
       });
 
-      logger.info(`🔍 [SaleUseCases] Ejecutando aggregate con matchConditions:`, matchConditions);
+      logger.debug(`🔍 [SaleUseCases] Ejecutando aggregate con matchConditions:`, matchConditions);
 
       const stats = await Sale.aggregate([
         {
@@ -1067,7 +1079,7 @@ class SaleUseCases {
         }
       ]);
       
-      logger.info(`🔍 [SaleUseCases] Stats de aggregate:`, { statsLength: stats.length, stats });
+      logger.debug(`🔍 [SaleUseCases] Stats de aggregate:`, { statsLength: stats.length, stats });
 
       // Inicializar respuesta con valores por defecto
       const result = {
@@ -1125,7 +1137,7 @@ class SaleUseCases {
       reportsCacheService.cache.set(cacheKey, result, 300);
       logger.debug(`💾 Cache SET para stats de barbero ${barberId}`);
 
-      logger.info(`🔍 [SaleUseCases] Retornando result FINAL:`, result);
+      logger.debug(`🔍 [SaleUseCases] Retornando result FINAL:`, result);
       return result;
     } catch (error) {
       logger.error('Error getting barber sales stats:', error);
@@ -1139,12 +1151,96 @@ class SaleUseCases {
     }
   }
 
-  /**
-   * Obtener reporte diario de ventas
-   */
-  /**
-   * Obtener fechas disponibles con ventas para un barbero o global
-   */
+  // Obtener estadísticas de ventas para varios barberos en una sola consulta
+  // @param {string[]} barberIds
+  // @param {Object} dateFilter - { date } | { startDate, endDate }
+  // @returns {Promise<Object>} mapa barberId → stats (ventas/cortes/totales)
+  // Preinicializa un bucket por barbero y lo rellena con una sola agregación
+  // agrupada por { barberId, type }; averageSale se calcula al final por bucket.
+  static async getBarbersSalesStats(barberIds = [], dateFilter = {}) {
+    const emptyBucket = () => ({ ventas: [], cortes: [], total: 0, count: 0, totalQuantity: 0, averageSale: 0 });
+    const result = {};
+
+    try {
+      const ids = (barberIds || [])
+        .filter(Boolean)
+        .map((id) => new mongoose.Types.ObjectId(id));
+
+      ids.forEach((id) => { result[String(id)] = emptyBucket(); });
+
+      if (ids.length === 0) return result;
+
+      const matchConditions = {
+        barberId: { $in: ids },
+        status: 'completed'
+      };
+
+      if (dateFilter.date) {
+        const targetDate = new Date(dateFilter.date + 'T00:00:00.000Z');
+        const startOfDay = new Date(targetDate);
+        startOfDay.setUTCHours(0, 0, 0, 0);
+        const endOfDay = new Date(targetDate);
+        endOfDay.setUTCHours(23, 59, 59, 999);
+        matchConditions.saleDate = { $gte: startOfDay, $lte: endOfDay };
+      } else if (dateFilter.startDate && dateFilter.endDate) {
+        const startDate = new Date(dateFilter.startDate + 'T00:00:00.000Z');
+        startDate.setUTCHours(0, 0, 0, 0);
+        const endDate = new Date(dateFilter.endDate + 'T23:59:59.999Z');
+        endDate.setUTCHours(23, 59, 59, 999);
+        matchConditions.saleDate = { $gte: startDate, $lte: endDate };
+      }
+
+      const rows = await Sale.aggregate([
+        { $match: matchConditions },
+        {
+          $group: {
+            _id: { barberId: '$barberId', type: '$type' },
+            total: { $sum: '$totalAmount' },
+            count: { $sum: 1 },
+            totalQuantity: { $sum: '$quantity' },
+            averageSale: { $avg: '$totalAmount' }
+          }
+        }
+      ]);
+
+      rows.forEach((row) => {
+        const key = String(row._id.barberId);
+        if (!result[key]) result[key] = emptyBucket();
+
+        const bucket = result[key];
+        const summary = {
+          total: row.total || 0,
+          count: row.count || 0,
+          totalQuantity: row.totalQuantity || 0,
+          average: row.averageSale || 0
+        };
+
+        if (row._id.type === SALE_TYPES.PRODUCT) {
+          bucket.ventas.push(summary);
+          bucket.totalQuantity += summary.totalQuantity;
+        } else if (row._id.type === SALE_TYPES.SERVICE) {
+          bucket.cortes.push(summary);
+        }
+
+        bucket.total += summary.total;
+        bucket.count += summary.count;
+      });
+
+      Object.values(result).forEach((bucket) => {
+        bucket.averageSale = bucket.count > 0 ? bucket.total / bucket.count : 0;
+      });
+
+      return result;
+    } catch (error) {
+      logger.error('Error obteniendo stats de ventas por barberos', { error: error.message, stack: error.stack });
+      return result;
+    }
+  }
+
+  // Obtener reporte diario de ventas
+  // Obtener fechas disponibles con ventas para un barbero o global
+  // Agrupa ventas completadas por día (YYYY-MM-DD) y retorna las fechas de más
+  // reciente a más antigua; ante error retorna [].
   static async getAvailableDates(barberId = null) {
     try {
       const match = barberId
@@ -1172,9 +1268,9 @@ class SaleUseCases {
     }
   }
 
-  /**
-   * Obtener reporte detallado de ventas agrupado por d�a con detalle de productos
-   */
+  // Obtener reporte detallado de ventas agrupado por d�a con detalle de productos
+  // Solo productos (type PRODUCT), ordenadas por fecha; el resultado se cachea
+  // vía withCache. Agrupa por día con totalAmount y totalProducts.
   static async getDetailedSalesReport(barberId, startDate, endDate) {
     try {
       // Debug: logger.debug(`?? Obteniendo reporte detallado de ventas - Barbero: ${barberId}, Desde: ${startDate || 'SIN LIMITE'}, Hasta: ${endDate || 'SIN LIMITE'}`);
@@ -1283,9 +1379,9 @@ class SaleUseCases {
     }
   }
 
-  /**
-   * Obtener detalles de cortes walk-in agrupados por d�a
-   */
+  // Obtener detalles de cortes walk-in agrupados por d�a
+  // Ventas de servicios (type SERVICE) con servicio populado, cacheadas vía
+  // withCache y agrupadas por día (totalAmount y totalServices).
   static async getWalkInDetails(barberId, startDate, endDate) {
     try {
       // Debug: logger.debug(`?? Obteniendo detalles de cortes walk-in - Barbero: ${barberId}, Desde: ${startDate || 'SIN LIMITE'}, Hasta: ${endDate || 'SIN LIMITE'}`);
@@ -1370,9 +1466,9 @@ class SaleUseCases {
     }
   }
 
-  /**
-   * Obtener reporte detallado de cortes (servicios walk-in) agrupado por d�a
-   */
+  // Obtener reporte detallado de cortes (servicios walk-in) agrupado por d�a
+  // Igual que el reporte de ventas pero para type SERVICE; cacheado y agrupado
+  // por día con totalAmount y totalCuts.
   static async getDetailedCutsReport(barberId, startDate, endDate) {
     try {
       // Debug: logger.debug(`?? Obteniendo reporte detallado de cortes - Barbero: ${barberId}, Desde: ${startDate || 'SIN LIMITE'}, Hasta: ${endDate || 'SIN LIMITE'}`);
@@ -1480,9 +1576,12 @@ class SaleUseCases {
     }
   }
 
-  /**
-   * Obtener resumen financiero completo para reportes
-   */
+  // Obtener resumen financiero completo para reportes
+  // Agregación principal con $facet (general, itemsBreakdown por servicio/
+  // producto, paymentMethods y dailyData con timezone America/Bogota). Suma
+  // aparte el revenue de citas completadas, combina sus métodos de pago y los
+  // costos de insumos (colección expenses, categoría 'supplies'). Retorna
+  // summary + breakdowns + dailyData.
   static async getFinancialSummary(startDate, endDate) {
     try {
       logger.debug(`?? Generando resumen financiero: ${startDate} - ${endDate}`);
@@ -1491,6 +1590,8 @@ class SaleUseCases {
       const end = new Date(endDate + 'T23:59:59.999Z');
 
       // Agregaci�n principal para obtener todos los datos basada en el modelo real
+      // $facet ejecuta en paralelo: general, itemsBreakdown, paymentMethods y
+      // dailyData; se filtra por saleDate (no createdAt) en el rango UTC.
       const summary = await Sale.aggregate([
         {
           $match: {
@@ -1614,7 +1715,7 @@ class SaleUseCases {
           $match: {
             date: { $gte: start, $lte: end },
             status: 'completed',
-            paymentMethod: { $exists: true, $ne: null, $ne: '' }
+            paymentMethod: { $exists: true, $nin: [null, ''] }
           }
         },
         {
@@ -1676,6 +1777,7 @@ class SaleUseCases {
       const appointmentRevenue = appointmentStats[0]?.appointmentRevenue || 0;
 
       // ? Calcular costos directos reales (gastos de categor�a 'supplies')
+      // Consulta directa a la colección expenses (insumos) dentro del período.
       const suppliesCostsResult = await mongoose.connection.db.collection('expenses').aggregate([
         {
           $match: {
@@ -1738,13 +1840,15 @@ class SaleUseCases {
     }
   }
 
-  /**
-   * Crear venta desde carrito con m�todos de pago m�ltiples
-   */
+  // Crear venta desde carrito con m�todos de pago m�ltiples
+  // Procesa cada ítem: productos validan stock y descuentan stock/sales; los
+  // servicios no tocan inventario. Cada ítem usa su propio paymentMethod, se
+  // guarda como una Sale individual con clientData opcional y al final se
+  // actualiza stats del barbero, se registra el log y se retorna el resumen.
   static async createCartSale(cartData) {
     const { cart, barberId, notes, clientData } = cartData;
     
-    logger.info('🛒 Iniciando creación de venta desde carrito', {
+    logger.debug('🛒 Iniciando creación de venta desde carrito', {
       cartLength: cart?.length || 0,
       barberId,
       notes: notes ? 'Sí' : 'No',
@@ -1753,7 +1857,7 @@ class SaleUseCases {
 
     // Log detallado del clientData recibido
     if (clientData) {
-      logger.info('📋 Datos del cliente recibidos:', {
+      logger.debug('📋 Datos del cliente recibidos:', {
         firstName: clientData.firstName || 'N/A',
         lastName: clientData.lastName || 'N/A',
         email: clientData.email || 'N/A',
@@ -1832,7 +1936,7 @@ class SaleUseCases {
           }
         );
 
-        logger.info(`?? Stock actualizado para producto`, {
+        logger.debug(`?? Stock actualizado para producto`, {
           productId: id,
           productName: name,
           quantityDeducted: quantity,
@@ -1908,7 +2012,7 @@ class SaleUseCases {
       
       // Log cada venta guardada con clientData
       if (clientData) {
-        logger.info('💾 Venta guardada con clientData:', {
+        logger.debug('💾 Venta guardada con clientData:', {
           saleId: sale._id,
           clientName: `${clientData.firstName} ${clientData.lastName}`,
           clientEmail: clientData.email,
@@ -1945,7 +2049,7 @@ class SaleUseCases {
           salesCount: createdSales.length
         }
       );
-      logger.info(`?? Log de carrito creado exitosamente`, {
+      logger.debug(`?? Log de carrito creado exitosamente`, {
         totalAmount: finalTotalAmount,
         barberId: barber._id,
         barberName: barber.user?.name || barber.specialty
@@ -1958,7 +2062,7 @@ class SaleUseCases {
       });
     }
 
-    logger.info('? Venta desde carrito creada exitosamente', {
+    logger.debug('? Venta desde carrito creada exitosamente', {
       salesCreated: createdSales.length,
       totalAmount: finalTotalAmount,
       itemsCount: saleItems.length,

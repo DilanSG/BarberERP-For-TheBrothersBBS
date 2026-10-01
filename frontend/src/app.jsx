@@ -1,41 +1,46 @@
 
-import React from 'react';
+// Componente raíz de enrutamiento de la aplicación.
+// Define todas las rutas con React Router y envuelve la app en los providers
+// de sockets, métodos de pago e inventario; las páginas se cargan por lazy
+// loading (code splitting) y el layout común vive en AppLayout.
+import React, { lazy } from 'react';
 import { Routes, Route, Navigate, Outlet } from 'react-router-dom';
-import MainLayout from './layouts/MainLayout';
+import AppLayout from './shared/components/layout/AppLayout';
 import NotificationContainer from './shared/components/notifications/NotificationContainer';
 import { useApiNotifications } from './shared/hooks/useApiNotifications';
 import { InventoryProvider } from './shared/contexts/InventoryContext';
 import { PaymentMethodsProvider } from './shared/contexts/PaymentMethodsContext';
+import { SocketProvider } from './shared/contexts/SocketContext';
 
-// Pages
-import Home from './pages/Home';
-import Profile from './pages/Profile';
-import ProfileEdit from './pages/ProfileEdit';
-import AppointmentRouter from './features/appointments/AppointmentRouter';
-import PublicBarbers from './pages/PublicBarbers';
-import Dashboard from './pages/Dashboard';
+// Páginas con lazy loading (code splitting por ruta).
+// El fallback de Suspense está en AppLayout (alrededor del Outlet).
+const Home = lazy(() => import('./pages/Home'));
+const Profile = lazy(() => import('./pages/Profile'));
+const ProfileEdit = lazy(() => import('./pages/ProfileEdit'));
+const AppointmentRouter = lazy(() => import('./features/appointments/AppointmentRouter'));
+const PublicBarbers = lazy(() => import('./pages/PublicBarbers'));
+const Dashboard = lazy(() => import('./pages/Dashboard'));
 
 // Review Pages
-import CreateReview from './features/reviews/CreateReview';
+const CreateReview = lazy(() => import('./features/reviews/CreateReview'));
 
 // Auth Pages
-import Login from './features/auth/Login';
-import Register from './features/auth/Register';
+const Login = lazy(() => import('./features/auth/Login'));
+const Register = lazy(() => import('./features/auth/Register'));
 
 // Barber Pages
-import Barbers from './features/barbers/Barbers';
-import BarberProfile from './features/barbers/BarberProfile';
-import BarberSales from './features/barbers/BarberSales';
-import CartInvoices from './pages/CartInvoices';
+const BarberProfile = lazy(() => import('./features/barbers/BarberProfile'));
+const BarberSales = lazy(() => import('./features/barbers/BarberSales'));
+const CartInvoices = lazy(() => import('./pages/CartInvoices'));
 
 // Admin Pages
-import UserRoleManager from './features/admin/UserRoleManager';
-import Inventory from './features/admin/Inventory';
-import AdminBarbers from './features/admin/AdminBarbers';
-import AdminServices from './features/admin/AdminServices';
-import Reports from './features/admin/Reports';
+const UserRoleManager = lazy(() => import('./features/admin/UserRoleManager'));
+const Inventory = lazy(() => import('./features/admin/Inventory'));
+const AdminBarbers = lazy(() => import('./features/admin/AdminBarbers'));
+const AdminServices = lazy(() => import('./features/admin/AdminServices'));
+const Reports = lazy(() => import('./features/admin/Reports'));
 
-// Components
+// Componentes de protección (se necesitan de inmediato, sin lazy)
 import ProtectedRoute from './features/auth/ProtectedRoute';
 import RequireAuth from './features/auth/RequireAuth';
 import { PublicRoute } from './features/auth/PublicRoute';
@@ -45,10 +50,13 @@ function App() {
   useApiNotifications();
 
   return (
-    <PaymentMethodsProvider>
-      <InventoryProvider>
-        <Routes>
-      <Route element={<MainLayout />}>
+    // Providers globales: socket en tiempo real -> métodos de pago -> inventario
+    <SocketProvider>
+      <PaymentMethodsProvider>
+        <InventoryProvider>
+          <Routes>
+        {/* Layout común (AppLayout con Suspense) para todas las rutas hijas */}
+      <Route element={<AppLayout />}>
         {/* Rutas públicas */}
         <Route path="/" element={<Home />} />
         <Route path="/barbers" element={<PublicBarbers />} />
@@ -146,11 +154,13 @@ function App() {
         {/* Ruta para manejar URLs no encontradas */}
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>
-    </Routes>
-    <NotificationContainer />
+          </Routes>
+          {/* Toasts/notificaciones globales (errores y avisos del API) */}
+          <NotificationContainer />
     </InventoryProvider>
     </PaymentMethodsProvider>
+    </SocketProvider>
   );
 }
 
-				export default App;
+export default App;

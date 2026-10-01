@@ -1,7 +1,12 @@
 import os from 'os';
 import { logger } from '../../../shared/utils/logger.js';
 
+// Casos de uso de monitoreo en memoria.
+// Acumula métricas de requests, tiempos de respuesta, uso de memoria/CPU,
+// errores y efectividad del caché, y expone un snapshot vía getMetrics().
 class MonitoringUseCases {
+  // Inicializa las estructuras de métricas. El monitoreo periódico NO arranca
+  // aquí: debe llamarse startResourceMonitoring() cuando el servidor esté listo.
   constructor() {
     this.metrics = {
       requests: {
@@ -40,6 +45,9 @@ class MonitoringUseCases {
   }
 
   // Monitoreo de recursos del sistema
+  // Idempotente: si ya está activo no hace nada. Cada 5 minutos muestrea heap
+  // (MB) y CPU, conserva los últimos 100 registros y solo loguea advertencia
+  // cuando el consumo es realmente alto (CPU > 90% o heap > 100 MB).
   startResourceMonitoring() {
     if (this.monitoringInterval) {
       return; // Ya está iniciado
@@ -91,6 +99,8 @@ class MonitoringUseCases {
   }
 
   // Calcula uso de CPU
+  // Toma dos muestras de los tiempos por núcleo separadas 100 ms y estima el
+  // porcentaje de uso como (1 - idle/total) promedio entre todos los núcleos.
   async getCPUUsage() {
     const startMeasure = os.cpus().map(cpu => ({
       idle: cpu.times.idle,
@@ -115,6 +125,8 @@ class MonitoringUseCases {
   }
 
   // Registra una request
+  // Usa como clave `MÉTODO ruta` (req.route.path si existe) para agrupar por
+  // endpoint, inicializa sus contadores y retorna el objeto de seguimiento.
   trackRequest(req, startTime) {
     const endpoint = `${req.method} ${req.route?.path || req.path}`;
     
@@ -139,6 +151,8 @@ class MonitoringUseCases {
   }
 
   // Registra una respuesta exitosa
+  // Actualiza el promedio móvil de tiempos (ponderado por total de requests),
+  // los extremos max/min y advierte si supera SLOW_REQUEST_MS (2000 ms por defecto).
   trackSuccess(tracking, responseTime) {
     this.metrics.requests.success++;
     tracking.endpointMetrics.totalTime += responseTime;
@@ -151,17 +165,20 @@ class MonitoringUseCases {
     this.metrics.responseTime.max = Math.max(this.metrics.responseTime.max, responseTime);
     this.metrics.responseTime.min = Math.min(this.metrics.responseTime.min, responseTime);
 
-    // Log si el tiempo de respuesta es alto
-    if (responseTime > 1000) {
+    // Log si el tiempo de respuesta es alto (umbral configurable)
+    const slowRequestMs = Number(process.env.SLOW_REQUEST_MS || 2000);
+    if (responseTime > slowRequestMs) {
       logger.warn('Tiempo de respuesta alto detectado', {
         endpoint: tracking.endpoint,
-        responseTime,
+        responseTime: Math.round(responseTime),
         module: 'monitoring'
       });
     }
   }
 
   // Registra un error
+  // Acumula totales global/por endpoint y por tipo (error.name); si el tipo ya
+  // se repitió más de 10 veces emite un log de error frecuente.
   trackError(tracking, error) {
     this.metrics.requests.errors++;
     tracking.endpointMetrics.errors++;
@@ -182,6 +199,7 @@ class MonitoringUseCases {
   }
 
   // Registra eventos de caché
+  // Incrementa hits o misses y recalcula el ratio de aciertos en porcentaje.
   trackCache(hit) {
     if (hit) {
       this.metrics.cache.hits++;
@@ -194,6 +212,7 @@ class MonitoringUseCases {
   }
 
   // Obtiene todas las métricas
+  // Arma un snapshot con uptime, totales, historiales y Map convertidos a objeto.
   getMetrics() {
     const now = new Date();
     const uptime = process.uptime();
@@ -227,6 +246,7 @@ class MonitoringUseCases {
   }
 
   // Detener monitoreo de recursos
+  // Cancela el interval activo (si lo hay) y limpia la referencia.
   stopResourceMonitoring() {
     if (this.monitoringInterval) {
       clearInterval(this.monitoringInterval);

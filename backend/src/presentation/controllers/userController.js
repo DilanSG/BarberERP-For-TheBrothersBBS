@@ -1,8 +1,7 @@
 import { asyncHandler } from '../middleware/index.js';
-import { AppError, Barber } from '../../barrel.js';
+import { AppError, Barber, logger } from '../../barrel.js';
 import UserUseCases from '../../core/application/usecases/UserUseCases.js';
 import BarberUseCases from '../../core/application/usecases/BarberUseCases.js';
-import mongoose from 'mongoose';
 
 const barberService = BarberUseCases.getInstance();
 const userService = UserUseCases.getInstance();
@@ -17,44 +16,47 @@ export const changeUserRole = asyncHandler(async (req, res) => {
     throw new AppError('Rol no válido', 400);
   }
 
-  const session = await mongoose.startSession();
-  session.startTransaction();
+  // Guardar rol anterior para compensación en caso de fallo
+  const userBefore = await userService.getUserById(req.params.id);
+  const previousRole = userBefore?.role;
+
+  const updatedUser = await userService.updateUser(
+    req.params.id,
+    { role },
+    true // adminAction
+  );
 
   try {
-    const updatedUser = await userService.updateUser(
-      req.params.id,
-      { role },
-      true // adminAction
-    );
-
     // Si el usuario es promovido a barbero, crear o reactivar su perfil
     if (role === 'barber') {
       const existingBarber = await Barber.findOne({ user: updatedUser._id });
       
       if (!existingBarber) {
         await userService.createBarberProfile(updatedUser);
-      } else {
+      } else if (!existingBarber.isActive) {
         // Reactivar perfil si existe pero está desactivado
-        await Barber.findByIdAndUpdate(existingBarber._id, { isActive: true });
+        await Barber.findByIdAndUpdate(existingBarber._id, { isActive: true, deactivatedAt: null });
       }
     } else {
       // Si deja de ser barbero, desactivar el perfil
       await userService.deactivateBarberProfile(updatedUser._id);
     }
-
-    await session.commitTransaction();
-    res.json({ 
-      success: true, 
-      message: 'Rol actualizado correctamente', 
-      data: updatedUser 
-    });
-
   } catch (error) {
-    await session.abortTransaction();
+    // Compensación: revertir el rol si falla la sincronización del perfil de barbero
+    logger.error('Error sincronizando perfil de barbero, revirtiendo rol:', error);
+    try {
+      await userService.updateUser(req.params.id, { role: previousRole }, true);
+    } catch (revertError) {
+      logger.error('Error crítico revirtiendo rol tras fallo de sincronización:', revertError);
+    }
     throw error;
-  } finally {
-    session.endSession();
   }
+
+  res.json({ 
+    success: true, 
+    message: 'Rol actualizado correctamente', 
+    data: updatedUser 
+  });
 });
 
 // @desc    Obtener todos los usuarios
@@ -109,11 +111,31 @@ export const updateUser = asyncHandler(async (req, res) => {
     updateData.profilePicture = req.image.url;
   }
 
+  // Obtener rol anterior para detectar cambios de rol
+  const previousUser = isAdmin && updateData.role
+    ? await userService.getUserById(userId)
+    : null;
+  const previousRole = previousUser?.role;
+
   const updatedUser = await userService.updateUser(
     userId,
     updateData,
     isAdmin
   );
+
+  // Sincronizar perfil de barbero cuando cambia el rol (mismo comportamiento que /users/:id/role)
+  if (isAdmin && updateData.role && updateData.role !== previousRole) {
+    if (updateData.role === 'barber') {
+      const existingBarber = await Barber.findOne({ user: updatedUser._id });
+      if (!existingBarber) {
+        await userService.createBarberProfile(updatedUser);
+      } else if (!existingBarber.isActive) {
+        await Barber.findByIdAndUpdate(existingBarber._id, { isActive: true, deactivatedAt: null });
+      }
+    } else if (previousRole === 'barber') {
+      await userService.deactivateBarberProfile(updatedUser._id);
+    }
+  }
 
   res.json({
     success: true,

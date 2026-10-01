@@ -2,14 +2,12 @@ import { Sale, Inventory, AppError, logger, SALE_TYPES } from '../barrel.js';
 import InventoryLogService from '../core/application/usecases/InventoryLogUseCases.js';
 import { refundVerificationService } from '../core/application/usecases/RefundVerificationUseCases.js';
 
-/**
- * Servicio para manejar reembolsos de ventas
- */
+// Servicio para manejar reembolsos de ventas
+// Los métodos son estáticos y de uso interno; validan código de administrador
+// (salvo para rol admin) y mantienen el stock sincronizado al reembolsar/reversar.
 class RefundService {
   
-  /**
-   * Procesar reembolso de una venta
-   */
+  // Procesar reembolso de una venta
   static async processRefund(saleId, reason, adminCode, userId, userRole) {
     logger.info('🔄 Iniciando proceso de reembolso', {
       saleId,
@@ -57,6 +55,7 @@ class RefundService {
 
     const originalSaleData = { ...sale.toObject() };
 
+    // Respaldo del estado original por si se requiere auditoría del cambio
     try {
       // Marcar la venta como reembolsada
       sale.status = 'refunded';
@@ -132,9 +131,10 @@ class RefundService {
     }
   }
 
-  /**
-   * Obtener todas las ventas reembolsadas
-   */
+  // Obtener todas las ventas reembolsadas
+  // Aplica filtros de fecha/barbero/tipo, pagina y calcula el monto total reembolsado.
+  // @param {Object} filters - { startDate, endDate, barberId, type, limit, page }
+  // @returns {Promise<Object>} Ventas, estadísticas y metadatos de paginación
   static async getRefundedSales(filters = {}) {
     const {
       startDate,
@@ -211,9 +211,11 @@ class RefundService {
     };
   }
 
-  /**
-   * Obtener resumen de reembolsos por barbero
-   */
+  // Obtener resumen de reembolsos por barbero
+  // Agrupa por barberId con totales y conteo por tipo (producto/servicio).
+  // @param {string|Date} startDate - Inicio del rango (opcional)
+  // @param {string|Date} endDate - Fin del rango (opcional)
+  // @returns {Promise<Array>} Resumen agregado ordenado por monto
   static async getRefundsSummaryByBarber(startDate, endDate) {
     const matchStage = {
       status: 'refunded'
@@ -247,16 +249,14 @@ class RefundService {
     return summary;
   }
 
-  /**
-   * Obtener código de verificación actual
-   */
+  // Obtener código de verificación actual
+  // Lo usa el frontend/admin para autorizar reembolsos de usuarios no admin.
+  // @returns {string} Código de verificación vigente
   static getCurrentVerificationCode() {
     return refundVerificationService.getCurrentCode();
   }
 
-  /**
-   * Eliminar reembolso (reversar a venta normal)
-   */
+  // Eliminar reembolso (reversar a venta normal)
   static async deleteRefund(saleId, adminUserId) {
     logger.info('🗑️ Iniciando eliminación de reembolso', {
       saleId,
@@ -323,9 +323,7 @@ class RefundService {
     };
   }
 
-  /**
-   * Eliminar reembolso permanentemente del sistema
-   */
+  // Eliminar reembolso permanentemente del sistema
   static async permanentDeleteRefund(saleId, adminUserId) {
     logger.info('🗑️ Iniciando eliminación permanente de reembolso', {
       saleId,

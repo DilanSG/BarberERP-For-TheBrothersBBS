@@ -1,7 +1,13 @@
 import { InventoryLog, logger } from '../../../barrel.js';
 
+// Casos de uso de la bitácora de inventario.
+// Centraliza la creación de logs de auditoría y las consultas/estadísticas
+// usadas por el panel de administración.
 class InventoryLogUseCases {
   // Crear un log de acción en inventario
+  // Parámetros: acción, item, usuario/rol, detalles y estados previo/nuevo.
+  // Copia a campos planos los valores presentes en `details` (mensaje, motivo,
+  // notas, cantidades, stock y monto) y persiste el log. Relanza errores.
   static async createLog(action, itemId, itemName, userId, userRole, details, previousState = null, newState = null) {
     try {
       const logData = {
@@ -38,6 +44,8 @@ class InventoryLogUseCases {
   }
 
   // Obtener logs para admin
+  // Aplica filtros opcionales de rango de fechas, acción, usuario y rol;
+  // popula usuario/ítem, ordena por timestamp descendente y limita (100 por defecto).
   static async getLogsForAdmin(filters = {}) {
     try {
       const query = {};
@@ -76,6 +84,7 @@ class InventoryLogUseCases {
   }
 
   // Obtener logs por item específico
+  // Historial completo del producto (más reciente primero) con el usuario que actuó.
   static async getLogsByItem(itemId) {
     try {
       const logs = await InventoryLog.find({ itemId })
@@ -90,6 +99,8 @@ class InventoryLogUseCases {
   }
 
   // Obtener estadísticas de logs
+  // Agregación en dos etapas: agrupa por acción+rol para contar, y luego por
+  // acción sumando el total y armando el desglose byRole. Acepta rango de fechas.
   static async getLogStats(filters = {}) {
     try {
       const matchStage = {};

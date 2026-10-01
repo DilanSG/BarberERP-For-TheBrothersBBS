@@ -1,16 +1,18 @@
 ﻿import React, { useEffect } from 'react';
 import logger from '@utils/logger';
-import useBodyScrollLock from '@hooks/useBodyScrollLock';
+import Modal from '@components/ui/Modal';
 import {
-  ShoppingCart, Package, Calendar, AlertTriangle, X,
+  ShoppingCart, Package, Calendar, AlertTriangle,
   Scissors, Clock, User, FileText, ExternalLink
 } from 'lucide-react';
 import { 
   SALE_TYPES, 
   SALE_TYPE_LABELS 
 } from '@shared/constants/salesConstants';
+import { formatCurrency } from '@utils/formatters';
 
 // Helper para formatear fechas sin desfase de timezone
+// Si la fecha viene como YYYY-MM-DD se le añade mediodía para evitar saltos de día
 const formatDateSafe = (dateString) => {
   if (!dateString) return 'Fecha no disponible';
   
@@ -27,15 +29,10 @@ const formatDateSafe = (dateString) => {
   });
 };
 
-/**
- * Modal para detalles de ventas con información detallada por producto y día
- */
+// Modal para detalles de ventas con información detallada por producto y día
 export const DetailedSalesModal = ({ isOpen, onClose, salesData, barberName, dateRange, loading, error }) => {
   // ✅ HOOKS SIEMPRE PRIMERO - antes de cualquier early return
-  // Bloquear scroll del body usando hook personalizado
-  useBodyScrollLock(isOpen);
-
-  // Debug: Agregar logs para entender la estructura de datos
+  // Logs de depuración para verificar la forma real de salesData (array de días)
   useEffect(() => {
     if (salesData) {
       logger.debug('🔍 MODAL DEBUG - salesData recibida:', salesData);
@@ -52,12 +49,7 @@ export const DetailedSalesModal = ({ isOpen, onClose, salesData, barberName, dat
   // Early return DESPUÉS de los hooks
   if (!isOpen) return null;
 
-  const formatCurrency = (amount) => new Intl.NumberFormat('es-CO', {
-    style: 'currency',
-    currency: 'COP',
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0
-  }).format(amount || 0);
+  
 
   // ✅ Helper para formatear el rango de fechas del modal
   const formatModalDateRange = () => {
@@ -90,7 +82,7 @@ export const DetailedSalesModal = ({ isOpen, onClose, salesData, barberName, dat
     return 'Período seleccionado';
   };
 
-  // Calcular totales
+  // Totales del período: suma de productos y de montos de todos los días
   const totalAmount = salesData?.reduce((sum, day) => sum + (day.totalAmount || 0), 0) || 0;
   const totalProducts = salesData?.reduce((sum, day) => sum + (day.totalProducts || 0), 0) || 0;
 
@@ -103,51 +95,31 @@ export const DetailedSalesModal = ({ isOpen, onClose, salesData, barberName, dat
   });
 
   return (
-    <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-[9999] p-4 sm:p-6 lg:p-8">
-      <div className="relative w-full max-w-sm sm:max-w-md lg:max-w-3xl mx-auto h-[90vh] sm:h-[85vh] lg:h-[80vh] flex flex-col">
-        <div className="relative bg-green-500/5 backdrop-blur-md border border-green-500/20 rounded-2xl shadow-2xl shadow-green-500/20 h-full flex flex-col overflow-hidden">
-          {/* Header fijo */}
-          <div className="relative z-10 flex-shrink-0 p-4 sm:p-6 border-b border-green-500/20">
-            <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center gap-2 sm:gap-3">
-                <div className="p-1.5 sm:p-2 rounded-lg bg-green-500/20 border border-green-500/30">
-                  <ShoppingCart className="w-4 h-4 sm:w-5 sm:h-5 text-green-400" />
-                </div>
-                <div>
-                  <h3 className="text-base sm:text-lg font-semibold text-white">
-                    Ventas - {barberName}
-                  </h3>
-                  <p className="text-xs sm:text-sm text-green-300">
-                    {formatModalDateRange()}
-                  </p>
-                </div>
-              </div>
-              <button 
-                onClick={onClose}
-                className="p-1 text-gray-400 hover:text-white transition-colors duration-200"
-              >
-                <X className="w-4 h-4 sm:w-5 sm:h-5" />
-              </button>
-            </div>
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      color="emerald"
+      title={`Ventas - ${barberName}`}
+      subtitle={formatModalDateRange()}
+      icon={ShoppingCart}
+      size="3xl"
+    >
+      {/* Resumen total */}
+      <div className="grid grid-cols-2 gap-3 sm:gap-4 mb-4">
+        <div className="p-3 bg-emerald-500/10 border border-emerald-500/30 rounded-lg">
+          <p className="text-xs text-emerald-300 mb-1">Total productos</p>
+          <p className="text-sm sm:text-base font-bold text-white">{totalProducts}</p>
+        </div>
+        <div className="p-3 bg-emerald-500/10 border border-emerald-500/30 rounded-lg">
+          <p className="text-xs text-emerald-300 mb-1">Total en ventas</p>
+          <p className="text-sm sm:text-base font-bold text-emerald-400">{formatCurrency(totalAmount)}</p>
+        </div>
+      </div>
 
-            {/* Resumen total */}
-            <div className="grid grid-cols-2 gap-3 sm:gap-4">
-              <div className="p-3 bg-green-500/10 border border-green-500/30 rounded-lg">
-                <p className="text-xs text-green-300 mb-1">Total productos</p>
-                <p className="text-sm sm:text-base font-bold text-white">{totalProducts}</p>
-              </div>
-              <div className="p-3 bg-green-500/10 border border-green-500/30 rounded-lg">
-                <p className="text-xs text-green-300 mb-1">Total en ventas</p>
-                <p className="text-sm sm:text-base font-bold text-green-400">{formatCurrency(totalAmount)}</p>
-              </div>
-            </div>
-          </div>
-
-          {/* Contenido scrolleable */}
-          <div className="flex-1 overflow-y-auto overflow-x-hidden custom-scrollbar px-4 sm:px-6 pb-4 sm:pb-6">
+            {/* Estados: cargando, error, sin datos o listado de ventas por día */}
             {loading ? (
               <div className="flex flex-col items-center justify-center py-8 text-center">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-green-400 mb-4"></div>
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-emerald-400 mb-4"></div>
                 <p className="text-gray-400">Cargando detalles de ventas...</p>
               </div>
             ) : error ? (
@@ -159,8 +131,8 @@ export const DetailedSalesModal = ({ isOpen, onClose, salesData, barberName, dat
               </div>
             ) : (!salesData || salesData.length === 0) ? (
               <div className="flex flex-col items-center justify-center py-8 text-center">
-                <div className="p-4 rounded-full bg-green-500/10 border border-green-500/20 mb-4">
-                  <ShoppingCart className="w-8 h-8 text-green-400" />
+                <div className="p-4 rounded-full bg-emerald-500/10 border border-emerald-500/20 mb-4">
+                  <ShoppingCart className="w-8 h-8 text-emerald-400" />
                 </div>
                 <p className="text-gray-400">No hay ventas registradas en este período</p>
               </div>
@@ -171,18 +143,18 @@ export const DetailedSalesModal = ({ isOpen, onClose, salesData, barberName, dat
                   .map((day, dayIndex) => (
                   <div key={dayIndex} className="space-y-3">
                     {/* Encabezado del día */}
-                    <div className="flex items-center justify-between py-2 border-b border-green-500/20">
+                    <div className="flex items-center justify-between py-2 border-b border-emerald-500/20">
                       <div className="flex items-center gap-2">
-                        <Calendar className="w-4 h-4 text-green-400" />
+                        <Calendar className="w-4 h-4 text-emerald-400" />
                         <h4 className="font-medium text-white">
                           {formatDateSafe(day.date)}
                         </h4>
                       </div>
                       <div className="text-right">
-                        <p className="text-xs text-green-300">
+                        <p className="text-xs text-emerald-300">
                           {day.sales?.length || 0} ventas • {day.totalProducts || 0} productos
                         </p>
-                        <p className="text-sm font-bold text-green-400">
+                        <p className="text-sm font-bold text-emerald-400">
                           {formatCurrency(day.totalAmount)}
                         </p>
                       </div>
@@ -190,11 +162,11 @@ export const DetailedSalesModal = ({ isOpen, onClose, salesData, barberName, dat
 
                     {/* Ventas del día */}
                     {day.sales?.map((sale, saleIndex) => (
-                      <div key={saleIndex} className="ml-4 p-4 bg-green-500/5 border border-green-500/20 rounded-xl hover:bg-green-500/10 transition-all duration-300">
+                      <div key={saleIndex} className="ml-4 p-4 bg-emerald-500/5 border border-emerald-500/20 rounded-xl hover:bg-emerald-500/10 transition-all duration-300">
                         <div className="flex items-start justify-between mb-3">
                           <div className="flex items-center gap-2">
-                            <div className="w-2 h-2 rounded-full bg-green-400"></div>
-                            <p className="text-xs text-green-300">
+                            <div className="w-2 h-2 rounded-full bg-emerald-400"></div>
+                            <p className="text-xs text-emerald-300">
                               {new Date(sale.saleDate).toLocaleTimeString('es-ES', {
                                 hour: '2-digit',
                                 minute: '2-digit'
@@ -207,7 +179,7 @@ export const DetailedSalesModal = ({ isOpen, onClose, salesData, barberName, dat
                             )}
                           </div>
                           <div className="flex items-center gap-2">
-                            <p className="text-sm font-bold text-green-400">{formatCurrency(sale.total)}</p>
+                            <p className="text-sm font-bold text-emerald-400">{formatCurrency(sale.total)}</p>
                           </div>
                         </div>
 
@@ -215,7 +187,7 @@ export const DetailedSalesModal = ({ isOpen, onClose, salesData, barberName, dat
                         <div className="flex items-center justify-between py-2 px-3 bg-black/20 rounded-lg">
                           <div className="flex items-center gap-2">
                             {sale.type === SALE_TYPES.PRODUCT ? (
-                              <Package size={12} className="text-green-400" />
+                              <Package size={12} className="text-emerald-400" />
                             ) : (
                               <Scissors size={12} className="text-blue-400" />
                             )}
@@ -230,7 +202,7 @@ export const DetailedSalesModal = ({ isOpen, onClose, salesData, barberName, dat
                             </div>
                           </div>
                           <div className="text-right">
-                            <p className="text-sm font-medium text-green-400">
+                            <p className="text-sm font-medium text-emerald-400">
                               {formatCurrency(sale.total)}
                             </p>
                             {sale.paymentMethod && (
@@ -256,22 +228,14 @@ export const DetailedSalesModal = ({ isOpen, onClose, salesData, barberName, dat
                 ))}
               </div>
             )}
-          </div>
-        </div>
-      </div>
-    </div>
+    </Modal>
   );
 };
 
-/**
- * Modal para detalles de citas completadas
- */
+// Modal para detalles de citas completadas
 export const DetailedAppointmentsModal = ({ isOpen, onClose, appointmentsData, barberName, dateRange, loading, error }) => {
   // ✅ HOOKS SIEMPRE PRIMERO - antes de cualquier early return
-  // Bloquear scroll del body usando hook personalizado
-  useBodyScrollLock(isOpen);
-
-  // Debug: Agregar logs para entender la estructura de datos de citas
+  // Logs de depuración para verificar la forma real de appointmentsData
   useEffect(() => {
     if (appointmentsData) {
       logger.debug('🔍 MODAL CITAS DEBUG - appointmentsData recibida:', appointmentsData);
@@ -288,12 +252,7 @@ export const DetailedAppointmentsModal = ({ isOpen, onClose, appointmentsData, b
   // Early return DESPUÉS de los hooks
   if (!isOpen) return null;
 
-  const formatCurrency = (amount) => new Intl.NumberFormat('es-CO', {
-    style: 'currency',
-    currency: 'COP',
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0
-  }).format(amount || 0);
+  
 
   // ✅ Helper para formatear el rango de fechas del modal
   const formatModalDateRange = () => {
@@ -326,7 +285,7 @@ export const DetailedAppointmentsModal = ({ isOpen, onClose, appointmentsData, b
     return 'Período seleccionado';
   };
 
-  // Calcular totales
+  // Totales del período: cantidad de citas e ingresos sumando el precio de cada servicio
   const totalAppointments = appointmentsData?.reduce((sum, day) => sum + (day.appointments?.length || 0), 0) || 0;
   const totalRevenue = appointmentsData?.reduce((sum, day) => 
     sum + (day.appointments?.reduce((daySum, apt) => daySum + (apt.service?.price || 0), 0) || 0), 0
@@ -341,48 +300,28 @@ export const DetailedAppointmentsModal = ({ isOpen, onClose, appointmentsData, b
   });
 
   return (
-    <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-[9999] p-4 sm:p-6 lg:p-8">
-      <div className="relative w-full max-w-sm sm:max-w-md lg:max-w-3xl mx-auto h-[90vh] sm:h-[85vh] lg:h-[80vh] flex flex-col">
-        <div className="relative bg-blue-500/5 backdrop-blur-md border border-blue-500/20 rounded-2xl shadow-2xl shadow-blue-500/20 h-full flex flex-col overflow-hidden">
-          {/* Header fijo */}
-          <div className="relative z-10 flex-shrink-0 p-4 sm:p-6 border-b border-blue-500/20">
-            <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center gap-2 sm:gap-3">
-                <div className="p-1.5 sm:p-2 rounded-lg bg-blue-500/20 border border-blue-500/30">
-                  <Calendar className="w-4 h-4 sm:w-5 sm:h-5 text-blue-400" />
-                </div>
-                <div>
-                  <h3 className="text-base sm:text-lg font-semibold text-white">
-                    Citas Completadas - {barberName}
-                  </h3>
-                  <p className="text-xs sm:text-sm text-blue-300">
-                    {formatModalDateRange()}
-                  </p>
-                </div>
-              </div>
-              <button 
-                onClick={onClose}
-                className="p-1 text-gray-400 hover:text-white transition-colors duration-200"
-              >
-                <X className="w-4 h-4 sm:w-5 sm:h-5" />
-              </button>
-            </div>
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      color="blue"
+      title={`Citas Completadas - ${barberName}`}
+      subtitle={formatModalDateRange()}
+      icon={Calendar}
+      size="3xl"
+    >
+      {/* Resumen de totales */}
+      <div className="grid grid-cols-2 gap-4 p-4 bg-blue-500/10 rounded-xl border border-blue-500/20 mb-4">
+        <div className="text-center">
+          <p className="text-xs sm:text-sm text-blue-300">Total Citas</p>
+          <p className="text-lg sm:text-xl font-bold text-blue-400">{totalAppointments}</p>
+        </div>
+        <div className="text-center">
+          <p className="text-xs sm:text-sm text-blue-300">Ingresos Generados</p>
+          <p className="text-lg sm:text-xl font-bold text-blue-400">{formatCurrency(totalRevenue)}</p>
+        </div>
+      </div>
 
-            {/* Resumen de totales */}
-            <div className="grid grid-cols-2 gap-4 p-4 bg-blue-500/10 rounded-xl border border-blue-500/20">
-              <div className="text-center">
-                <p className="text-xs sm:text-sm text-blue-300">Total Citas</p>
-                <p className="text-lg sm:text-xl font-bold text-blue-400">{totalAppointments}</p>
-              </div>
-              <div className="text-center">
-                <p className="text-xs sm:text-sm text-blue-300">Ingresos Generados</p>
-                <p className="text-lg sm:text-xl font-bold text-blue-400">{formatCurrency(totalRevenue)}</p>
-              </div>
-            </div>
-          </div>
-
-          {/* Contenido scrolleable */}
-          <div className="flex-1 overflow-y-auto overflow-x-hidden custom-scrollbar px-4 sm:px-6 pb-4 sm:pb-6" style={{ minHeight: 0 }}>
+            {/* Estados: cargando, error, sin datos o listado de citas por día */}
             {loading ? (
               <div className="flex items-center justify-center py-8">
                 <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-400"></div>
@@ -449,8 +388,8 @@ export const DetailedAppointmentsModal = ({ isOpen, onClose, appointmentsData, b
                               {formatCurrency(appointment.service?.price || 0)}
                             </p>
                             <div className="flex items-center gap-1 mt-1">
-                              <div className="w-2 h-2 rounded-full bg-green-400"></div>
-                              <span className="text-xs text-green-300">Completada</span>
+                              <div className="w-2 h-2 rounded-full bg-emerald-400"></div>
+                              <span className="text-xs text-emerald-300">Completada</span>
                             </div>
                           </div>
                         </div>
@@ -488,30 +427,17 @@ export const DetailedAppointmentsModal = ({ isOpen, onClose, appointmentsData, b
                 ))}
               </div>
             )}
-          </div>
-        </div>
-      </div>
-    </div>
+    </Modal>
   );
 };
 
-/**
- * Modal para detalles de cortes (servicios walk-in) con hora de realización
- */
+// Modal para detalles de cortes (servicios walk-in) con hora de realización
 export const DetailedCutsModal = ({ isOpen, onClose, cutsData, barberName, dateRange, loading, error }) => {
   // ✅ HOOKS SIEMPRE PRIMERO - antes de cualquier early return
-  // Bloquear scroll del body usando hook personalizado
-  useBodyScrollLock(isOpen);
-
   // Early return DESPUÉS de los hooks
   if (!isOpen) return null;
 
-  const formatCurrency = (amount) => new Intl.NumberFormat('es-CO', {
-    style: 'currency',
-    currency: 'COP',
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0
-  }).format(amount || 0);
+  
 
   // ✅ Helper para formatear el rango de fechas del modal
   const formatModalDateRange = () => {
@@ -544,57 +470,37 @@ export const DetailedCutsModal = ({ isOpen, onClose, cutsData, barberName, dateR
     return 'Período seleccionado';
   };
 
-  // Calcular totales
+  // Totales del período: cantidad de cortes e ingresos acumulados
   const totalCuts = cutsData?.reduce((sum, day) => sum + (day.cuts?.length || 0), 0) || 0;
   const totalRevenue = cutsData?.reduce((sum, day) => sum + (day.totalAmount || 0), 0) || 0;
 
   return (
-    <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-[9999] p-4 sm:p-6 lg:p-8">
-      <div className="relative w-full max-w-sm sm:max-w-md lg:max-w-3xl mx-auto h-[90vh] sm:h-[85vh] lg:h-[80vh] flex flex-col">
-        <div className="relative bg-purple-500/5 backdrop-blur-md border border-purple-500/20 rounded-2xl shadow-2xl shadow-purple-500/20 h-full flex flex-col overflow-hidden">
-          {/* Header fijo */}
-          <div className="relative z-10 flex-shrink-0 p-4 sm:p-6 border-b border-purple-500/20">
-            <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center gap-2 sm:gap-3">
-                <div className="p-1.5 sm:p-2 rounded-lg bg-purple-500/20 border border-purple-500/30">
-                  <Scissors className="w-4 h-4 sm:w-5 sm:h-5 text-purple-400" />
-                </div>
-                <div>
-                  <h3 className="text-base sm:text-lg font-semibold text-white">
-                    Cortes Realizados - {barberName}
-                  </h3>
-                  <p className="text-xs sm:text-sm text-purple-300">
-                    {formatModalDateRange()}
-                  </p>
-                </div>
-              </div>
-              <button 
-                onClick={onClose}
-                className="p-1 text-gray-400 hover:text-white transition-colors duration-200"
-              >
-                <X className="w-4 h-4 sm:w-5 sm:h-5" />
-              </button>
-            </div>
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      color="brand"
+      title={`Cortes Realizados - ${barberName}`}
+      subtitle={formatModalDateRange()}
+      icon={Scissors}
+      size="3xl"
+    >
+      {/* Resumen de totales */}
+      <div className="grid grid-cols-2 gap-4 p-4 bg-brand-400/10 rounded-xl border border-brand-400/20 mb-4">
+        <div className="text-center">
+          <p className="text-xs sm:text-sm text-brand-200">Total Cortes</p>
+          <p className="text-lg sm:text-xl font-bold text-brand-300">{totalCuts}</p>
+        </div>
+        <div className="text-center">
+          <p className="text-xs sm:text-sm text-brand-200">Ingresos Generados</p>
+          <p className="text-lg sm:text-xl font-bold text-brand-300">{formatCurrency(totalRevenue)}</p>
+        </div>
+      </div>
 
-            {/* Resumen de totales */}
-            <div className="grid grid-cols-2 gap-4 p-4 bg-purple-500/10 rounded-xl border border-purple-500/20">
-              <div className="text-center">
-                <p className="text-xs sm:text-sm text-purple-300">Total Cortes</p>
-                <p className="text-lg sm:text-xl font-bold text-purple-400">{totalCuts}</p>
-              </div>
-              <div className="text-center">
-                <p className="text-xs sm:text-sm text-purple-300">Ingresos Generados</p>
-                <p className="text-lg sm:text-xl font-bold text-purple-400">{formatCurrency(totalRevenue)}</p>
-              </div>
-            </div>
-          </div>
-
-          {/* Contenido scrolleable */}
-          <div className="flex-1 overflow-y-auto overflow-x-hidden custom-scrollbar px-4 sm:px-6 pb-4 sm:pb-6" style={{ minHeight: 0 }}>
+            {/* Estados: cargando, error, sin datos o listado de cortes por día */}
             {loading ? (
               <div className="flex items-center justify-center py-8">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-400"></div>
-                <span className="ml-3 text-purple-400">Cargando cortes...</span>
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-brand-300"></div>
+                <span className="ml-3 text-brand-300">Cargando cortes...</span>
               </div>
             ) : error ? (
               <div className="flex flex-col items-center justify-center py-8 text-center">
@@ -605,8 +511,8 @@ export const DetailedCutsModal = ({ isOpen, onClose, cutsData, barberName, dateR
               </div>
             ) : (!cutsData || cutsData.length === 0) ? (
               <div className="flex flex-col items-center justify-center py-8 text-center">
-                <div className="p-4 rounded-full bg-purple-500/10 border border-purple-500/20 mb-4">
-                  <Scissors className="w-8 h-8 text-purple-400" />
+                <div className="p-4 rounded-full bg-brand-400/10 border border-brand-400/20 mb-4">
+                  <Scissors className="w-8 h-8 text-brand-300" />
                 </div>
                 <p className="text-gray-400">No hay cortes registrados en este período</p>
               </div>
@@ -617,18 +523,18 @@ export const DetailedCutsModal = ({ isOpen, onClose, cutsData, barberName, dateR
                   .map((day, dayIndex) => (
                   <div key={dayIndex} className="space-y-3">
                     {/* Encabezado del día */}
-                    <div className="flex items-center justify-between py-2 border-b border-purple-500/20">
+                    <div className="flex items-center justify-between py-2 border-b border-brand-400/20">
                       <div className="flex items-center gap-2">
-                        <Calendar className="w-4 h-4 text-purple-400" />
+                        <Calendar className="w-4 h-4 text-brand-300" />
                         <h4 className="font-medium text-white">
                           {formatDateSafe(day.date)}
                         </h4>
                       </div>
                       <div className="text-right">
-                        <p className="text-xs text-purple-300">
+                        <p className="text-xs text-brand-200">
                           {day.cuts?.length || 0} cortes realizados
                         </p>
-                        <p className="text-sm font-bold text-purple-400">
+                        <p className="text-sm font-bold text-brand-300">
                           {formatCurrency(day.totalAmount)}
                         </p>
                       </div>
@@ -636,12 +542,12 @@ export const DetailedCutsModal = ({ isOpen, onClose, cutsData, barberName, dateR
 
                     {/* Cortes del día */}
                     {day.cuts?.map((cut, cutIndex) => (
-                      <div key={cutIndex} className="ml-4 p-4 bg-purple-500/5 border border-purple-500/20 rounded-xl hover:bg-purple-500/10 transition-all duration-300">
+                      <div key={cutIndex} className="ml-4 p-4 bg-brand-400/5 border border-brand-400/20 rounded-xl hover:bg-brand-400/10 transition-all duration-300">
                         <div className="flex items-start justify-between mb-3">
                           <div className="flex items-center gap-2">
-                            <div className="w-2 h-2 rounded-full bg-purple-400"></div>
+                            <div className="w-2 h-2 rounded-full bg-brand-300"></div>
                             <div>
-                              <p className="text-xs text-purple-300 flex items-center gap-1">
+                              <p className="text-xs text-brand-200 flex items-center gap-1">
                                 <Clock size={10} />
                                 {new Date(cut.saleDate).toLocaleTimeString('es-ES', {
                                   hour: '2-digit',
@@ -657,7 +563,7 @@ export const DetailedCutsModal = ({ isOpen, onClose, cutsData, barberName, dateR
                           </div>
                           <div className="flex items-center gap-2">
                             <div className="text-right">
-                              <p className="text-sm font-bold text-purple-400">
+                              <p className="text-sm font-bold text-brand-300">
                                 {formatCurrency(cut.total)}
                               </p>
                               {cut.paymentMethod && (
@@ -672,7 +578,7 @@ export const DetailedCutsModal = ({ isOpen, onClose, cutsData, barberName, dateR
                         {/* Servicio del corte */}
                         <div className="flex items-center justify-between py-2 px-3 bg-black/20 rounded-lg">
                           <div className="flex items-center gap-2">
-                            <Scissors size={12} className="text-purple-400" />
+                            <Scissors size={12} className="text-brand-300" />
                             <div>
                               <p className="text-sm font-medium text-white">
                                 {cut.service?.name || 'Corte de Cabello'}
@@ -682,7 +588,7 @@ export const DetailedCutsModal = ({ isOpen, onClose, cutsData, barberName, dateR
                               </p>
                             </div>
                           </div>
-                          <p className="text-sm font-medium text-purple-400">
+                          <p className="text-sm font-medium text-brand-300">
                             {formatCurrency(cut.total)}
                           </p>
                         </div>
@@ -702,9 +608,6 @@ export const DetailedCutsModal = ({ isOpen, onClose, cutsData, barberName, dateR
                 ))}
               </div>
             )}
-          </div>
-        </div>
-      </div>
-    </div>
+    </Modal>
   );
 };

@@ -1,5 +1,8 @@
 import mongoose from 'mongoose';
 
+// Modelo Mongoose del perfil de barbero.
+// Vincula a un usuario con su especialidad, horario semanal, servicios que
+// atiende, métricas de reseñas y estadísticas acumuladas de ventas.
 const barberSchema = new mongoose.Schema({
   user: {
     type: mongoose.Schema.Types.ObjectId,
@@ -14,6 +17,7 @@ const barberSchema = new mongoose.Schema({
     maxlength: [100, 'La especialidad no puede exceder los 100 caracteres']
   },
   experience: {
+    // Años de experiencia del barbero; alimenta el virtual experienceFormatted.
     type: Number, // en años
     min: [0, 'La experiencia no puede ser negativa'],
     default: 0
@@ -27,6 +31,7 @@ const barberSchema = new mongoose.Schema({
     ref: 'Service'
   }],
   schedule: {
+    // Horario semanal: por día se guarda hora de inicio/fin y si atiende.
     monday: { start: String, end: String, available: Boolean },
     tuesday: { start: String, end: String, available: Boolean },
     wednesday: { start: String, end: String, available: Boolean },
@@ -36,6 +41,8 @@ const barberSchema = new mongoose.Schema({
     sunday: { start: String, end: String, available: Boolean }
   },
   rating: {
+    // Rating en formato anidado (legado). El promedio vigente se mantiene
+    // sincronizado en averageRating/totalReviews desde el modelo Review.
     average: {
       type: Number,
       default: 0,
@@ -90,6 +97,7 @@ const barberSchema = new mongoose.Schema({
 });
 
 // Índices para optimización de consultas
+// Soportan listados de barberos activos, principales y filtros por especialidad.
 barberSchema.index({ isActive: 1 });
 barberSchema.index({ isMainBarber: 1 });
 barberSchema.index({ specialty: 1 });

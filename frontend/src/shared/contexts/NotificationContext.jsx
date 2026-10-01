@@ -1,8 +1,12 @@
-﻿import React, { createContext, useContext, useState, useEffect } from 'react';
+﻿// Contexto global de notificaciones (toasts).
+// Evita duplicados combinando notificaciones activas y un registro de recientes
+// (15 s), y auto-cierra cada toast según su duración.
+import React, { createContext, useContext, useState, useEffect } from 'react';
 import { logger } from '../utils/logger.js';
 
 const NotificationContext = createContext();
 
+// Hook de consumo; lanza error si se usa fuera de NotificationProvider
 export const useNotification = () => {
   const context = useContext(NotificationContext);
   if (!context) {
@@ -11,6 +15,8 @@ export const useNotification = () => {
   return context;
 };
 
+// Provider de notificaciones. Valor: notifications, addNotification,
+// removeNotification, clearAllNotifications y los helpers show*.
 export const NotificationProvider = ({ children }) => {
   const [notifications, setNotifications] = useState([]);
   const [recentNotifications, setRecentNotifications] = useState(new Map());
@@ -34,6 +40,9 @@ export const NotificationProvider = ({ children }) => {
     return () => clearInterval(cleanupInterval);
   }, []);
 
+  // Crea y encola una notificación; devuelve su id.
+  // Deduplica: ignora si ya hay una idéntica activa o mostrada en los últimos 15s;
+  // se auto-elimina tras `duration` (5000ms por defecto) si autoClose es true.
   const addNotification = (notification) => {
     const id = Date.now() + Math.random(); // Agregar random para evitar duplicados
     const newNotification = {
@@ -105,7 +114,9 @@ export const NotificationProvider = ({ children }) => {
     setNotifications([]);
   };
 
-  // Métodos de conveniencia para diferentes tipos
+  // Métodos de conveniencia para diferentes tipos.
+  // El título se autogenera si el mensaje es largo y la duración crece con el
+  // texto (errores duran más: 8-10s; éxito 4-6s).
   const showSuccess = (message, title = '') => {
     return addNotification({
       type: 'success',

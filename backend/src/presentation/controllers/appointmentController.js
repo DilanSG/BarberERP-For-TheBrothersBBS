@@ -3,6 +3,7 @@ import AppointmentUseCases from '../../core/application/usecases/appointmentServ
 import BarberUseCases from '../../core/application/usecases/BarberUseCases.js';
 import { Appointment, Barber, User, AppError, logger } from '../../barrel.js';
 import emailService from '../../services/emailService.js';
+import { emitAppointmentCreated, emitAppointmentUpdated, emitAppointmentDeleted, emitAppointmentStatusChanged } from '../../services/websocketService.js';
 
 const barberService = BarberUseCases.getInstance();
 
@@ -55,6 +56,8 @@ export const createAppointment = asyncHandler(async (req, res) => {
     logger.warn('Error enviando notificaciones de email:', emailError);
   }
 
+  emitAppointmentCreated(appointment);
+
   res.status(201).json({
     success: true,
     message: 'Cita creada exitosamente',
@@ -70,8 +73,12 @@ export const getAppointments = asyncHandler(async (req, res) => {
   let filters = {};
   
   if (req.user.role === 'barber') {
-    // Los barberos solo ven sus propias citas
-    filters.barber = req.params.barberId;
+    // Los barberos solo ven sus propias citas (resolver perfil de barbero desde el usuario autenticado)
+    const barber = await Barber.findOne({ user: req.user._id });
+    if (!barber) {
+      throw new AppError('Barbero no encontrado', 404);
+    }
+    filters.barber = barber._id;
     // No mostrar citas eliminadas por el barbero
     filters['deletedBy.barber'] = { $ne: true };
   } else if (req.user.role === 'user') {
@@ -124,14 +131,6 @@ export const getAppointments = asyncHandler(async (req, res) => {
 // @access  Private
 export const getBarberAppointments = asyncHandler(async (req, res) => {
   const { barberId } = req.params;
-  
-  // Ejecutar limpieza automática de citas expiradas antes de mostrar la lista
-  try {
-    await AppointmentUseCases.cleanupExpiredPendingAppointments();
-  } catch (error) {
-    logger.warn('Error en limpieza automática de citas expiradas:', error);
-    // No fallar si la limpieza falla, solo continuar
-  }
   
   // Construir filtros
   const filters = { 
@@ -206,6 +205,8 @@ export const updateAppointment = asyncHandler(async (req, res) => {
 
   const updatedAppointment = await AppointmentUseCases.updateAppointment(id, updateData);
 
+  emitAppointmentUpdated(updatedAppointment);
+
   res.json({
     success: true,
     data: updatedAppointment
@@ -268,6 +269,8 @@ export const cancelAppointment = asyncHandler(async (req, res) => {
   }
   
   const cancelledAppointment = await AppointmentUseCases.cancelAppointment(id, reason, req.user);
+
+  emitAppointmentStatusChanged(cancelledAppointment);
 
   // 📧 ENVIAR NOTIFICACIÓN DE CANCELACIÓN
   try {
@@ -342,6 +345,8 @@ export const completeAppointment = asyncHandler(async (req, res) => {
 
   const completedAppointment = await AppointmentUseCases.completeAppointment(id, req.user._id, req.user.role, paymentMethod);
 
+  emitAppointmentStatusChanged(completedAppointment);
+
   // 🌟 NUEVA FUNCIONALIDAD: Enviar email de solicitud de reseña
   try {
     // Poblar datos necesarios para el email
@@ -385,6 +390,8 @@ export const approveAppointment = asyncHandler(async (req, res) => {
     req.user.role
   );
 
+  emitAppointmentStatusChanged(approvedAppointment);
+
   res.json({
     success: true,
     message: 'Cita aprobada/confirmada exitosamente',
@@ -412,6 +419,8 @@ export const markNoShow = asyncHandler(async (req, res) => {
   }
 
   const noShowAppointment = await AppointmentUseCases.markNoShow(id);
+
+  emitAppointmentStatusChanged(noShowAppointment);
 
   res.json({
     success: true,
@@ -443,7 +452,7 @@ export const getAppointmentStats = asyncHandler(async (req, res) => {
     filters.endDate = req.query.endDate; // Pasar como string para que el service maneje la zona horaria
   }
 
-  const stats = await AppointmentUseCases.getStats(filters);
+  const stats = await AppointmentUseCases.getAppointmentStats(filters);
 
   res.json({
     success: true,
@@ -492,6 +501,8 @@ export const deleteAppointment = asyncHandler(async (req, res) => {
       updatedAppointment.deletedBy.admin) {
     await Appointment.findByIdAndDelete(id);
   }
+
+  emitAppointmentDeleted(req.params.id, appointment?.barber?._id || appointment?.barber);
 
   res.json({
     success: true,
@@ -617,6 +628,33 @@ export const getBarberAppointmentStats = asyncHandler(async (req, res) => {
     endDate
   });
   
+  res.json({
+    success: true,
+    data: stats
+  });
+});
+
+// @desc    Obtener estadísticas de citas para varios barberos (batch)
+// @route   GET /api/v1/appointments/barbers/stats?ids=a,b,c
+// @access  Privado/Admin
+export const getBarbersAppointmentStats = asyncHandler(async (req, res) => {
+  const { ids, date, startDate, endDate } = req.query;
+
+  const barberIds = String(ids || '')
+    .split(',')
+    .map((id) => id.trim())
+    .filter(Boolean);
+
+  if (barberIds.length === 0) {
+    throw new AppError('Se requiere al menos un id de barbero', 400);
+  }
+
+  const stats = await AppointmentUseCases.getBarbersAppointmentStats(barberIds, {
+    date,
+    startDate,
+    endDate
+  });
+
   res.json({
     success: true,
     data: stats

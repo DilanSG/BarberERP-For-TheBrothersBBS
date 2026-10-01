@@ -3,10 +3,9 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 
 import logger from '../utils/logger';
-/**
- * Sistema de analytics para navegación y comportamiento de usuario
- * Rastrea patrones de uso, performance y user journey
- */
+// Sistema de analytics para navegación y comportamiento de usuario.
+// Rastrea patrones de uso, performance y user journey en memoria (singleton);
+// no persiste nada: los datos viven mientras dure la pestaña.
 class NavigationAnalytics {
   constructor() {
     this.sessions = new Map();
@@ -46,7 +45,7 @@ class NavigationAnalytics {
     return 'unknown';
   }
 
-  // Trackear visita a una ruta
+  // Trackear visita a una ruta: acumula visitas, roles y referrers de la ruta
   trackRouteVisit(path, userRole = null, referrer = null) {
     const timestamp = Date.now();
     const routeData = {
@@ -91,7 +90,7 @@ class NavigationAnalytics {
     return routeData;
   }
 
-  // Trackear tiempo de carga de ruta
+  // Trackear tiempo de carga de ruta (guarda muestras para mínimo/máximo/promedio)
   trackRouteLoadTime(path, loadTime) {
     const route = this.routes.get(path);
     if (route) {
@@ -167,7 +166,7 @@ class NavigationAnalytics {
     // logger.debug(`🎯 Analytics: Conversion - ${path}: ${conversionType} (${value || 'no value'})`);
   }
 
-  // Obtener estadísticas completas
+  // Obtener estadísticas completas (overview, top rutas, rutas lentas, journeys)
   getAnalytics() {
     const totalSessions = 1; // Por ahora solo sesión actual
     const totalPageviews = Array.from(this.routes.values()).reduce((sum, route) => sum + route.visits, 0);
@@ -272,12 +271,11 @@ class NavigationAnalytics {
   }
 }
 
-// Instancia singleton
+// Instancia singleton compartida por todos los componentes
 const analytics = new NavigationAnalytics();
 
-/**
- * Hook principal para analytics de navegación
- */
+// Hook principal de analytics: registra cada cambio de ruta, el tiempo pasado en
+// la ruta anterior y el tiempo de carga; expone helpers ligados a la ruta actual.
 export const useNavigationAnalytics = () => {
   const location = useLocation();
   const { user } = useAuth();
@@ -332,9 +330,7 @@ export const useNavigationAnalytics = () => {
   };
 };
 
-/**
- * Hook para trackear interacciones específicas
- */
+// Hook para trackear interacciones específicas
 export const useInteractionTracking = () => {
   const { trackInteraction } = useNavigationAnalytics();
 
@@ -362,9 +358,7 @@ export const useInteractionTracking = () => {
   };
 };
 
-/**
- * Hook para trackear conversiones
- */
+// Hook para trackear conversiones
 export const useConversionTracking = () => {
   const { trackConversion } = useNavigationAnalytics();
 

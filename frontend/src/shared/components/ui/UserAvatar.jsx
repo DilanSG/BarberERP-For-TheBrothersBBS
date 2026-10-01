@@ -1,5 +1,8 @@
 import React from 'react';
 
+// Avatar de usuario: foto con fallback a iniciales. El color de borde/fondo
+// depende del rol (fundador=brand, admin=azul, barber=rojo, cliente=neutro).
+// Props: user, size ('sm'|'md'|'lg'|'xl'), onClick, showBorder, borderColor.
 const UserAvatar = ({ 
   user, 
   size = 'md', 
@@ -24,20 +27,21 @@ const UserAvatar = ({
   };
 
   // Definir colores de borde basados en rol
+  // admin = azul · barber = rojo · fundador = dorado · cliente = neutro
   const getBorderColor = () => {
     if (borderColor) return borderColor;
     
-    if (user.isFounder) return 'border-yellow-400/40';
+    if (user.isFounder) return 'border-brand-500/40';
     if (user.role === 'admin') return 'border-blue-500/40';
-    if (user.role === 'barber') return 'border-green-500/40';
+    if (user.role === 'barber') return 'border-red-500/40';
     return 'border-gray-500/40';
   };
 
   // Definir colores de fondo basados en rol
   const getBackgroundColor = () => {
-    if (user.isFounder) return 'from-yellow-400/20 to-amber-400/20';
+    if (user.isFounder) return 'from-brand-500/20 to-brand-600/20';
     if (user.role === 'admin') return 'from-blue-500/20 to-blue-600/20';
-    if (user.role === 'barber') return 'from-green-500/20 to-green-600/20';
+    if (user.role === 'barber') return 'from-red-500/20 to-red-600/20';
     return 'from-gray-500/20 to-gray-600/20';
   };
 
@@ -45,6 +49,7 @@ const UserAvatar = ({
   const textSizeClass = textSizes[size] || textSizes.md;
   const borderClass = showBorder ? `border-2 ${getBorderColor()}` : '';
   
+  // Si la imagen falla, oculta la <img> y muestra el fallback de iniciales.
   const handleImageError = (e) => {
     e.target.style.display = 'none';
     const fallback = e.target.parentElement.querySelector('.fallback-avatar');
@@ -61,6 +66,7 @@ const UserAvatar = ({
     }
   };
 
+  // Iniciales a partir del nombre (nombre + apellido) o del email.
   const getInitials = () => {
     const name = user.name || user.email || '?';
     if (name === '?') return '?';

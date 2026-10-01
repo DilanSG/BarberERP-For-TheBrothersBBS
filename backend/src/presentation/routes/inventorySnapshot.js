@@ -1,5 +1,6 @@
 import express from 'express';
 import { protect, adminAuth } from '../middleware/auth.js';
+import { validateIdParam } from '../middleware/validation.js';
 import { 
   createSnapshot,
   getSnapshots,
@@ -18,8 +19,8 @@ router.use(protect);
 router.post('/', adminAuth, createSnapshot);
 router.get('/', adminAuth, getSnapshots);
 router.get('/stats', adminAuth, getSnapshotStats);
-router.get('/:id', adminAuth, getSnapshotById);
-router.get('/:id/download', adminAuth, downloadSnapshotExcel);
-router.delete('/:id', adminAuth, deleteSnapshot);
+router.get('/:id', adminAuth, validateIdParam, getSnapshotById);
+router.get('/:id/download', adminAuth, validateIdParam, downloadSnapshotExcel);
+router.delete('/:id', adminAuth, validateIdParam, deleteSnapshot);
 
 export default router;

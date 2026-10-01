@@ -1,14 +1,17 @@
-/**
- * InventoryUseCases - Casos de uso para gestión de inventario
- * ✅ MIGRACIÓN COMPLETA A REPOSITORY PATTERN
- *
- * Gestión integral de inventario con Repository Pattern
- */
+// InventoryUseCases - Casos de uso para gestión de inventario
+// ✅ MIGRACIÓN COMPLETA A REPOSITORY PATTERN
+//
+// Gestión integral de inventario con Repository Pattern
 
-import { AppError, logger, Inventory } from '../../../barrel.js';
+import { AppError, logger, Inventory, PaymentMethod } from '../../../barrel.js';
+import ExpenseService from '../services/ExpenseService.js';
 import DIContainer from '../../../shared/container/index.js';
 
+// Casos de uso de inventario.
+// El CRUD delega en InventoryRepository (DI); los ajustes de stock y las
+// estadísticas/órdenes de compra usan el modelo o agregaciones directamente.
 class InventoryUseCases {
+  // Resuelve el repositorio de inventario desde el contenedor DI.
   constructor() {
     // Obtener repositorios del contenedor DI
     this.inventoryRepository = DIContainer.get('InventoryRepository');
@@ -20,51 +23,44 @@ class InventoryUseCases {
     return new InventoryUseCases();
   }
 
-  /**
-   * Obtener inventario completo (✅ MIGRADO)
-   * @param {Object} filters - Filtros de búsqueda
-   * @param {Object} pagination - Paginación
-   * @returns {Promise<Object>}
-   */
+  // Obtener inventario completo (✅ MIGRADO)
+  // Aplica filtros y paginación sobre el repositorio (orden por nombre) y
+  // normaliza la respuesta a { data, total, pagination } con valores por defecto.
   async getInventory(filters = {}, pagination = {}) {
     try {
       const { page = 1, limit = 50 } = pagination;
       
-      logger.debug('InventoryUseCases: Obteniendo inventario con filtros:', filters);
+      logger.debug('InventoryUseCases: Obteniendo inventario', { filters });
 
       // Construir query para repository
       const query = this._buildInventoryQuery(filters);
 
       const result = await this.inventoryRepository.findAll({
-        filter: query,
+        filters: query,
         limit,
         page,
         sort: { name: 1 }
       });
 
-      // Validar estructura de respuesta
-      if (result && result.data) {
-        logger.debug(`InventoryUseCases: Recuperados ${result.data.length} items de inventario`);
-        return result;
-      } else {
-        logger.warn('InventoryUseCases: Respuesta inesperada del repository:', result);
-        return {
-          data: result || [],
-          total: result?.length || 0,
-          pagination: { page, limit }
-        };
-      }
+      const products = Array.isArray(result?.products) ? result.products : [];
+      logger.debug(`InventoryUseCases: Recuperados ${products.length} items de inventario`);
+      return {
+        data: products,
+        total: result?.total ?? products.length,
+        pagination: {
+          page: result?.page ?? page,
+          limit,
+          totalPages: result?.totalPages ?? 1
+        }
+      };
     } catch (error) {
       logger.error('InventoryUseCases: Error al obtener inventario:', error);
       throw new AppError('Error al obtener inventario', 500);
     }
   }
 
-  /**
-   * Obtener item de inventario por ID (✅ MIGRADO)
-   * @param {string} id - ID del item
-   * @returns {Promise<Object>}
-   */
+  // Obtener item de inventario por ID (✅ MIGRADO)
+  // Lanza 404 si el repositorio no lo encuentra.
   async getInventoryItemById(id) {
     try {
       logger.debug(`InventoryUseCases: Buscando item por ID: ${id}`);
@@ -83,12 +79,8 @@ class InventoryUseCases {
     }
   }
 
-  /**
-   * Crear nuevo item de inventario (✅ MIGRADO)
-   * @param {Object} itemData - Datos del item
-   * @param {Object} user - Usuario que crea el item
-   * @returns {Promise<Object>}
-   */
+  // Crear nuevo item de inventario (✅ MIGRADO)
+  // Agrega createdBy del usuario autenticado antes de persistir.
   async createInventoryItem(itemData, user) {
     try {
       logger.debug('InventoryUseCases: Creando nuevo item de inventario');
@@ -101,7 +93,7 @@ class InventoryUseCases {
 
       const newItem = await this.inventoryRepository.create(enhancedData);
       
-      logger.info(`InventoryUseCases: Item creado exitosamente: ${newItem._id}`);
+      logger.debug(`InventoryUseCases: Item creado exitosamente: ${newItem._id}`);
       return newItem;
     } catch (error) {
       if (error instanceof AppError) throw error;
@@ -110,20 +102,15 @@ class InventoryUseCases {
     }
   }
 
-  /**
-   * Actualizar item de inventario (✅ MIGRADO)
-   * @param {string} id - ID del item
-   * @param {Object} updateData - Datos a actualizar
-   * @param {Object} user - Usuario que actualiza
-   * @returns {Promise<Object>}
-   */
+  // Actualizar item de inventario (✅ MIGRADO)
+  // Delega la actualización parcial al repositorio.
   async updateInventoryItem(id, updateData, user) {
     try {
       logger.debug(`InventoryUseCases: Actualizando item ${id}`);
       
       const updatedItem = await this.inventoryRepository.update(id, updateData);
       
-      logger.info(`InventoryUseCases: Item actualizado exitosamente: ${id}`);
+      logger.debug(`InventoryUseCases: Item actualizado exitosamente: ${id}`);
       return updatedItem;
     } catch (error) {
       if (error instanceof AppError) throw error;
@@ -132,19 +119,15 @@ class InventoryUseCases {
     }
   }
 
-  /**
-   * Eliminar item de inventario (✅ MIGRADO)
-   * @param {string} id - ID del item
-   * @param {Object} user - Usuario que elimina
-   * @returns {Promise<boolean>}
-   */
+  // Eliminar item de inventario (✅ MIGRADO)
+  // Delega el borrado al repositorio.
   async deleteInventoryItem(id, user) {
     try {
       logger.debug(`InventoryUseCases: Eliminando item ${id}`);
       
       const result = await this.inventoryRepository.delete(id);
       
-      logger.info(`InventoryUseCases: Item eliminado exitosamente: ${id}`);
+      logger.debug(`InventoryUseCases: Item eliminado exitosamente: ${id}`);
       return result;
     } catch (error) {
       if (error instanceof AppError) throw error;
@@ -153,34 +136,57 @@ class InventoryUseCases {
     }
   }
 
-  /**
-   * Actualizar stock de item (✅ MIGRADO)
-   * @param {string} id - ID del item
-   * @param {number} quantity - Cantidad a agregar/quitar (positivo = agregar, negativo = quitar)
-   * @param {Object} user - Usuario que actualiza
-   * @param {string} reason - Razón del cambio
-   * @returns {Promise<Object>}
-   */
+  // Actualizar stock de item (✅ MIGRADO)
+  // quantity positivo agrega y negativo quita. Verifica que el nuevo stock no
+  // quede negativo y actualiza atómicamente stock + contadores entries/exits +
+  // un movimiento en el historial embebido. Retorna el item actualizado.
   async updateStock(id, quantity, user, reason = 'Ajuste manual') {
     try {
       logger.debug(`InventoryUseCases: Actualizando stock del item ${id} en ${quantity}`);
       
       const item = await this.getInventoryItemById(id);
-      const newStock = item.currentStock + quantity;
+      if (!item) {
+        throw new AppError('Item de inventario no encontrado', 404);
+      }
+
+      const previousStock = item.stock;
+      const newStock = previousStock + quantity;
       
       if (newStock < 0) {
         throw new AppError('El stock no puede ser negativo', 400);
       }
 
-      const updatedItem = await this.inventoryRepository.update(id, {
-        currentStock: newStock,
-        lastUpdated: new Date()
-      });
+      // Normalizar usuario (puede venir como documento, id o null)
+      const userId = user?._id || user || null;
 
-      // Registrar movimiento de stock
-      await this._recordStockMovement(id, quantity, user._id, reason);
+      const movement = {
+        type: quantity > 0 ? 'add' : 'remove',
+        quantity: Math.abs(quantity),
+        previousStock,
+        newStock,
+        reason,
+        date: new Date(),
+        ...(userId ? { user: userId } : {})
+      };
+
+      // Actualización atómica: stock + contadores + historial de movimientos
+      const incFields = { stock: quantity, lastUpdated: new Date() };
+      if (quantity > 0) {
+        incFields.entries = Math.abs(quantity);
+      } else {
+        incFields.exits = Math.abs(quantity);
+      }
+
+      const updatedItem = await Inventory.findByIdAndUpdate(
+        id,
+        {
+          $inc: incFields,
+          $push: { movements: movement }
+        },
+        { new: true, runValidators: true }
+      );
       
-      logger.info(`InventoryUseCases: Stock actualizado para ${id}: ${item.currentStock} -> ${newStock}`);
+      logger.debug(`InventoryUseCases: Stock actualizado para ${id}: ${previousStock} -> ${newStock}`);
       return updatedItem;
     } catch (error) {
       if (error instanceof AppError) throw error;
@@ -189,35 +195,34 @@ class InventoryUseCases {
     }
   }
 
-  /**
-   * Obtener items con stock bajo (✅ MIGRADO)
-   * @returns {Promise<Array>}
-   */
+  // Obtener items con stock bajo (✅ MIGRADO)
+  // Usa $expr stock <= minStock, ordena de menor a mayor y limita a 1000.
   async getLowStockItems() {
     try {
       logger.debug('InventoryUseCases: Obteniendo items con stock bajo');
       
       const result = await this.inventoryRepository.findAll({
-        filter: {
-          $expr: { $lte: ['$currentStock', '$minStock'] }
+        filters: {
+          $expr: { $lte: ['$stock', '$minStock'] }
         },
-        sort: { currentStock: 1 }
+        sort: { stock: 1 },
+        limit: 1000,
+        page: 1
       });
 
-      logger.debug(`InventoryUseCases: Encontrados ${result.data.length} items con stock bajo`);
-      return result.data;
+      const items = Array.isArray(result?.products) ? result.products : [];
+      logger.debug(`InventoryUseCases: Encontrados ${items.length} items con stock bajo`);
+      return items;
     } catch (error) {
       logger.error('InventoryUseCases: Error al obtener items con stock bajo:', error);
       throw new AppError('Error al obtener items con stock bajo', 500);
     }
   }
 
-  /**
-   * Construir query para filtros de inventario
-   * @param {Object} filters - Filtros
-   * @returns {Object} Query de MongoDB
-   * @private
-   */
+  // Construir query para filtros de inventario
+  // Solo permite category/supplier/isActive; agrega búsqueda regex por
+  // name/description/code y el filtro lowStock con $expr.
+  // @private, retorna la query de MongoDB.
   _buildInventoryQuery(filters) {
     const query = {};
 
@@ -232,35 +237,21 @@ class InventoryUseCases {
       query.$or = [
         { name: { $regex: filters.search, $options: 'i' } },
         { description: { $regex: filters.search, $options: 'i' } },
-        { sku: { $regex: filters.search, $options: 'i' } }
+        { code: { $regex: filters.search, $options: 'i' } }
       ];
     }
 
     // Filtro de stock bajo
     if (filters.lowStock) {
-      query.$expr = { $lte: ['$currentStock', '$minStock'] };
+      query.$expr = { $lte: ['$stock', '$minStock'] };
     }
 
     return query;
   }
 
-  /**
-   * Registrar movimiento de stock (método auxiliar)
-   * @param {string} itemId - ID del item
-   * @param {number} quantity - Cantidad del movimiento
-   * @param {string} userId - ID del usuario
-   * @param {string} reason - Razón del movimiento
-   * @returns {Promise<void>}
-   * @private
-   */
-  async _recordStockMovement(itemId, quantity, userId, reason) {
-    // Esta funcionalidad podría implementarse en el futuro
-    // como un servicio separado de historial de movimientos
-    logger.debug(`Movimiento de stock registrado: ${itemId} ${quantity > 0 ? '+' : ''}${quantity} - ${reason}`);
-  }
-
   // ========================================================================
   // ADAPTADORES DE COMPATIBILIDAD PARA MÉTODOS ESTÁTICOS
+  // Cada wrapper obtiene una instancia con DI y delega en el método interno.
   // ========================================================================
 
   static async getInventory(filters = {}, pagination = {}) {
@@ -300,6 +291,8 @@ class InventoryUseCases {
 
   // ========================================================================
   // ADAPTADORES DE COMPATIBILIDAD PARA inventoryService.js (nombres legacy)
+  // Traducen nombres antiguos a los métodos nuevos; los que no reciben usuario
+  // pasan null y adjustStock convierte { type, options } al formato interno.
   // ========================================================================
 
   static async getAllItems(filters = {}) {
@@ -333,8 +326,41 @@ class InventoryUseCases {
   static async adjustStock(itemId, quantity, type = 'add', reason, options = {}) {
     const instance = InventoryUseCases.getInstance();
     // Convertir el parámetro 'type' al formato esperado
+    // 'subtract' → cantidad negativa; el resto → positiva.
     const finalQuantity = type === 'subtract' ? -Math.abs(quantity) : Math.abs(quantity);
-    return await instance.updateStock(itemId, finalQuantity, null, reason);
+    const user = options.userId ? { _id: options.userId } : null;
+
+    // Validar método de pago ANTES de tocar el stock (si viene costo)
+    // Así se evita actualizar inventario si el método es inválido.
+    let paymentMethod = null;
+    if (options.cost && options.cost > 0) {
+      paymentMethod = await PaymentMethod.findByIdOrAlias(options.paymentMethod || 'efectivo');
+      if (!paymentMethod) {
+        throw new AppError(`Método de pago no válido: ${options.paymentMethod}`, 400);
+      }
+    }
+
+    const updatedItem = await instance.updateStock(itemId, finalQuantity, user, reason);
+
+    // Registrar gasto por entrada de inventario con costo
+    // Si falla el gasto, el stock ya quedó actualizado: se informa ese estado.
+    if (options.cost && options.cost > 0) {
+      try {
+        await ExpenseService.createExpense({
+          description: `Compra de inventario: ${updatedItem?.name || itemId} (${Math.abs(quantity)} unidades)`,
+          amount: options.cost,
+          category: 'supplies',
+          paymentMethodId: paymentMethod._id,
+          paymentMethod: paymentMethod.backendId || options.paymentMethod,
+          date: new Date()
+        }, options.userId);
+      } catch (expenseError) {
+        logger.error('InventoryUseCases: Error registrando gasto de inventario:', expenseError);
+        throw new AppError('El stock fue actualizado, pero no se pudo registrar el gasto', 500);
+      }
+    }
+
+    return updatedItem;
   }
 
   static async getItemsByCategory(category) {
@@ -349,6 +375,7 @@ class InventoryUseCases {
 
   static async getDailyReport(dateString) {
     // Este método necesita implementación específica
+    // Arma un reporte simple: estadísticas globales + items con stock bajo.
     logger.debug(`Generando reporte diario para: ${dateString}`);
     try {
       const stats = await InventoryUseCases.getInventoryStats();
@@ -372,10 +399,9 @@ class InventoryUseCases {
   // Mantenidos por complejidad específica
   // ========================================================================
 
-  /**
-   * Obtener estadísticas de inventario
-   * @returns {Promise<Object>}
-   */
+  // Obtener estadísticas de inventario
+  // Agregación única: total de items, valor total (stock*precio), stock promedio
+  // y cantidad de items con stock <= minStock. Retorna ceros si no hay datos.
   static async getInventoryStats() {
     logger.debug('Obteniendo estadísticas de inventario');
     
@@ -411,12 +437,9 @@ class InventoryUseCases {
     }
   }
 
-  /**
-   * Obtener reporte de movimientos de inventario
-   * @param {Date} startDate - Fecha inicio
-   * @param {Date} endDate - Fecha fin
-   * @returns {Promise<Array>}
-   */
+  // Obtener reporte de movimientos de inventario
+  // Placeholder: los movimientos viven embebidos en cada item, por lo que
+  // devuelve un arreglo vacío hasta implementar la consulta agregada.
   static async getInventoryMovements(startDate, endDate) {
     logger.debug(`Obteniendo movimientos de inventario: ${startDate} - ${endDate}`);
     
@@ -433,10 +456,10 @@ class InventoryUseCases {
     }
   }
 
-  /**
-   * Procesar orden de compra automática para items con stock bajo
-   * @returns {Promise<Object>}
-   */
+  // Procesar orden de compra automática para items con stock bajo
+  // Sugiere recomprar max(minStock * 2, 10) unidades por item y calcula el
+  // costo estimado con el precio actual. Retorna { items, totalOrderValue,
+  // generatedAt } sin persistir nada.
   static async processAutomaticPurchaseOrder() {
     logger.debug('Procesando orden de compra automática');
     
@@ -451,10 +474,10 @@ class InventoryUseCases {
       const orderItems = lowStockItems.map(item => ({
         item: item._id,
         name: item.name,
-        currentStock: item.currentStock,
+        currentStock: item.stock,
         minStock: item.minStock,
         suggestedQuantity: Math.max(item.minStock * 2, 10), // Sugerir el doble del mínimo
-        estimatedCost: item.cost * Math.max(item.minStock * 2, 10)
+        estimatedCost: (item.price || 0) * Math.max(item.minStock * 2, 10)
       }));
 
       const totalOrderValue = orderItems.reduce((sum, item) => sum + item.estimatedCost, 0);
@@ -465,7 +488,7 @@ class InventoryUseCases {
         generatedAt: new Date()
       };
 
-      logger.info(`Orden de compra automática generada: ${orderItems.length} items, valor estimado: $${totalOrderValue}`);
+      logger.debug(`Orden de compra automática generada: ${orderItems.length} items, valor estimado: $${totalOrderValue}`);
       return result;
     } catch (error) {
       logger.error('Error procesando orden de compra automática:', error);

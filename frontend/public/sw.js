@@ -1,7 +1,7 @@
 // Service Worker para The Brothers Barber Shop
-// Versión 1.0.0 - Navegación offline y caché inteligente
+// Versión 1.2.0 - Navegación offline y caché inteligente
 
-const CACHE_NAME = 'tbb-v1.0.0';
+const CACHE_NAME = 'tbb-v1.2.0';
 const OFFLINE_URL = '/offline.html';
 
 // Rutas críticas para cachear
@@ -26,7 +26,7 @@ const CACHE_STRATEGIES = {
 
 // Instalación del Service Worker
 self.addEventListener('install', (event) => {
-  console.log('🔧 SW: Installing Service Worker v1.0.0');
+  console.log('🔧 SW: Installing Service Worker v1.2.0');
   
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
@@ -53,7 +53,7 @@ self.addEventListener('install', (event) => {
 
 // Activación del Service Worker
 self.addEventListener('activate', (event) => {
-  console.log('✅ SW: Activating Service Worker v1.0.0');
+  console.log('✅ SW: Activating Service Worker v1.2.0');
   
   event.waitUntil(
     Promise.all([
@@ -338,4 +338,4 @@ self.addEventListener('push', (event) => {
 });
 
 // Log de versión
-console.log('🚀 SW: Service Worker v1.0.0 loaded successfully');
+console.log('🚀 SW: Service Worker v1.2.0 loaded successfully');

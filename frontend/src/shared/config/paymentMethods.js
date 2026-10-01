@@ -1,131 +1,69 @@
-import { 
-  Banknote, 
-  Smartphone, 
-  CreditCard 
-} from 'lucide-react';
+import { Banknote, CreditCard, Smartphone } from 'lucide-react';
+import { usePaymentMethodsContext } from '@contexts/PaymentMethodsContext';
 
-/**
- * Configuración centralizada de métodos de pago
- * Se usa en toda la aplicación para mantener consistencia
- */
+// Configuración de métodos de pago (reforma):
+// - Efectivo es el único método predeterminado.
+// - El resto son dinámicos y vienen del backend (PaymentMethodsContext).
+// - Sin emojis: la UI usa el icono por categoría y el color de la paleta.
+
+const ICON_BY_CATEGORY = {
+  cash: Banknote,
+  digital: Smartphone,
+  card: CreditCard,
+  transfer: Smartphone,
+  other: CreditCard,
+};
+
+// Fallback mínimo: solo Efectivo (si el backend no responde)
 export const PAYMENT_METHODS = [
   {
-    id: 'efectivo',
+    id: 'cash',
+    backendId: 'cash',
     name: 'Efectivo',
-    icon: Banknote,
-    emoji: '💵',
-    color: 'green',
     description: 'Pago en efectivo',
-    // CORREGIDO: Usar 'efectivo' que es como lo almacena el backend
-    backendId: 'efectivo'
+    color: 'emerald',
+    category: 'cash',
+    isSystem: true,
+    icon: Banknote,
   },
-  {
-    id: 'nequi',
-    name: 'Nequi',
-    icon: Smartphone,
-    emoji: '📱',
-    color: 'pink',
-    description: 'Pago por Nequi',
-    backendId: 'nequi'
-  },
-  {
-    id: 'nu',
-    name: 'Nu',
-    icon: CreditCard,
-    emoji: '💳',
-    color: 'purple',
-    description: 'Tarjeta Nu',
-    backendId: 'nu'
-  },
-  {
-    id: 'daviplata',
-    name: 'Daviplata',
-    icon: Smartphone,
-    emoji: '📱',
-    color: 'red',
-    description: 'Pago por Daviplata',
-    backendId: 'daviplata'
-  },
-  {
-    id: 'tarjeta',
-    name: 'Tarjeta',
-    icon: CreditCard,
-    emoji: '💳',
-    color: 'blue',
-    description: 'Tarjeta débito/crédito',
-    backendId: 'tarjeta'  // Usar un ID consolidado
-  },
-  {
-    id: 'bancolombia',
-    name: 'Bancolombia',
-    icon: CreditCard,
-    emoji: '🏛️',
-    color: 'yellow',
-    description: 'Transferencia Bancolombia',
-    backendId: 'bancolombia'
-  },
-  {
-    id: 'digital',
-    name: 'Pago Digital',
-    icon: Smartphone,
-    emoji: '💻',
-    color: 'cyan',
-    description: 'Otros métodos digitales',
-    backendId: 'digital'
-  }
 ];
 
-/**
- * Obtener método de pago por ID
- */
-export const getPaymentMethodById = (id) => {
-  return PAYMENT_METHODS.find(method => method.id === id) || PAYMENT_METHODS[0];
-};
+// Busca por id interno o backendId; si no existe, devuelve Efectivo
+export const getPaymentMethodById = (id) =>
+  PAYMENT_METHODS.find((method) => method.id === id || method.backendId === id) || PAYMENT_METHODS[0];
 
-/**
- * Obtener todos los métodos de pago
- */
-export const getAllPaymentMethods = () => {
-  return PAYMENT_METHODS;
-};
+// Devuelve el catálogo estático (solo Efectivo; los demás son dinámicos)
+export const getAllPaymentMethods = () => PAYMENT_METHODS;
 
-/**
- * Mapear ID de frontend a backend
- */
+// frontendId → backendId ('cash' como respaldo)
 export const mapPaymentMethodToBackend = (frontendId) => {
   const method = getPaymentMethodById(frontendId);
   return method?.backendId || 'cash';
 };
 
-/**
- * Mapear ID de backend a frontend
- */
-export const mapPaymentMethodFromBackend = (backendId) => {
-  const method = PAYMENT_METHODS.find(m => m.backendId === backendId);
-  return method?.id || 'efectivo';
-};
+// backendId → id interno ('cash' como respaldo)
+export const mapPaymentMethodFromBackend = (backendId) =>
+  getPaymentMethodById(backendId)?.id || 'cash';
 
-/**
- * Obtener opciones para selects
- */
-export const getPaymentMethodOptions = () => {
-  return PAYMENT_METHODS.map(method => ({
-    value: method.id,
-    label: method.name,
-    icon: method.emoji
-  }));
-};
-
-/**
- * Hook personalizado para usar métodos de pago
- */
+// Hook de métodos de pago: devuelve los métodos del backend (dinámicos) con
+// fallback a solo Efectivo. Mantiene el shape usado por la app.
 export const usePaymentMethods = () => {
+  const ctx = usePaymentMethodsContext();
+  const paymentMethods = (ctx.allPaymentMethods || []).map((method) => ({
+    ...method,
+    icon: method.icon || ICON_BY_CATEGORY[method.category] || CreditCard,
+  }));
+
   return {
-    paymentMethods: PAYMENT_METHODS,
-    getById: getPaymentMethodById,
-    getAll: getAllPaymentMethods,
-    mapToBackend: mapPaymentMethodToBackend,
-    mapFromBackend: mapPaymentMethodFromBackend,
-    getOptions: getPaymentMethodOptions
+    paymentMethods,
+    getById: (id) => paymentMethods.find((m) => m.id === id || m.backendId === id) || paymentMethods[0],
+    getAll: () => paymentMethods,
+    mapToBackend: (frontendId) => (paymentMethods.find((m) => m.id === frontendId || m.backendId === frontendId)?.backendId) || 'cash',
+    mapFromBackend: (backendId) => paymentMethods.find((m) => m.backendId === backendId) || paymentMethods[0],
+    getOptions: () => paymentMethods.map((method) => ({
+      value: method.backendId,
+      label: method.name,
+      icon: method.icon,
+    })),
   };
 };

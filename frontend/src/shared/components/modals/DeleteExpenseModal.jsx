@@ -1,6 +1,9 @@
 import React from 'react';
-import { AlertTriangle, X, Trash2, Calendar, Repeat, DollarSign } from 'lucide-react';
+import { AlertTriangle, Trash2, Calendar, Repeat, DollarSign } from 'lucide-react';
+import Modal from '../ui/Modal';
 
+// Modal de confirmación para eliminar un gasto único o recurrente.
+// Adapta las advertencias y la ficha según el tipo de gasto.
 const DeleteExpenseModal = ({ 
   isOpen, 
   onClose, 
@@ -8,19 +11,23 @@ const DeleteExpenseModal = ({
   onDelete,
   isLoading = false 
 }) => {
+  // Ejecuta la eliminación del gasto seleccionado mediante onDelete.
   const handleDelete = async () => {
     if (expense) {
       await onDelete(expense._id);
     }
   };
 
+  // No renderiza si está cerrado o no hay gasto.
   if (!isOpen || !expense) return null;
 
+  // Considera recurrente si tiene tipo 'recurring' o frecuencia definida.
   // Determinar si es gasto recurrente o único
   const isRecurring = expense.type === 'recurring' || expense.frequency;
   const expenseType = isRecurring ? 'recurrente' : 'único';
 
   // Formatear fecha
+  // Da formato largo en español a una fecha, con respaldo si no existe.
   const formatDate = (dateString) => {
     if (!dateString) return 'No especificada';
     const date = new Date(dateString);
@@ -32,6 +39,7 @@ const DeleteExpenseModal = ({
   };
 
   // Formatear categoría
+  // Traduce el id de categoría a un nombre legible.
   const getCategoryName = (categoryId) => {
     if (!categoryId) return 'Sin categoría';
     
@@ -54,6 +62,7 @@ const DeleteExpenseModal = ({
   };
 
   // Formatear frecuencia (copiado de RecurringExpensesListModal para consistencia)
+  // Describe la frecuencia en texto ('Cada 2 semanas', 'Mensual', etc.).
   const getFrequencyName = (frequency) => {
     if (!frequency) return 'No definida';
     
@@ -91,174 +100,151 @@ const DeleteExpenseModal = ({
     return 'No especificada';
   };
 
+  // Vista: advertencias, resumen del gasto y confirmación de borrado.
   return (
-    <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-[10003] p-4 sm:p-6 lg:p-8">
-      <div className="relative w-full max-w-sm sm:max-w-md mx-auto h-[90vh] sm:h-[85vh] lg:h-[80vh] flex flex-col">
-        <div className="relative bg-red-500/5 backdrop-blur-md border border-red-500/20 rounded-2xl shadow-2xl shadow-red-500/20 h-full flex flex-col overflow-hidden">
-          {/* Header */}
-          <div className="relative z-10 flex-shrink-0 p-4 sm:p-6 border-b border-red-500/20">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2 sm:gap-3">
-                <div className="p-1.5 sm:p-2 rounded-lg bg-red-500/20 border border-red-500/30">
-                  <AlertTriangle className="w-4 h-4 sm:w-5 sm:h-5 text-red-400" />
-                </div>
-                <div>
-                  <h3 className="text-base sm:text-lg font-semibold text-white">
-                    Eliminar Gasto {expenseType}
-                  </h3>
-                  <p className="text-xs sm:text-sm text-red-300">Esta acción no se puede deshacer</p>
-                </div>
-              </div>
-              <button
-                onClick={onClose}
-                className="p-1 text-gray-400 hover:text-white transition-colors duration-200"
-              >
-                <X className="w-4 h-4 sm:w-5 sm:h-5" />
-              </button>
-            </div>
-          </div>
-
-          {/* Content */}
-          <div className="relative z-10 flex-1 overflow-y-auto p-4 sm:p-6">
-            <div className="mb-6">
-              <p className="text-gray-300 mb-4">
-                ¿Estás seguro de que deseas eliminar el gasto{' '}
-                <span className="font-semibold text-white">"{expense.description}"</span>?
-              </p>
-              
-              <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-4 mb-6">
-                <div className="flex items-start gap-3">
-                  <AlertTriangle className="w-5 h-5 text-red-400 mt-0.5 flex-shrink-0" />
-                  <div className="text-sm text-red-200">
-                    <p className="font-medium mb-2">Advertencia importante:</p>
-                    <ul className="list-disc list-inside space-y-1 text-red-300">
-                      <li>Se eliminará permanentemente de la base de datos</li>
-                      <li>Los reportes financieros se actualizarán automáticamente</li>
-                      {isRecurring && (
-                        <>
-                          <li>Se cancelarán todas las futuras ocurrencias programadas</li>
-                          <li>El historial de pagos pasados se mantendrá intacto</li>
-                        </>
-                      )}
-                    </ul>
-                  </div>
-                </div>
-              </div>
-
-              {/* Expense Info */}
-              <div className="bg-gray-700/50 backdrop-blur-sm rounded-xl p-4 border border-gray-600/20">
-                <h4 className="text-white font-medium mb-3 flex items-center gap-2">
-                  <DollarSign className="w-4 h-4 text-green-400" />
-                  Información del gasto:
-                </h4>
-                <div className="space-y-3 text-sm">
-                  <div className="flex justify-between items-center">
-                    <span className="text-gray-400">Descripción:</span>
-                    <span className="text-white font-medium">{expense.description || 'Sin descripción'}</span>
-                  </div>
-                  
-                  <div className="flex justify-between items-center">
-                    <span className="text-gray-400">Monto:</span>
-                    <span className="text-green-400 font-bold">
-                      ${(expense.amount || 0).toLocaleString('es-ES')}
-                    </span>
-                  </div>
-                  
-                  <div className="flex justify-between items-center">
-                    <span className="text-gray-400">Tipo:</span>
-                    <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ${
-                      isRecurring 
-                        ? 'bg-purple-500/20 text-purple-300 border border-purple-500/30' 
-                        : 'bg-blue-500/20 text-blue-300 border border-blue-500/30'
-                    }`}>
-                      {isRecurring ? (
-                        <>
-                          <Repeat className="w-3 h-3" />
-                          Recurrente
-                        </>
-                      ) : (
-                        <>
-                          <Calendar className="w-3 h-3" />
-                          Único
-                        </>
-                      )}
-                    </span>
-                  </div>
-
-                  <div className="flex justify-between items-center">
-                    <span className="text-gray-400">Categoría:</span>
-                    <span className="text-white">{getCategoryName(expense.category)}</span>
-                  </div>
-
-                  {isRecurring && (
-                    <>
-                      <div className="flex justify-between items-center">
-                        <span className="text-gray-400">Frecuencia:</span>
-                        <span className="text-purple-300">{getFrequencyName(expense.frequency)}</span>
-                      </div>
-                      
-                      <div className="flex justify-between items-center">
-                        <span className="text-gray-400">Estado:</span>
-                        <span className={`${expense.isActive !== false ? 'text-green-400' : 'text-red-400'}`}>
-                          {expense.isActive !== false ? 'Activo' : 'Inactivo'}
-                        </span>
-                      </div>
-
-                      {expense.nextDate && (
-                        <div className="flex justify-between items-center">
-                          <span className="text-gray-400">Próximo pago:</span>
-                          <span className="text-blue-300">{formatDate(expense.nextDate)}</span>
-                        </div>
-                      )}
-                    </>
-                  )}
-
-                  {!isRecurring && expense.date && (
-                    <div className="flex justify-between items-center">
-                      <span className="text-gray-400">Fecha:</span>
-                      <span className="text-blue-300">{formatDate(expense.date)}</span>
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Buttons - Fixed bottom */}
-          <div className="relative z-10 flex-shrink-0 p-4 sm:p-6 border-t border-red-500/20 bg-red-500/5">
-            <div className="flex gap-3">
-              <button
-                type="button"
-                onClick={onClose}
-                disabled={isLoading}
-                className="flex-1 px-3 sm:px-4 py-2 sm:py-3 border border-gray-600/50 text-gray-300 rounded-xl hover:bg-gray-700/50 hover:border-gray-500/50 transition-all duration-300 disabled:opacity-50 backdrop-blur-sm font-medium text-sm sm:text-base"
-              >
-                Cancelar
-              </button>
-              
-              <button
-                onClick={handleDelete}
-                disabled={isLoading}
-                className="flex-1 px-3 sm:px-4 py-2 sm:py-3 bg-gradient-to-r from-red-600 to-red-700 text-white rounded-xl hover:from-red-700 hover:to-red-800 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 font-medium shadow-lg shadow-red-500/20 text-sm sm:text-base"
-              >
-                {isLoading ? (
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      color="red"
+      title={`Eliminar Gasto ${expenseType}`}
+      subtitle="Esta acción no se puede deshacer"
+      icon={AlertTriangle}
+      size="md"
+      zIndex="alert"
+      footer={
+        <div className="flex gap-3">
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={isLoading}
+            className="flex-1 px-4 py-2.5 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.08] text-gray-300 hover:text-white text-sm font-medium transition-colors disabled:opacity-50"
+          >
+            Cancelar
+          </button>
+          
+          <button
+            onClick={handleDelete}
+            disabled={isLoading}
+            className="flex-1 px-5 py-2.5 rounded-xl bg-red-600 hover:bg-red-700 text-white text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+          >
+            {isLoading ? (
+              <>
+                <div className="w-4 h-4 border-2 border-white/20 border-t-white rounded-full animate-spin" />
+                <span>Eliminando...</span>
+              </>
+            ) : (
+              <>
+                <Trash2 className="w-4 h-4" />
+                <span>Eliminar {expenseType}</span>
+              </>
+            )}
+          </button>
+        </div>
+      }
+    >
+      <div className="mb-6">
+        <p className="text-gray-300 mb-4">
+          ¿Estás seguro de que deseas eliminar el gasto{' '}
+          <span className="font-semibold text-red-200">"{expense.description}"</span>?
+        </p>
+        
+        <div className="rounded-xl border border-red-500/20 bg-red-500/10 p-4 mb-6">
+          <div className="flex items-start gap-3">
+            <AlertTriangle className="w-5 h-5 text-red-400 mt-0.5 flex-shrink-0" />
+            <div className="text-sm text-red-200">
+              <p className="font-medium mb-2">Advertencia importante:</p>
+              <ul className="list-disc list-inside space-y-1 text-red-300">
+                <li>Se eliminará permanentemente de la base de datos</li>
+                <li>Los reportes financieros se actualizarán automáticamente</li>
+                {isRecurring && (
                   <>
-                    <div className="w-4 h-4 border-2 border-white/20 border-t-white rounded-full animate-spin" />
-                    <span className="hidden sm:inline">Eliminando...</span>
-                  </>
-                ) : (
-                  <>
-                    <Trash2 className="w-4 h-4" />
-                    <span className="hidden sm:inline">Eliminar {expenseType}</span>
-                    <span className="sm:hidden">Eliminar</span>
+                    <li>Se cancelarán todas las futuras ocurrencias programadas</li>
+                    <li>El historial de pagos pasados se mantendrá intacto</li>
                   </>
                 )}
-              </button>
+              </ul>
             </div>
           </div>
         </div>
+
+        {/* Expense Info */}
+        <div className="rounded-xl border border-white/[0.08] bg-white/[0.02] p-4">
+          <h4 className="text-red-200 font-medium mb-3 flex items-center gap-2">
+            <DollarSign className="w-4 h-4 text-emerald-400" />
+            Información del gasto:
+          </h4>
+          <div className="space-y-3 text-sm">
+            <div className="flex justify-between items-center">
+              <span className="text-gray-400">Descripción:</span>
+              <span className="text-red-200 font-medium">{expense.description || 'Sin descripción'}</span>
+            </div>
+            
+            <div className="flex justify-between items-center">
+              <span className="text-gray-400">Monto:</span>
+              <span className="text-emerald-400 font-bold">
+                ${(expense.amount || 0).toLocaleString('es-ES')}
+              </span>
+            </div>
+            
+            <div className="flex justify-between items-center">
+              <span className="text-gray-400">Tipo:</span>
+              <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ${
+                isRecurring 
+                  ? 'bg-brand-400/20 text-brand-200 border border-brand-400/30' 
+                  : 'bg-blue-500/20 text-blue-300 border border-blue-500/30'
+              }`}>
+                {isRecurring ? (
+                  <>
+                    <Repeat className="w-3 h-3" />
+                    Recurrente
+                  </>
+                ) : (
+                  <>
+                    <Calendar className="w-3 h-3" />
+                    Único
+                  </>
+                )}
+              </span>
+            </div>
+
+            <div className="flex justify-between items-center">
+              <span className="text-gray-400">Categoría:</span>
+              <span className="text-red-200">{getCategoryName(expense.category)}</span>
+            </div>
+
+            {isRecurring && (
+              <>
+                <div className="flex justify-between items-center">
+                  <span className="text-gray-400">Frecuencia:</span>
+                  <span className="text-brand-200">{getFrequencyName(expense.frequency)}</span>
+                </div>
+                
+                <div className="flex justify-between items-center">
+                  <span className="text-gray-400">Estado:</span>
+                  <span className={`${expense.isActive !== false ? 'text-emerald-400' : 'text-red-400'}`}>
+                    {expense.isActive !== false ? 'Activo' : 'Inactivo'}
+                  </span>
+                </div>
+
+                {expense.nextDate && (
+                  <div className="flex justify-between items-center">
+                    <span className="text-gray-400">Próximo pago:</span>
+                    <span className="text-blue-300">{formatDate(expense.nextDate)}</span>
+                  </div>
+                )}
+              </>
+            )}
+
+            {!isRecurring && expense.date && (
+              <div className="flex justify-between items-center">
+                <span className="text-gray-400">Fecha:</span>
+                <span className="text-blue-300">{formatDate(expense.date)}</span>
+              </div>
+            )}
+          </div>
+        </div>
       </div>
-    </div>
+    </Modal>
   );
 };
 

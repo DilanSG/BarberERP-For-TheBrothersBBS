@@ -1,12 +1,14 @@
-/**
- * BarberUseCases - Casos de uso para gestión de barberos
- * Gestión integral de barberos con Repository Pattern
- */
+// BarberUseCases - Casos de uso para gestión de barberos
+// Gestión integral de barberos con Repository Pattern
 
-import { AppError, logger } from '../../../barrel.js';
+import { AppError, logger, Barber, Appointment, Sale } from '../../../barrel.js';
 import DIContainer from '../../../shared/container/index.js';
 
+// Casos de uso de barberos.
+// Delega el CRUD en repositorios resueltos por inyección de dependencias y
+// mantiene adaptadores estáticos de compatibilidad para el código existente.
 class BarberUseCases {
+  // Resuelve los repositorios de barberos y usuarios desde el contenedor DI.
   constructor() {
     // Obtener repositorios del contenedor DI
     this.barberRepository = DIContainer.get('BarberRepository');
@@ -14,21 +16,20 @@ class BarberUseCases {
   }
 
   // Método estático para obtener instancia con DI
+  // Fábrica usada por los adaptadores estáticos de más abajo.
   static getInstance() {
     return new BarberUseCases();
   }
 
-  /**
-   * Obtener todos los barberos
-   * @param {Object} filters - Filtros de búsqueda
-   * @param {Object} pagination - Paginación
-   * @returns {Promise<Object>}
-   */
+  // Obtener todos los barberos
+  // Recibe filtros de búsqueda y paginación; delega en el repositorio con
+  // orden por createdAt descendente y normaliza la respuesta { data, total,
+  // pagination }. Si el repositorio responde en otro formato, hace fallback.
   async getBarbers(filters = {}, pagination = {}) {
     try {
       const { page = 1, limit = 50 } = pagination;
       
-      logger.debug('BarberUseCases: Obteniendo barberos con filtros:', filters);
+      logger.debug('BarberUseCases: Obteniendo barberos', { filters });
 
       // Construir query para repository
       const query = this._buildBarbersQuery(filters);
@@ -67,11 +68,8 @@ class BarberUseCases {
     }
   }
 
-  /**
-   * Obtener barbero por ID
-   * @param {string} id - ID del barbero
-   * @returns {Promise<Object>}
-   */
+  // Obtener barbero por ID
+  // Lanza 404 si el repositorio no encuentra el documento.
   async getBarberById(id) {
     try {
       logger.debug(`BarberUseCases: Buscando barbero por ID: ${id}`);
@@ -90,12 +88,8 @@ class BarberUseCases {
     }
   }
 
-  /**
-   * Crear nuevo barbero
-   * @param {Object} barberData - Datos del barbero
-   * @param {Object} user - Usuario que crea el barbero
-   * @returns {Promise<Object>}
-   */
+  // Crear nuevo barbero
+  // Si se indica usuario, valida existencia y exige rol 'barber' antes de crear.
   async createBarber(barberData, user) {
     try {
       logger.debug('BarberUseCases: Creando nuevo barbero');
@@ -113,7 +107,7 @@ class BarberUseCases {
 
       const newBarber = await this.barberRepository.create(barberData);
       
-      logger.info(`BarberUseCases: Barbero creado exitosamente: ${newBarber._id}`);
+      logger.debug(`BarberUseCases: Barbero creado exitosamente: ${newBarber._id}`);
       return newBarber;
     } catch (error) {
       if (error instanceof AppError) throw error;
@@ -122,20 +116,15 @@ class BarberUseCases {
     }
   }
 
-  /**
-   * Actualizar barbero
-   * @param {string} id - ID del barbero
-   * @param {Object} updateData - Datos a actualizar
-   * @param {Object} user - Usuario que actualiza
-   * @returns {Promise<Object>}
-   */
+  // Actualizar barbero
+  // Delega la actualización al repositorio y retorna el documento actualizado.
   async updateBarber(id, updateData, user) {
     try {
       logger.debug(`BarberUseCases: Actualizando barbero ${id}`);
       
       const updatedBarber = await this.barberRepository.update(id, updateData);
       
-      logger.info(`BarberUseCases: Barbero actualizado exitosamente: ${id}`);
+      logger.debug(`BarberUseCases: Barbero actualizado exitosamente: ${id}`);
       return updatedBarber;
     } catch (error) {
       if (error instanceof AppError) throw error;
@@ -144,19 +133,15 @@ class BarberUseCases {
     }
   }
 
-  /**
-   * Eliminar barbero
-   * @param {string} id - ID del barbero
-   * @param {Object} user - Usuario que elimina
-   * @returns {Promise<boolean>}
-   */
+  // Eliminar barbero
+  // Delega el borrado al repositorio; retorna el resultado de la operación.
   async deleteBarber(id, user) {
     try {
       logger.debug(`BarberUseCases: Eliminando barbero ${id}`);
       
       const result = await this.barberRepository.delete(id);
       
-      logger.info(`BarberUseCases: Barbero eliminado exitosamente: ${id}`);
+      logger.debug(`BarberUseCases: Barbero eliminado exitosamente: ${id}`);
       return result;
     } catch (error) {
       if (error instanceof AppError) throw error;
@@ -165,10 +150,8 @@ class BarberUseCases {
     }
   }
 
-  /**
-   * Obtener barberos activos
-   * @returns {Promise<Array>}
-   */
+  // Obtener barberos activos
+  // Retorna solo isActive:true; asume que el repositorio devuelve { data }.
   async getActiveBarbers() {
     try {
       logger.debug('BarberUseCases: Obteniendo barberos activos');
@@ -186,12 +169,10 @@ class BarberUseCases {
     }
   }
 
-  /**
-   * Construir query para filtros de barberos
-   * @param {Object} filters - Filtros
-   * @returns {Object} Query de MongoDB
-   * @private
-   */
+  // Construir query para filtros de barberos
+  // Solo acepta los filtros permitidos (isActive, specialties) y arma un $or
+  // de regex case-insensitive por name/specialties cuando viene `search`.
+  // @private, retorna la query de MongoDB.
   _buildBarbersQuery(filters) {
     const query = {};
 
@@ -214,6 +195,7 @@ class BarberUseCases {
 
   // ========================================================================
   // ADAPTADORES DE COMPATIBILIDAD PARA MÉTODOS ESTÁTICOS
+  // Cada uno crea una instancia con DI y delega en el método de instancia.
   // ========================================================================
 
   static async getBarbers(filters = {}, pagination = {}) {
@@ -249,13 +231,10 @@ class BarberUseCases {
   // ** MÉTODOS COMPLEJOS SIN MIGRAR 
   // Mantenidos por complejidad específica
   //
-  /**
-   * Obtener estadísticas de barbero
-   * @param {string} barberId - ID del barbero
-   * @param {Date} startDate - Fecha inicio
-   * @param {Date} endDate - Fecha fin
-   * @returns {Promise<Object>}
-   */
+  // Obtener estadísticas de barbero (citas y ventas) en un rango de fechas.
+  // Arma dos agregaciones: citas agrupadas con conteos por estado usando la
+  // fecha `date` de la cita, y ventas con total/revenue/promedio por createdAt.
+  // Retorna { barber, period, appointments, sales } con ceros si no hay datos.
   static async getBarberStats(barberId, startDate, endDate) {
     logger.debug(`Obteniendo estadísticas del barbero: ${barberId}`);
     
@@ -270,6 +249,8 @@ class BarberUseCases {
         barber: barberId
       };
 
+      // Filtro de fechas opcional: construye el rango sobre createdAt (solo las
+      // claves presentes) y luego se reutiliza como rango de `date` en citas.
       if (startDate || endDate) {
         dateQuery.createdAt = {};
         if (startDate) dateQuery.createdAt.$gte = new Date(startDate);
@@ -277,6 +258,7 @@ class BarberUseCases {
       }
 
       // Estadísticas de citas
+      // Nota: reutiliza el rango de createdAt sobre el campo `date` de la cita.
       const appointmentStats = await Appointment.aggregate([
         { $match: { ...dateQuery, date: dateQuery.createdAt } },
         {
@@ -334,13 +316,9 @@ class BarberUseCases {
     }
   }
 
-  /**
-   * Actualizar horario de barbero
-   * @param {string} barberId - ID del barbero
-   * @param {Object} schedule - Nuevo horario
-   * @param {Object} user - Usuario que actualiza
-   * @returns {Promise<Object>}
-   */
+  // Actualizar horario de barbero
+  // Valida que los días pertenezcan a la semana y que, si el día está
+  // disponible, tenga start y end; hace merge con el horario existente y guarda.
   static async updateBarberSchedule(barberId, schedule, user) {
     logger.debug(`Actualizando horario del barbero: ${barberId}`);
     
@@ -367,7 +345,7 @@ class BarberUseCases {
 
       const updatedBarber = await Barber.findById(barberId).populate('user', 'name email');
       
-      logger.info(`Horario actualizado para barbero ${barberId}`);
+      logger.debug(`Horario actualizado para barbero ${barberId}`);
       return updatedBarber;
     } catch (error) {
       if (error instanceof AppError) throw error;
@@ -376,12 +354,10 @@ class BarberUseCases {
     }
   }
 
-  /**
-   * Obtener horarios disponibles de barbero
-   * @param {string} barberId - ID del barbero
-   * @param {string} date - Fecha en formato YYYY-MM-DD
-   * @returns {Promise<Array>}
-   */
+  // Obtener horarios disponibles de barbero
+  // Traduce la fecha al día de la semana (es→en), devuelve [] si no atiende ese
+  // día y genera slots cada 30 min entre start y end, marcando ocupado un slot
+  // si cae dentro de una cita existente (duración de la cita o 60 min por defecto).
   static async getBarberAvailableSlots(barberId, date) {
     logger.debug(`Obteniendo horarios disponibles del barbero ${barberId} para ${date}`);
     

@@ -1,24 +1,32 @@
 {
-  "name": "thebrothersbarbershop-frontend",
+  "name": "barbererp-frontend",
   "version": "1.0.0",
+  "description": "BarberERP — Frontend (React) para The Brothers Barber Shop",
   "private": true,
   "type": "module",
+  "license": "SEE LICENSE IN LICENSE",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview"
   },
   "dependencies": {
+    "@gsap/react": "2.1.1",
     "@sentry/node": "10.19.0",
     "@sentry/profiling-node": "10.19.0",
     "@sentry/react": "10.19.0",
+    "@skeletonlabs/skeleton": "5.0.1",
+    "@skeletonlabs/skeleton-react": "5.0.1",
     "@vercel/analytics": "1.5.0",
     "@vercel/speed-insights": "1.2.0",
     "@vitejs/plugin-react": "4.3.4",
     "autoprefixer": "^10.4.15",
+    "class-variance-authority": "0.7.1",
+    "clsx": "2.1.1",
     "date-fns": "^3.6.0",
     "esbuild": "0.25.11",
     "exceljs": "4.4.0",
+    "gsap": "3.12.5",
     "lucide-react": "^0.542.0",
     "postcss": "^8.4.29",
     "react": "^18.2.0",
@@ -27,6 +35,8 @@
     "react-dom": "^18.2.0",
     "react-router-dom": "^6.15.0",
     "react-toastify": "^11.0.5",
+    "socket.io-client": "4.8.3",
+    "tailwind-merge": "3.6.0",
     "tailwindcss": "^3.3.3",
     "vite": "4.5.5"
   }

@@ -1,0 +1,201 @@
+LICENCIA BARBERERP 1.0 — NO COMERCIAL
+(Source-Available · Permisiva para modificación · Prohibido el uso comercial)
+
+Copyright (c) 2026 IntoCode. Todos los derechos reservados.
+Autor original: Dilan Acuña.
+Software: BarberERP — ERP personalizado para The Brothers Barber Shop.
+
+================================================================================
+RESUMEN (no vinculante, solo orientativo)
+================================================================================
+Puedes: usar el software en tus propios entornos, leerlo, copiarlo y modificarlo.
+Debes: mantener la autoría (IntoCode / Dilan Acuña) y esta misma licencia en los
+        derivados.
+No puedes: venderlo, cobrar por él, ofrecerlo como servicio, integrarlo en
+           productos/servicios de pago ni usarlo para generar ganancias.
+Cualquier uso comercial requiere una licencia comercial escrita de IntoCode.
+
+================================================================================
+1. DEFINICIONES
+================================================================================
+1.1. "Software": el proyecto BarberERP, incluyendo su código fuente, código
+     objeto, documentación, configuraciones, recursos gráficos, esquemas de
+     base de datos y cualquier material entregado bajo esta licencia.
+
+1.2. "Titular": IntoCode, desarrolladora del Software. Autor original: Dilan
+     Acuña.
+
+1.3. "Licenciatario": toda persona natural o jurídica que use, copie, modifique
+     o distribuya el Software conforme a esta licencia.
+
+1.4. "Uso Comercial": cualquier uso del Software orientado, directa o
+     indirectamente, a obtener un beneficio económico o ventaja comercial.
+     Incluye, sin limitarse a:
+       a) vender, revender, alquilar, licenciar o cobrar por el Software o por
+          funcionalidades derivadas del mismo;
+       b) ofrecer el Software (o un derivado) como servicio, SaaS, hosting,
+          soporte o consultoría remunerada;
+       c) integrarlo en productos o servicios de pago;
+       d) usarlo para operar un negocio cuyo modelo principal sea la venta de
+          servicios o productos a terceros;
+       e) usarlo con fines publicitarios o de monetización (anuncios,
+          patrocinios, comisiones, etc.).
+
+1.5. "Entornos Propios": instalaciones controladas directamente por el
+     Licenciatario para su uso personal, interno o de su propio negocio, sin
+     ofrecer el Software a terceros como producto o servicio. El uso en
+     Entornos Propios está permitido y no se considera Uso Comercial prohibido,
+     siempre que no implique cobro, reventa ni explotación del Software en sí.
+
+1.6. "Derivado": cualquier trabajo basado en el Software, incluyendo
+     modificaciones, adaptaciones, traducciones, extensiones o combinaciones
+     con otros componentes.
+
+================================================================================
+2. CONCESIÓN DE DERECHOS
+================================================================================
+2.1. El Titular concede al Licenciatario una licencia mundial, no exclusiva,
+     gratuita y no transferible para:
+       a) usar y ejecutar el Software;
+       b) estudiar y leer su código fuente;
+       c) copiarlo y almacenarlo;
+       d) modificarlo, adaptarlo y crear Derivados;
+       e) publicarlo y distribuirlo,
+     siempre que dicho uso cumpla con todas las condiciones y restricciones de
+     esta licencia.
+
+2.2. La concesión es "source-available": el acceso al código se otorga para
+     uso, estudio y modificación, no para explotación comercial.
+
+================================================================================
+3. CONDICIONES
+================================================================================
+3.1. Atribución obligatoria: toda copia, modificación, Derivado o distribución
+     debe conservar de forma visible:
+       - el aviso de copyright: "Copyright (c) 2026 IntoCode. Autor: Dilan Acuña";
+       - una referencia clara a "BarberERP";
+       - este mismo archivo de licencia (LICENSE) sin alteraciones en sus
+         términos.
+
+3.2. Misma licencia: los Derivados deben distribuirse bajo esta misma licencia
+     (Licencia BarberERP 1.0 — No Comercial) u otra equivalente aprobada por
+     escrito por el Titular. No se permite relicenciar bajo términos más
+     permisivos ni propietarios.
+
+3.3. Avisos: no se pueden eliminar, ocultar ni modificar los avisos de autoría,
+     marca o licencia presentes en el Software.
+
+================================================================================
+4. RESTRICCIONES
+================================================================================
+4.1. Uso Comercial prohibido: queda terminantemente prohibido todo Uso
+     Comercial del Software o de sus Derivados sin autorización previa y
+     escrita del Titular.
+
+4.2. Prohibición de lucro: el Licenciatario no podrá obtener ganancias,
+     ingresos, comisiones, regalías ni ventajas económicas derivadas del
+     Software o de su explotación.
+
+4.3. Sublicencia: no se permite sublicenciar, vender, ceder ni transferir esta
+     licencia o el Software a terceros con fines comerciales.
+
+4.4. Marca: no se permite usar los nombres "BarberERP", "IntoCode", "The
+     Brothers Barber Shop" ni sus logotipos para promocionar, respaldar o
+     comercializar productos o servicios sin autorización escrita.
+
+4.5. Servicios a terceros: no se puede desplegar el Software para ofrecer
+     funcionalidades a terceros (clientes, usuarios externos, otras empresas)
+     como servicio, incluso si es gratuito, cuando ello sustituya una
+     alternativa comercial o genere cualquier tipo de contraprestación.
+
+================================================================================
+5. LICENCIA COMERCIAL (EXCEPCIÓN)
+================================================================================
+5.1. Cualquier uso distinto al permitido en esta licencia, en especial el Uso
+     Comercial, requiere una licencia comercial separada otorgada por escrito
+     por IntoCode.
+
+5.2. Para solicitar una licencia comercial, contactar a:
+       IntoCode — Desarrolladora del proyecto
+       Autor: Dilan Acuña
+       Contacto: garaydilan2002@gmail.com
+
+================================================================================
+6. TITULARIDAD
+================================================================================
+6.1. El Software es y seguirá siendo propiedad exclusiva de IntoCode. Esta
+     licencia no transfiere ningún derecho de propiedad intelectual ni de
+     titularidad sobre el Software, solo los permisos expresamente otorgados.
+
+6.2. Todas las contribuciones realizadas por terceros al Software se entienden
+     cedidas al Titular para su uso y explotación, salvo acuerdo escrito en
+     contrario.
+
+================================================================================
+7. GARANTÍAS Y RESPONSABILIDAD
+================================================================================
+7.1. El Software se entrega "TAL CUAL" ("AS IS"), sin garantías de ningún tipo,
+     expresas o implícitas, incluyendo, sin limitarse a, garantías de
+     comerciabilidad, idoneidad para un propósito particular, no infracción o
+     ausencia de errores.
+
+7.2. En ningún caso el Titular o los autores serán responsables por daños
+     directos, indirectos, incidentales, especiales, ejemplares o consecuentes
+     (incluyendo pérdida de datos, beneficios, interrupción del negocio o
+     daños por lucro cesante) derivados del uso o la imposibilidad de uso del
+     Software, incluso si se hubiera advertido la posibilidad de tales daños.
+
+7.3. El Licenciatario asume la totalidad del riesgo y la responsabilidad por el
+     uso del Software y por el cumplimiento de las leyes aplicables en su
+     jurisdicción.
+
+================================================================================
+8. VIGENCIA Y TERMINACIÓN
+================================================================================
+8.1. Esta licencia entra en vigencia desde el momento en que el Licenciatario
+     usa, copia, modifica o distribuye el Software y se mantiene vigente
+     mientras se cumplan sus términos.
+
+8.2. El incumplimiento de cualquiera de las condiciones o restricciones
+     termina automáticamente la licencia, sin previo aviso.
+
+8.3. Tras la terminación, el Licenciatario deberá cesar todo uso y destruir o
+     eliminar todas las copias del Software y de sus Derivados en su poder.
+
+8.4. Las secciones 4 (Restricciones), 6 (Titularidad), 7 (Garantías y
+     Responsabilidad), 8 (Vigencia y Terminación) y 9 (Ley Aplicable)
+     sobreviven a la terminación.
+
+================================================================================
+9. LEY APLICABLE Y JURISDICCIÓN
+================================================================================
+9.1. Esta licencia se rige por las leyes de la República de Colombia.
+
+9.2. Cualquier controversia se resolverá ante los jueces y tribunales
+     competentes de Bogotá D.C., Colombia.
+
+9.3. Si alguna disposición de esta licencia se considera inválida o
+     inaplicable, el resto permanecerá en pleno vigor y efecto.
+
+================================================================================
+ANEXO — ENGLISH SUMMARY (courtesy translation, not binding)
+================================================================================
+BarberERP 1.0 — Non-Commercial Source-Available License.
+Copyright (c) 2026 IntoCode. Original author: Dilan Acuña.
+
+You may use, read, copy, modify, publish and distribute this software, provided
+that: (a) you keep the copyright notice and this license; (b) derivatives are
+licensed under the same terms; and (c) you do NOT make any commercial use of
+it — including selling, reselling, renting, offering it as a paid or free
+service to third parties, integrating it into paid products, or using it to
+generate revenue or profit.
+
+Use in your own personal/internal environments is permitted. Any commercial
+use requires a separate written commercial license from IntoCode.
+
+The software is provided "AS IS", without warranty of any kind, and the authors
+are not liable for any damages. This license terminates automatically upon
+breach. Governed by the laws of Colombia; venue: Bogotá D.C.
+
+The Spanish text above is the official and binding version.
+================================================================================

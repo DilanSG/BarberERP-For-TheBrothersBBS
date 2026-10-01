@@ -1,5 +1,8 @@
 import mongoose from 'mongoose';
 
+// Modelo Mongoose de socios de la barbería.
+// Representa a los dueños (fundador/socio) y su porcentaje de participación,
+// vinculados a un usuario admin, con auditoría de quién crea y modifica.
 const socioSchema = new mongoose.Schema({
   // Referencia al usuario admin que tendrá el subrol de socio
   userId: {
@@ -72,11 +75,13 @@ const socioSchema = new mongoose.Schema({
 
 // Índices
 // Nota: email y userId ya tienen unique: true, no necesitan índices adicionales
-socioSchema.index({ isFounder: 1 });
+socioSchema.index({ tipoSocio: 1 });
 socioSchema.index({ isActive: 1 });
 socioSchema.index({ createdAt: -1 });
 
 // Middleware pre-save
+// Reglas de negocio: solo usuarios admin pueden ser socios, solo puede existir
+// un fundador activo y la suma de porcentajes activos no puede exceder 100%.
 socioSchema.pre('save', async function(next) {
   // Validar que el usuario sea admin
   const User = mongoose.model('User');
@@ -97,6 +102,8 @@ socioSchema.pre('save', async function(next) {
   }
 
   // Validar que la suma de porcentajes no exceda 100
+  // Agrega los demás socios activos (excluyendo este _id) y compara el total
+  // disponible contra el porcentaje que se está guardando.
   if (this.isModified('porcentaje') || this.isNew) {
     const totalPorcentaje = await this.constructor.aggregate([
       {
@@ -123,12 +130,15 @@ socioSchema.pre('save', async function(next) {
 });
 
 // Métodos estáticos
+// Devuelve los socios activos con datos básicos del usuario vinculado.
 socioSchema.statics.getDistribucionActual = async function() {
   return await this.find({ isActive: true })
     .populate('userId', 'name email role')
     .select('nombre email porcentaje tipoSocio userId');
 };
 
+// Reparte una ganancia total proporcionalmente al porcentaje de cada socio y
+// agrega la ganancia calculada (exacta y redondeada a pesos enteros).
 socioSchema.statics.calcularDistribucion = async function(gananciaTotal) {
   const socios = await this.getDistribucionActual();
   
@@ -139,6 +149,7 @@ socioSchema.statics.calcularDistribucion = async function(gananciaTotal) {
   }));
 };
 
+// Suma (agregación Mongo) los porcentajes de todos los socios activos.
 socioSchema.statics.getTotalPorcentajeAsignado = async function() {
   const result = await this.aggregate([
     {
@@ -156,14 +167,17 @@ socioSchema.statics.getTotalPorcentajeAsignado = async function() {
 };
 
 // Métodos de instancia
+// Solo un fundador activo tiene permisos de gestión sobre otros socios.
 socioSchema.methods.puedeCrearSocios = function() {
   return this.tipoSocio === 'fundador' && this.isActive;
 };
 
+// Misma regla que puedeCrearSocios: aplica para editar/eliminar socios.
 socioSchema.methods.puedeEditarSocios = function() {
   return this.tipoSocio === 'fundador' && this.isActive;
 };
 
+// Construye los badges visuales del socio (Admin + Fundador/Socio) para la UI.
 socioSchema.methods.getBadges = function() {
   const badges = [];
   
@@ -200,6 +214,7 @@ socioSchema.methods.getBadges = function() {
   return badges;
 };
 
+// Serialización pública: elimina __v antes de enviar el socio al frontend.
 socioSchema.methods.toJSON = function() {
   const socio = this.toObject();
   
@@ -210,6 +225,7 @@ socioSchema.methods.toJSON = function() {
 };
 
 // Validación custom para porcentajes
+// Exige un número finito dentro del rango (0, 100] además de las reglas del schema.
 socioSchema.path('porcentaje').validate(function(value) {
   return value > 0 && value <= 100 && Number.isFinite(value);
 }, 'El porcentaje debe ser un número válido entre 0.01 y 100');

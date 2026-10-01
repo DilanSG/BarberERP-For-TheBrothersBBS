@@ -1,0 +1,111 @@
+/* ============================================================================
+   Mini barber poles de fondo — tema claro
+   - Franjas: mismo movimiento que el GradientButton (background-position por
+     un tile exacto de 33.94px → 24px/cos45° → bucle infinito sin salto),
+     3s linear infinite y sin delay → todos giran sincronizados.
+   - Deriva: bucle suave tipo partícula alrededor de su posición (con algo más
+     de rango, 45–90px) y rotación leve; duraciones/delays por instancia.
+   ========================================================================= */
+
+.barber-pole-float {
+  position: absolute;
+  animation-name: barber-pole-drift;
+  animation-timing-function: ease-in-out;
+  animation-iteration-count: infinite;
+  will-change: transform;
+}
+
+/* Mismo recorrido que las partículas, escalado por --range */
+@keyframes barber-pole-drift {
+  0% {
+    transform: translate3d(0, 0, 0) rotate(var(--rot, 0deg));
+  }
+  25% {
+    transform: translate3d(calc(var(--range, 60px) * 0.33), calc(var(--range, 60px) * -0.67), 0)
+               rotate(calc(var(--rot, 0deg) + 6deg));
+  }
+  50% {
+    transform: translate3d(calc(var(--range, 60px) * -0.17), calc(var(--range, 60px) * -0.33), 0)
+               rotate(calc(var(--rot, 0deg) - 5deg));
+  }
+  75% {
+    transform: translate3d(calc(var(--range, 60px) * 0.5), calc(var(--range, 60px) * -1), 0)
+               rotate(calc(var(--rot, 0deg) + 4deg));
+  }
+  100% {
+    transform: translate3d(0, 0, 0) rotate(var(--rot, 0deg));
+  }
+}
+
+/* Solo el pole: cilindro rayado con extremos redondeados */
+.barber-pole {
+  display: block;
+  border-radius: 999px;
+  background-image: repeating-linear-gradient(
+    -45deg,
+    #e75757 0px, #e75757 3px,
+    #dc2626 3px, #dc2626 6px,
+    #ffffff 6px, #ffffff 12px,
+    #2563eb 12px, #2563eb 15px,
+    #4e7beb 15px, #4e7beb 18px,
+    #ffffff 18px, #ffffff 24px
+  );
+  background-size: 33.94px 33.94px;
+  background-position: 0px 0px;
+  animation: barber-pole-scroll 3s linear infinite;
+  box-shadow: inset 0 0 3px rgba(18, 22, 28, 0.10), 0 1px 3px rgba(18, 22, 28, 0.06);
+}
+
+/* Igual que el GradientButton: desplaza exactamente un tile en X (infinito) */
+@keyframes barber-pole-scroll {
+  from { background-position: 0px 0px; }
+  to   { background-position: 33.94px 0px; }
+}
+
+/* Variante oscura: franjas profundas con brillo tenue, pensada para
+   verse como postes luminosos difuminados sobre el fondo oscuro. */
+.barber-pole--dark {
+  background-image: repeating-linear-gradient(
+    -45deg,
+    rgba(220, 38, 38, 0.85) 0px, rgba(220, 38, 38, 0.85) 3px,
+    rgba(127, 29, 29, 0.9) 3px, rgba(127, 29, 29, 0.9) 6px,
+    rgba(255, 255, 255, 0.22) 6px, rgba(255, 255, 255, 0.22) 12px,
+    rgba(37, 99, 235, 0.85) 12px, rgba(37, 99, 235, 0.85) 15px,
+    rgba(30, 58, 138, 0.9) 15px, rgba(30, 58, 138, 0.9) 18px,
+    rgba(255, 255, 255, 0.18) 18px, rgba(255, 255, 255, 0.18) 24px
+  );
+  box-shadow:
+    inset 0 0 4px rgba(0, 0, 0, 0.5),
+    0 0 12px rgba(59, 130, 246, 0.14),
+    0 0 18px rgba(220, 38, 38, 0.08);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .barber-pole-float,
+  .barber-pole {
+    animation: none;
+  }
+}
+
+/* Toggle switch activo: franjas de barber pole en movimiento (inspirado en GradientButton) */
+.toggle-switch-stripes {
+  background-image: repeating-linear-gradient(
+    -45deg,
+    #e75757 0px, #e75757 3px,
+    #dc2626 3px, #dc2626 6px,
+    #ffffff 6px, #ffffff 12px,
+    #2563eb 12px, #2563eb 15px,
+    #4e7beb 15px, #4e7beb 18px,
+    #ffffff 18px, #ffffff 24px
+  );
+  background-size: 33.94px 33.94px;
+  background-position: 0px 0px;
+  animation: barber-pole-scroll 6s linear infinite;
+  box-shadow: inset 0 0 4px rgba(0, 0, 0, 0.22);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .toggle-switch-stripes {
+    animation: none;
+  }
+}

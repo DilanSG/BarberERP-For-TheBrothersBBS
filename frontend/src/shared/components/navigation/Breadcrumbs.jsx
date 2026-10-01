@@ -1,123 +1,197 @@
-import React from 'react';
-import { Link, useLocation } from 'react-router-dom';
-import { ChevronRight, Home } from 'lucide-react';
+import React, { useMemo } from 'react';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { ChevronRight, Home, ArrowLeft } from 'lucide-react';
 
-/**
- * Componente de breadcrumbs (migas de pan) para navegación
- * Muestra la ruta actual del usuario de forma jerárquica
- */
+// Breadcrumbs con navegación jerárquica y botón "Volver".
+//
+// Lógica:
+// - Siempre inicia en "Inicio" (/).
+// - Cada segmento de la ruta se traduce a una etiqueta legible (ROUTE_LABELS).
+// - Los segmentos de acción (view/edit/create/new) no generan crumb propio:
+//   se combinan con el ID siguiente en una sola etiqueta (ej: "Detalle de Cita").
+// - Los IDs (ObjectId) se etiquetan según el recurso padre (ej: barbers → "Perfil").
+// - El botón "Volver" regresa a la página desde la que se ingresó (historial real);
+//   si no hay historial (carga directa), vuelve al inicio.
+
+// Etiquetas legibles por segmento de ruta
+const ROUTE_LABELS = {
+  'barbers': 'Barberos',
+  'profile': 'Mi Perfil',
+  'profile-edit': 'Editar Perfil',
+  'inventory': 'Inventario',
+  'sales': 'Punto de Venta',
+  'cart-invoices': 'Facturas de Carrito',
+  'services': 'Servicios',
+  'roles': 'Usuarios y Roles',
+  'reports': 'Control Financiero',
+  'appointment': 'Citas',
+  'reviews': 'Reseñas',
+  'new': 'Nueva',
+  'edit': 'Editar',
+  'view': 'Detalle',
+  'create': 'Crear'
+};
+
+// Segmentos de acción: no generan crumb propio cuando preceden a un ID
+const ACTION_SEGMENTS = new Set(['view', 'edit', 'create']);
+
+// Prefijos de ruteo: no son páginas reales (no generan crumb).
+// Para admin/barber, "/" ya es el panel (menú de rol), así que "admin" sobra.
+const SKIP_SEGMENTS = new Set(['admin']);
+
+// Etiqueta del crumb dinámico (ID) según el segmento anterior
+const DETAIL_LABELS = {
+  'barbers': 'Perfil',
+  'appointment': 'Detalle',
+  'view': 'Detalle',
+  'edit': 'Editar',
+  'create': 'Crear'
+};
+
+// Detecta IDs: ObjectId de MongoDB, numérico o cadena larga no etiquetada.
+const isId = (segment) =>
+  /^[a-f\d]{24}$/i.test(segment) || // MongoDB ObjectId
+  /^\d+$/.test(segment) ||          // Numérico
+  segment.length > 20;              // IDs largos
+
+// Capitaliza la primera letra para segmentos sin etiqueta en ROUTE_LABELS.
+const capitalize = (text) => text.charAt(0).toUpperCase() + text.slice(1);
+
 const Breadcrumbs = ({ className = '' }) => {
   const location = useLocation();
-  
-  // Mapeo de rutas a etiquetas legibles
-  const routeMap = {
-    '': 'Inicio',
-    'services': 'Servicios',
-    'barbers': 'Barberos',
-    'profile': 'Mi Perfil',
-    'profile-edit': 'Editar Perfil',
-    'dashboard': 'Dashboard',
-    'appointment': 'Citas',
-    'new': 'Nueva',
-    'edit': 'Editar',
-    'view': 'Ver Detalle',
-    'admin': 'Administración',
-    'inventory': 'Inventario',
-    'sales': 'Ventas',
-    'roles': 'Roles',
-    'reports': 'Reportes',
-    'login': 'Iniciar Sesión',
-    'register': 'Registro'
-  };
+  const navigate = useNavigate();
 
-  // Obtener segmentos de la ruta
-  const pathnames = location.pathname.split('/').filter(x => x);
-  
-  // Si estamos en home, no mostrar breadcrumbs
-  if (pathnames.length === 0) {
-    return null;
-  }
+  // Construye las migas desde el pathname: omite prefijos, combina acciones con
+  // IDs, traduce etiquetas e inserta el padre contextual si viene en el state.
+  const crumbs = useMemo(() => {
+    const pathnames = location.pathname.split('/').filter(Boolean);
+    const items = [{ label: 'Inicio', path: '/', isFirst: true }];
 
-  // Función para obtener el icono según la ruta
-  const getRouteIcon = (route) => {
-    const iconMap = {
-      '': Home,
-      'services': null,
-      'barbers': null,
-      'profile': null,
-      'appointment': null,
-      'admin': null
-    };
-    
-    return iconMap[route];
-  };
+    let accumulated = '';
 
-  // Construir la estructura de breadcrumbs
-  const breadcrumbs = [
-    // Siempre incluir Home
-    {
-      label: 'Inicio',
-      path: '/',
-      icon: Home
-    }
-  ];
-
-  // Agregar segmentos de la ruta
-  let accumulatedPath = '';
-  pathnames.forEach((pathname, index) => {
-    accumulatedPath += `/${pathname}`;
-    
-    // Saltar IDs (rutas dinámicas como /barbers/123)
-    const isId = /^[a-f\d]{24}$/i.test(pathname) || // MongoDB ObjectId
-                 /^\d+$/.test(pathname) || // Números
-                 pathname.length > 15; // IDs muy largos
-    
-    if (!isId) {
-      const label = routeMap[pathname] || pathname.charAt(0).toUpperCase() + pathname.slice(1);
+    pathnames.forEach((segment, index) => {
+      accumulated += `/${segment}`;
       const isLast = index === pathnames.length - 1;
-      
-      breadcrumbs.push({
-        label,
-        path: accumulatedPath,
+
+      // Prefijos de ruteo (ej: /admin): no generan crumb
+      if (SKIP_SEGMENTS.has(segment)) {
+        return;
+      }
+
+      // IDs: etiqueta contextual según el recurso padre
+      if (isId(segment)) {
+        const previous = pathnames[index - 1];
+        items.push({
+          label: DETAIL_LABELS[previous] || 'Detalle',
+          path: accumulated,
+          isLast
+        });
+        return;
+      }
+
+      // Acciones intermedias (view/edit/create): se combinan con el ID siguiente
+      if (ACTION_SEGMENTS.has(segment) && !isLast) {
+        return;
+      }
+
+      items.push({
+        label: ROUTE_LABELS[segment] || capitalize(segment),
+        path: accumulated,
         isLast
       });
-    }
-  });
+    });
 
-  // Si solo tenemos Home + 1 más, no mostrar breadcrumbs (muy simple)
-  if (breadcrumbs.length <= 2) {
+    // Padre contextual: páginas que se abren desde otra (ej: Mi Perfil › Editar Perfil)
+    // El origen lo pasa el enlace con `state={{ breadcrumbParent: { label, path } }}`.
+    const parentCrumb = location.state?.breadcrumbParent;
+    if (parentCrumb?.label && parentCrumb?.path && items.length > 1) {
+      const alreadyInTrail = items.some(crumb => crumb.path === parentCrumb.path);
+      if (!alreadyInTrail) {
+        items.splice(items.length - 1, 0, {
+          label: parentCrumb.label,
+          path: parentCrumb.path
+        });
+      }
+    }
+
+    return items;
+  }, [location.pathname, location.state]);
+
+  // Ocultar solo en home y páginas de autenticación
+  if (location.pathname === '/' || location.pathname === '/login' || location.pathname === '/register') {
     return null;
   }
 
+  // Volver a donde se ingresó; si no hay historial en el router, ir al inicio
+  const handleBack = () => {
+    if (location.key !== 'default') {
+      navigate(-1);
+    } else {
+      navigate('/');
+    }
+  };
+
   return (
-    <nav className={`flex items-center space-x-1 text-sm ${className}`}>
-      {breadcrumbs.map((crumb, index) => {
-        const Icon = crumb.icon;
-        const isLast = index === breadcrumbs.length - 1;
-        
-        return (
-          <div key={crumb.path} className="flex items-center">
-            {index > 0 && (
-              <ChevronRight className="w-3 h-3 text-gray-500 mx-1 flex-shrink-0" />
-            )}
-            
-            {isLast ? (
-              <span className="text-blue-300 font-medium flex items-center gap-1.5">
-                {Icon && <Icon className="w-3 h-3" />}
-                {crumb.label}
-              </span>
-            ) : (
-              <Link
-                to={crumb.path}
-                className="text-gray-400 hover:text-white transition-colors duration-200 flex items-center gap-1.5 hover:underline"
-              >
-                {Icon && <Icon className="w-3 h-3" />}
-                {crumb.label}
-              </Link>
-            )}
-          </div>
-        );
-      })}
+    <nav
+      aria-label="Navegación de migas de pan"
+      className={`inline-flex max-w-full items-center gap-2 text-xs sm:text-sm ${className}`}
+    >
+      {/* Botón volver */}
+      <button
+        type="button"
+        onClick={handleBack}
+        title="Volver a la página anterior"
+        className="inline-flex items-center gap-1.5 text-gray-400 hover:text-white transition-colors duration-200 flex-shrink-0"
+      >
+        <ArrowLeft className="w-3.5 h-3.5" />
+        <span className="hidden sm:inline font-medium">Volver</span>
+      </button>
+
+      {/* Ruta jerárquica */}
+      <ol className="flex items-center gap-1 min-w-0">
+        {crumbs.map((crumb, index) => {
+          const isLast = index === crumbs.length - 1;
+          const isFirst = index === 0;
+          // En móvil se ocultan los intermedios cuando hay 4+ niveles (se conservan los últimos 2)
+          const hiddenOnMobile = !isFirst && !isLast && index < crumbs.length - 2;
+
+          return (
+            <React.Fragment key={crumb.path}>
+              {!isFirst && (
+                <li className={`${hiddenOnMobile ? 'hidden sm:flex' : 'flex'} items-center flex-shrink-0`} aria-hidden="true">
+                  <ChevronRight className="w-3.5 h-3.5 text-gray-600" />
+                </li>
+              )}
+
+              {hiddenOnMobile && index === 1 && (
+                <li className="flex sm:hidden items-center flex-shrink-0" aria-hidden="true">
+                  <span className="text-gray-500 px-0.5">…</span>
+                </li>
+              )}
+
+              <li className={`${hiddenOnMobile ? 'hidden sm:flex' : 'flex'} items-center min-w-0`}>
+                {isLast ? (
+                  <span
+                    aria-current="page"
+                    className="flex items-center gap-1.5 min-w-0 font-medium text-blue-300"
+                  >
+                    {isFirst && <Home className="w-3.5 h-3.5 flex-shrink-0" />}
+                    <span className="truncate">{crumb.label}</span>
+                  </span>
+                ) : (
+                  <Link
+                    to={crumb.path}
+                    className="flex items-center gap-1.5 min-w-0 text-gray-400 hover:text-white transition-colors duration-200"
+                  >
+                    {isFirst && <Home className="w-3.5 h-3.5 flex-shrink-0" />}
+                    <span className="truncate hover:underline">{crumb.label}</span>
+                  </Link>
+                )}
+              </li>
+            </React.Fragment>
+          );
+        })}
+      </ol>
     </nav>
   );
 };

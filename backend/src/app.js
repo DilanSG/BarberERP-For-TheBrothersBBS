@@ -93,8 +93,8 @@ app.use(morganMiddleware);
 setupSwagger(app);
 
 // Body parsers y sanitización
-app.use(express.json({ limit: config.app.maxFileSize }));
-app.use(express.urlencoded({ extended: true, limit: config.app.maxFileSize }));
+app.use(express.json({ limit: config.app?.maxFileSize || '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: config.app?.maxFileSize || '10mb' }));
 app.use(mongoSanitize());
 app.use(xss());
 app.use(hpp());
@@ -102,25 +102,12 @@ app.use(hpp());
 // Configuración de Cloudinary
 cloudinaryConfig();
 
-// Directorio estático para uploads
+// Directorio estático para uploads (respaldo para archivos legacy)
 app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
 
 // Documentación API
 const swaggerDocument = YAML.load(path.join(__dirname, '../docs/swagger.yaml'));
 app.use('/api/docs', swaggerUi.serve, swaggerUi.setup(swaggerDocument));
-
-// TEMPORARY: Log ALL invoice requests to debug routing
-app.use('/api/v1/invoices*', (req, res, next) => {
-  logger.info('INVOICE REQUEST RECEIVED', {
-    method: req.method,
-    originalUrl: req.originalUrl,
-    path: req.path,
-    baseUrl: req.baseUrl,
-    params: req.params,
-    query: req.query
-  });
-  next();
-});
 
 // Rutas de la API
 app.use(`/api/${config.app.apiVersion}`, routes);
@@ -128,7 +115,7 @@ app.use(`/api/${config.app.apiVersion}`, routes);
 // Ruta raíz - Bienvenida de la API  
 app.get('/', (req, res) => {
   try {
-    logger.info('Root route accessed successfully');
+    logger.debug('Root route accessed');
     res.status(200).json({
       success: true,
       service: 'The Brothers Barber Shop API',
@@ -138,7 +125,7 @@ app.get('/', (req, res) => {
       status: 'online'
     });
   } catch (error) {
-    logger.error('Error in root route:', error);
+    logger.error('Error en la ruta raíz', { error: error.message, stack: error.stack });
     res.status(500).json({
       success: false,
       message: 'Error interno del servidor'

@@ -216,7 +216,7 @@ export const getMySalesForRefund = asyncHandler(async (req, res) => {
   const appointmentQuery = {
     barber: barberId,
     status: 'completed',
-    paymentMethod: { $exists: true, $ne: null, $ne: '' }
+    paymentMethod: { $exists: true, $nin: [null, ''] }
   };
 
   // Filtros de fecha sobre date para citas

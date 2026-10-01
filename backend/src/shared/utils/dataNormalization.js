@@ -3,14 +3,14 @@ import Service from '../../core/domain/entities/Service.js';
 import { logger } from './logger.js';
 import { SALE_TYPES, getSaleTypeDisplayName } from '../constants/salesConstants.js';
 
-/**
- * Utilidades para normalizar datos entre diferentes entidades
- */
+// Utilidades para normalizar datos entre diferentes entidades
+// Adapta ventas y citas a una estructura común usada por reportes y frontend.
 class DataNormalizationService {
   
-  /**
-   * Obtener categoría de una venta
-   */
+  // Obtener categoría de una venta
+  // Prioriza la categoría guardada; si falta, la busca en inventario o servicio.
+  // @param {Object} sale - Venta a inspeccionar
+  // @returns {Promise<string>} Categoría resuelta
   static async getSaleCategory(sale) {
     try {
       // Si ya tiene categoría, devolverla
@@ -48,9 +48,9 @@ class DataNormalizationService {
     }
   }
 
-  /**
-   * Normalizar datos de venta para frontend
-   */
+  // Normalizar datos de venta para frontend
+  // @param {Object} sale - Venta cruda
+  // @returns {Promise<Object>} Venta con campos homogéneos (name, category, etc.)
   static async normalizeSaleData(sale) {
     try {
       const normalizedSale = {
@@ -91,9 +91,10 @@ class DataNormalizationService {
     }
   }
 
-  /**
-   * Normalizar datos de appointment como venta
-   */
+  // Normalizar datos de appointment como venta
+  // Permite listar citas completadas junto a las ventas en reportes.
+  // @param {Object} appointment - Cita con service/barber/user poblados
+  // @returns {Object|null} Cita adaptada al formato de venta
   static normalizeAppointmentAsSale(appointment) {
     try {
       return {
@@ -126,9 +127,7 @@ class DataNormalizationService {
     }
   }
 
-  /**
-   * Obtener tipos de venta normalizados
-   */
+  // Obtener tipos de venta normalizados
   static getSaleTypes() {
     return {
       PRODUCT: SALE_TYPES.PRODUCT,
@@ -137,26 +136,24 @@ class DataNormalizationService {
     };
   }
 
-  /**
-   * Obtener nombre de display para tipos
-   */
+  // Obtener nombre de display para tipos
   static getSaleTypeDisplayName(type) {
     return getSaleTypeDisplayName(type);
   }
 
-  /**
-   * Obtener todas las categorías disponibles de ventas
-   */
+  // Obtener todas las categorías disponibles de ventas
+  // Une las categorías distintas de inventario y servicios más las genéricas.
+  // @returns {Promise<string[]>} Categorías ordenadas y sin duplicados
   static async getAvailableCategories() {
     try {
       // Obtener categorías de productos
       const productCategories = await Inventory.distinct('category', { 
-        category: { $exists: true, $ne: null, $ne: '' } 
+        category: { $exists: true, $nin: [null, ''] } 
       });
 
       // Obtener categorías de servicios
       const serviceCategories = await Service.distinct('category', { 
-        category: { $exists: true, $ne: null, $ne: '' } 
+        category: { $exists: true, $nin: [null, ''] } 
       });
 
       // Combinar y eliminar duplicados
@@ -174,9 +171,10 @@ class DataNormalizationService {
     }
   }
 
-  /**
-   * Validar consistencia de datos de venta
-   */
+  // Validar consistencia de datos de venta
+  // Verifica campos obligatorios según el tipo y montos positivos.
+  // @param {Object} saleData - Datos de la venta
+  // @returns {Object} { isValid, errors }
   static validateSaleData(saleData) {
     const errors = [];
 

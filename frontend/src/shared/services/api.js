@@ -1,24 +1,39 @@
-﻿import config from '../config/api.js';
+﻿// Cliente HTTP central de la aplicación.
+// Expone `api` (get/post/put/delete/patch/upload) con:
+// - token JWT validado localmente antes de cada petición
+// - reintentos con backoff exponencial y timeout según el tipo de petición
+// - caché en memoria + Cache API con stale-while-revalidate
+// - deduplicación de peticiones GET simultáneas a la misma URL
+// - manejo centralizado de errores 400/401/403/404/429/5xx con notificaciones
+import config from '../config/api.js';
 import logger from '../utils/logger';
 
-const API_URL = config.apiUrl;
+// URL base de la API (ej. http://localhost:5000/api/v1)
+export const API_URL = config.apiUrl;
+// Versión enviada en la cabecera X-Client-Version
 const APP_VERSION = import.meta.env.VITE_APP_VERSION || '1.0.0';
 
 // Log de configuración de conexión para debugging
 console.log('🔧 Configuración de API:', config.getConnectionInfo());
 
+// Espera no bloqueante usada por los reintentos (backoff)
 const wait = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
-// Variable para almacenar el contexto de notificaciones
+// Contexto de notificaciones de React (se inyecta con setNotificationContext)
 let notificationContext = null;
 
-// Función para establecer el contexto de notificaciones
+// Conecta el NotificationContext de React con este módulo; si no se conecta,
+// los errores se avisan con `alert` como fallback.
 export const setNotificationContext = (context) => {
   notificationContext = context;
 };
 
-// Helper para operaciones de caché que verifica disponibilidad
+// Envoltorio defensivo sobre la Cache API del navegador.
+// La Cache API solo existe en contextos seguros (HTTPS/localhost); si no está
+// disponible o falla, se devuelve un valor vacío para no romper la app.
+// La caché en memoria sigue funcionando como capa principal.
 const safeCache = {
+  // Abre (o crea) la caché por nombre; null si no está disponible
   async open(name) {
     if (typeof caches === 'undefined') return null;
     try {
@@ -29,6 +44,7 @@ const safeCache = {
     }
   },
 
+  // Borra una entrada concreta de la Cache API (false si no se pudo)
   async delete(request) {
     if (typeof caches === 'undefined') return false;
     try {
@@ -39,6 +55,7 @@ const safeCache = {
     }
   },
 
+  // Lista los nombres de caché existentes; [] si la Cache API no está disponible
   async keys() {
     if (typeof caches === 'undefined') return [];
     try {
@@ -50,8 +67,55 @@ const safeCache = {
   }
 };
 
+// Construye un Error nuevo conservando `response`, `data` y `status` del error
+// original, para no perder el detalle HTTP en errores de validación (400).
+const createPreservedError = (message, error) => {
+  const preservedError = new Error(message);
+  if (error?.response) preservedError.response = error.response;
+  if (error?.data) preservedError.data = error.data;
+  if (error?.response?.status) preservedError.status = error.response.status;
+  return preservedError;
+};
+
 // Cache helper
+// Peticiones GET en vuelo (dedupe: una sola llamada por URL simultánea)
+const inflightRequests = new Map();
+
+// Caché en memoria: funciona SIEMPRE (la Cache API solo existe en HTTPS/localhost)
+// Clave: url → { value, expiry }. Es la capa primaria por velocidad.
+const memoryCache = new Map();
+const MEMORY_CACHE_LIMIT = 300; // Nº máximo de entradas antes de podar la más antigua
+
+// Caché de respuestas GET en dos capas: memoria (rápida) y Cache API (persistente
+// entre recargas). Soporta stale-while-revalidate usando entradas expiradas.
 export const cacheHelper = {
+  // Devuelve { value, expiry } aunque esté expirado (para stale-while-revalidate).
+  // Busca primero en memoria y luego en la Cache API (repuebla la memoria).
+  async getEntry(key) {
+    // 1) Memoria (inmediata)
+    const inMemory = memoryCache.get(key);
+    if (inMemory) return inMemory;
+
+    // 2) Cache API (persistencia entre recargas; solo en contextos seguros)
+    const cache = await safeCache.open('api-cache');
+    if (!cache) return null;
+    try {
+      const response = await cache.match(key);
+      if (!response) return null;
+      const data = await response.json();
+      if (data && data.value !== undefined) {
+        const entry = { value: data.value, expiry: data.expiry || 0 };
+        memoryCache.set(key, entry);
+        return entry;
+      }
+    } catch (error) {
+      console.warn('Error al obtener entrada de caché:', error);
+    }
+    return null;
+  },
+
+  // Devuelve el valor solo si NO ha expirado (revisa únicamente la Cache API);
+  // si expiró, elimina la entrada.
   async get(key) {
     const cache = await safeCache.open('api-cache');
     if (!cache) return null;
@@ -73,34 +137,69 @@ export const cacheHelper = {
     return null;
   },
 
+  // Guarda la entrada en memoria (podando la más antigua si se supera el
+  // límite) y además la persiste en la Cache API si está disponible.
   async set(key, value, ttl = 300000) { // 5 minutos por defecto
+    const entry = {
+      value,
+      expiry: Date.now() + ttl,
+      timestamp: Date.now()
+    };
+
+    // Memoria (podar si crece demasiado)
+    if (memoryCache.size >= MEMORY_CACHE_LIMIT) {
+      const oldest = memoryCache.keys().next().value;
+      memoryCache.delete(oldest);
+    }
+    memoryCache.set(key, entry);
+
+    // Persistencia (Cache API) — opcional según el contexto
     const cache = await safeCache.open('api-cache');
     if (!cache) return;
-    
     try {
-      const data = {
-        value,
-        expiry: Date.now() + ttl,
-        timestamp: Date.now()
-      };
-      const response = new Response(JSON.stringify(data));
+      const response = new Response(JSON.stringify(entry));
       await cache.put(key, response);
     } catch (error) {
       console.warn('Error al guardar en caché:', error);
     }
   },
 
+  // Vacía la caché en memoria y elimina todas las cachés del navegador
   async clear() {
+    memoryCache.clear();
     try {
       const keys = await safeCache.keys();
       await Promise.all(keys.map(key => safeCache.delete(key)));
     } catch (error) {
       console.warn('Error al limpiar caché:', error);
     }
+  },
+
+  // Invalida entradas cuyo URL coincida con el patrón (p. ej. /sales).
+  // Recorre memoria y Cache API; útil tras POST/PUT/PATCH/DELETE.
+  async invalidateByPattern(pattern) {
+    const regex = pattern instanceof RegExp ? pattern : new RegExp(pattern);
+    for (const key of [...memoryCache.keys()]) {
+      if (regex.test(key)) memoryCache.delete(key);
+    }
+    try {
+      const cache = await safeCache.open('api-cache');
+      if (!cache) return;
+      const keys = await cache.keys();
+      await Promise.all(keys.map((req) => (regex.test(req.url) ? cache.delete(req) : null)));
+    } catch (error) {
+      console.warn('Error invalidando caché:', error);
+    }
   }
 };
 
-const fetchWithRetry = async (url, options, retries = 3, backoff = 1000) => {
+// Ejecuta fetch con timeout y reintentos automáticos.
+// - Timeout: 30s para subidas (multipart) y snapshots; 10s para el resto.
+// - Añade cabeceras X-Client-Version y X-Request-ID para monitoreo.
+// - Reintenta con backoff exponencial en 429 y en fallos de red.
+// Parámetros: url, options de fetch, reintentos restantes (3) y backoff inicial (1000ms).
+// Devuelve la Response; lanza Error con response/data adjuntos si el HTTP no es ok.
+export const fetchWithRetry = async (url, options, retries = 3, backoff = 1000) => {
   // Añadir timeout de 30 segundos para subidas de archivos y snapshots
   const isUpload = options.headers && options.headers['Content-Type'] === 'multipart/form-data';
   const isSnapshot = url.includes('/inventory-snapshots');
@@ -143,6 +242,7 @@ const fetchWithRetry = async (url, options, retries = 3, backoff = 1000) => {
     //   console.warn('Error enviando métricas:', e);
     // }
     
+    // 429 (rate limit): espera y reintenta duplicando el backoff
     if (response.status === 429 && retries > 0) {
       await wait(backoff);
       return fetchWithRetry(url, options, retries - 1, backoff * 2);
@@ -184,6 +284,7 @@ const fetchWithRetry = async (url, options, retries = 3, backoff = 1000) => {
       throw timeoutError;
     }
     
+    // Fallo de red (servidor caído, CORS, sin conexión): reintenta con backoff
     if (retries > 0 && (error.name === 'TypeError' || error.message.includes('failed to fetch'))) {
       await wait(backoff);
       return fetchWithRetry(url, options, retries - 1, backoff * 2);
@@ -192,6 +293,9 @@ const fetchWithRetry = async (url, options, retries = 3, backoff = 1000) => {
   }
 };
 
+// Cierre de sesión forzado por token expirado:
+// muestra la notificación (o `alert` si no hay contexto), limpia token, usuario
+// y caché, y redirige a /login pasados 2 segundos.
 export const handleSessionExpired = () => {
   logger.debug('🕐 Sesión expirada - iniciando proceso de limpieza');
   
@@ -217,7 +321,12 @@ export const handleSessionExpired = () => {
   }, 2000);
 };
 
-// Nueva función para manejar errores de autenticación
+// Manejo centralizado de errores 401 (token expirado, ausente o inválido):
+// - No notifica en /auth/login ni /auth/register (los maneja el formulario).
+// - Evita bucles de redirección si ya estamos en /login o /register.
+// - Si el mensaje indica expiración/JWT llama a handleSessionExpired.
+// - En cualquier otro caso avisa, limpia credenciales y redirige a /login.
+// Siempre lanza Error para que el llamador detenga el flujo.
 const handleAuthError = (response, data, endpoint = '') => {
   if (response.status === 401) {
     const message = data.message || '';
@@ -279,6 +388,10 @@ const handleAuthError = (response, data, endpoint = '') => {
   }
 };
 
+// Traduce errores HTTP a notificaciones de usuario según el status:
+// 429 servidor ocupado, 403 sin permisos, 404 no encontrado, 500 error interno,
+// fallo de red (failed to fetch). Los 400 y 401 se omiten aquí porque ya se
+// manejan antes con mensajes específicos.
 const handleConnectionError = (error) => {
   if (notificationContext) {
     if (error.message.includes('failed to fetch') || error.name === 'TypeError') {
@@ -322,8 +435,11 @@ const handleConnectionError = (error) => {
   }
 };
 
+// Devuelve el token guardado solo si sigue vigente.
+// Decodifica el payload del JWT SIN verificar la firma (únicamente para leer `exp`).
+// Si está expirado o malformado, limpia token/usuario y devuelve null.
 // Función auxiliar para obtener token válido
-const getValidToken = () => {
+export const getValidToken = () => {
   const token = localStorage.getItem('token');
   if (!token) return null;
   
@@ -354,6 +470,10 @@ export const api = {
   // api.get(endpoint, false) -> sin caché
   // api.get(endpoint, true, 60000) -> con TTL custom
   // api.get(endpoint, { params: {...}, useCache: true, cacheTTL: 60000 })
+  // GET con caché y deduplicación de peticiones simultáneas.
+  // Flujo: si la caché está fresca devuelve su valor; si está expirada devuelve
+  // la copia vieja y revalida en segundo plano (stale-while-revalidate); si no
+  // hay caché hace la petición y la comparte con otras idénticas en vuelo.
   get: async (endpoint, optionsOrUseCache = true, cacheTTL = 300000) => {
     try {
       let params = null;
@@ -389,29 +509,50 @@ export const api = {
         console.log('🔍 [api.get] URL construida con params:', { endpoint, url, params, useCache, finalTTL });
       }
 
-      // Intentar caché
+      const authHeaders = {
+        'Content-Type': 'application/json',
+        ...(token && { 'Authorization': `Bearer ${token}` }),
+      };
+
+      // Petición real: parsea JSON, valida 401 y guarda en caché si aplica
+      const fetchAndCache = async () => {
+        const response = await fetchWithRetry(url, { method: 'GET', headers: authHeaders });
+        const data = await response.json();
+        handleAuthError(response, data, endpoint);
+        if (useCache && response.ok) {
+          await cacheHelper.set(url, data, finalTTL);
+        }
+        return data;
+      };
+
+      // Caché: fresca → instantánea; expirada → instantánea + revalidación en 2º plano
       if (useCache) {
-        const cachedData = await cacheHelper.get(url);
-        if (cachedData) {
-          return cachedData;
+        const entry = await cacheHelper.getEntry(url);
+        if (entry) {
+          if (entry.expiry > Date.now()) return entry.value;
+          // stale-while-revalidate (deduplicado)
+          if (!inflightRequests.has(url)) {
+            const bg = fetchAndCache()
+              .catch(() => {})
+              .finally(() => inflightRequests.delete(url));
+            inflightRequests.set(url, bg);
+          }
+          return entry.value;
         }
       }
 
-      const response = await fetchWithRetry(url, {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token && { 'Authorization': `Bearer ${token}` }),
-        },
-      });
-
-      const data = await response.json();
-      handleAuthError(response, data, endpoint);
-
-      if (useCache && response.ok) {
-        await cacheHelper.set(url, data, finalTTL);
+      // Dedupe: si ya hay una petición igual en curso, compartirla
+      if (inflightRequests.has(url)) {
+        return inflightRequests.get(url);
       }
-      return data;
+
+      const request = fetchAndCache();
+      inflightRequests.set(url, request);
+      try {
+        return await request;
+      } finally {
+        inflightRequests.delete(url);
+      }
     } catch (error) {
       logger.debug('🚨 Error en api.get:', error);
       if (error.response && error.data) {
@@ -426,6 +567,10 @@ export const api = {
     }
   },
 
+  // POST en JSON con token. Al responder OK invalida la caché del recurso
+  // (patrón = primer segmento del endpoint, p. ej. /sales).
+  // Los errores 400 de validación se notifican con el detalle por campo.
+  // Devuelve el JSON ya parseado.
   post: async (endpoint, data) => {
     try {
       const token = getValidToken();
@@ -443,19 +588,10 @@ export const api = {
       // Manejar errores de autenticación
       handleAuthError(response, responseData, endpoint);
 
-      // Invalidar caché relacionado si la operación fue exitosa
+      // Invalidar caché relacionado (memoria + Cache API)
       if (response.ok) {
         try {
-          const cachePattern = new RegExp(endpoint.split('/')[1]);
-          const cache = await safeCache.open('api-cache');
-          if (cache) {
-            const keys = await cache.keys();
-            for (const key of keys) {
-              if (cachePattern.test(key.url)) {
-                await cache.delete(key);
-              }
-            }
-          }
+          await cacheHelper.invalidateByPattern(new RegExp(endpoint.split('/')[1]));
         } catch (cacheError) {
           console.warn('Error al invalidar caché:', cacheError);
         }
@@ -520,11 +656,7 @@ export const api = {
           notificationContext.showError(message, 'Error de Validación');
           
           // 🔧 IMPORTANTE: Preservar información original de respuesta
-          const preservedError = new Error(message);
-          preservedError.response = error.response;
-          preservedError.data = error.data;
-          preservedError.status = error.response.status;
-          throw preservedError;
+          throw createPreservedError(message, error);
         }
       }
       
@@ -534,6 +666,9 @@ export const api = {
     }
   },
 
+  // PUT con token. Detecta FormData (no fuerza Content-Type para no romper el
+  // boundary) y en JSON envía el body serializado. Invalida la caché del recurso.
+  // customOptions.headers permite añadir cabeceras extra.
   put: async (endpoint, data, customOptions = {}) => {
     try {
       const token = getValidToken();
@@ -568,19 +703,10 @@ export const api = {
       // Manejar errores de autenticación
       handleAuthError(response, responseData, endpoint);
 
-      // Invalidar caché relacionado
+      // Invalidar caché relacionado (memoria + Cache API)
       if (response.ok) {
         try {
-          const cachePattern = new RegExp(endpoint.split('/')[1]);
-          const cache = await safeCache.open('api-cache');
-          if (cache) {
-            const keys = await cache.keys();
-            for (const key of keys) {
-              if (cachePattern.test(key.url)) {
-                await cache.delete(key);
-              }
-            }
-          }
+          await cacheHelper.invalidateByPattern(new RegExp(endpoint.split('/')[1]));
         } catch (cacheError) {
           console.warn('Error al invalidar caché:', cacheError);
         }
@@ -615,7 +741,7 @@ export const api = {
           }
           
           notificationContext.showError(message, 'Error de Validación');
-          throw new Error(message);
+          throw createPreservedError(message, error);
         }
       }
       
@@ -625,6 +751,7 @@ export const api = {
     }
   },
 
+  // DELETE con token. Invalida la caché del recurso tras una respuesta OK.
   delete: async (endpoint) => {
     try {
       const token = getValidToken();
@@ -641,19 +768,10 @@ export const api = {
       // Manejar errores de autenticación
       handleAuthError(response, responseData, endpoint);
 
-      // Invalidar caché relacionado
+      // Invalidar caché relacionado (memoria + Cache API)
       if (response.ok) {
         try {
-          const cachePattern = new RegExp(endpoint.split('/')[1]);
-          const cache = await safeCache.open('api-cache');
-          if (cache) {
-            const keys = await cache.keys();
-            for (const key of keys) {
-              if (cachePattern.test(key.url)) {
-                await cache.delete(key);
-              }
-            }
-          }
+          await cacheHelper.invalidateByPattern(new RegExp(endpoint.split('/')[1]));
         } catch (cacheError) {
           console.warn('Error al invalidar caché:', cacheError);
         }
@@ -688,7 +806,7 @@ export const api = {
           }
           
           notificationContext.showError(message, 'Error de Validación');
-          throw new Error(message);
+          throw createPreservedError(message, error);
         }
       }
       
@@ -698,6 +816,7 @@ export const api = {
     }
   },
 
+  // PATCH en JSON con token. Invalida la caché del recurso tras una respuesta OK.
   patch: async (endpoint, data) => {
     try {
       const token = getValidToken();
@@ -715,19 +834,10 @@ export const api = {
       // Manejar errores de autenticación
       handleAuthError(response, responseData, endpoint);
 
-      // Invalidar caché relacionado
+      // Invalidar caché relacionado (memoria + Cache API)
       if (response.ok) {
         try {
-          const cachePattern = new RegExp(endpoint.split('/')[1]);
-          const cache = await safeCache.open('api-cache');
-          if (cache) {
-            const keys = await cache.keys();
-            for (const key of keys) {
-              if (cachePattern.test(key.url)) {
-                await cache.delete(key);
-              }
-            }
-          }
+          await cacheHelper.invalidateByPattern(new RegExp(endpoint.split('/')[1]));
         } catch (cacheError) {
           console.warn('Error al invalidar caché:', cacheError);
         }
@@ -762,7 +872,7 @@ export const api = {
           }
           
           notificationContext.showError(message, 'Error de Validación');
-          throw new Error(message);
+          throw createPreservedError(message, error);
         }
       }
       
@@ -773,6 +883,8 @@ export const api = {
   },
 
   // Método específico para subir archivos
+  // POST de FormData: NO fija Content-Type (el navegador añade el boundary).
+  // Invalida la caché del recurso y devuelve el JSON de la respuesta.
   upload: async (endpoint, formData) => {
     try {
       const token = getValidToken();
@@ -790,19 +902,10 @@ export const api = {
       // Manejar errores de autenticación
       handleAuthError(response, responseData, endpoint);
 
-      // Invalidar caché relacionado
+      // Invalidar caché relacionado (memoria + Cache API)
       if (response.ok) {
         try {
-          const cachePattern = new RegExp(endpoint.split('/')[1]);
-          const cache = await safeCache.open('api-cache');
-          if (cache) {
-            const keys = await cache.keys();
-            for (const key of keys) {
-              if (cachePattern.test(key.url)) {
-                await cache.delete(key);
-              }
-            }
-          }
+          await cacheHelper.invalidateByPattern(new RegExp(endpoint.split('/')[1]));
         } catch (cacheError) {
           console.warn('Error al invalidar caché:', cacheError);
         }
@@ -837,7 +940,7 @@ export const api = {
           }
           
           notificationContext.showError(message, 'Error de Validación');
-          throw new Error(message);
+          throw createPreservedError(message, error);
         }
       }
       
@@ -849,294 +952,15 @@ export const api = {
 };
 
 // Servicios específicos
-export const appointmentService = {
-  getAppointments: () => api.get('/appointments', true, 60000), // 1 minuto de caché
-  getBarberAppointments: (barberId) => api.get(`/appointments/barber/${barberId}`, true, 60000),
-  createAppointment: (data) => api.post('/appointments', data),
-  updateAppointment: (id, data) => api.put(`/appointments/${id}`, data),
-  cancelAppointment: (id, reason) => api.put(`/appointments/${id}/cancel`, { reason }),
-  approveAppointment: (id) => api.put(`/appointments/${id}/approve`, {}),
-  completeAppointment: (id, paymentMethod) => api.put(`/appointments/${id}/complete`, { paymentMethod }),
-  markNoShow: (id) => api.put(`/appointments/${id}/no-show`, {}),
-  deleteAppointment: (id) => api.delete(`/appointments/${id}`),
-  getAvailableTimes: (barberId, date) => api.get(`/appointments/availability/${barberId}?date=${date}&duration=30`),
-};
-
-export const barberService = {
-  getAllBarbers: () => api.get('/barbers', true, 300000), // 5 minutos de caché
-  getBarberById: (id) => api.get(`/barbers/${id}`, true, 300000),
-  getBarberByUserId: (userId) => api.get(`/barbers/by-user/${userId}`, true, 300000),
-  createBarber: (data) => api.post('/barbers', data),
-  updateBarber: (id, data) => api.put(`/barbers/${id}`, data),
-  removeBarber: (id) => api.put(`/barbers/${id}/remove`),
-  updateMainBarberStatus: (id, isMainBarber) => api.patch(`/barbers/${id}/main-status`, { isMainBarber }),
-  getBarberProfile: async () => {
-    // Para obtener el perfil del barbero autenticado, necesitamos su userId
-    const user = JSON.parse(localStorage.getItem('user') || '{}');
-    if (!user._id) {
-      throw new Error('Usuario no autenticado');
-    }
-    return api.get(`/barbers/by-user/${user._id}`, true, 300000);
-  },
-  updateBarberProfile: (id, data) => api.put(`/barbers/${id}`, data),
-  updateMyProfile: async (data) => {
-    // Para actualizar el perfil del barbero autenticado
-    const user = JSON.parse(localStorage.getItem('user') || '{}');
-    if (!user._id) {
-      throw new Error('Usuario no autenticado');
-    }
-    
-    // Primero obtener el perfil para conseguir el ID del barbero
-    const barberResponse = await api.get(`/barbers/by-user/${user._id}`, false);
-    const barberData = barberResponse.data || barberResponse;
-    
-    if (!barberData || !barberData._id) {
-      throw new Error('No se pudo obtener el ID del barbero');
-    }
-    
-    // Siempre usar el endpoint /profile para evitar validateImageRequired
-    // El endpoint /profile maneja tanto FormData como JSON
-    return api.put(`/barbers/${barberData._id}/profile`, data);
-  },
-  getBarberStats: (id) => api.get(`/barbers/${id}/stats`, true, 900000), // 15 minutos de caché
-};
 
 // Servicios de ventas
-export const salesService = {
-  getBarberSalesStats: (barberId, params = {}) => {
-    const queryString = new URLSearchParams(params).toString();
-    const url = `/sales/barber/${barberId}/stats${queryString ? `?${queryString}` : ''}`;
-    console.log('🔍 [salesService] getBarberSalesStats:', { barberId, params, queryString, url });
-    return api.get(url, true, 300000);
-  },
-  // Si se pasa barberId, usa el endpoint por barbero; si no, usa el global
-  getAvailableDates: (barberId = null) => {
-    if (barberId) {
-      return api.get(`/sales/barber/${barberId}/available-dates`, true, 300000);
-    } else {
-      return api.get(`/sales/available-dates`, true, 300000);
-    }
-  },
-  getDailyReport: (date, barberId = null) => {
-    const params = new URLSearchParams({ date });
-    if (barberId) params.append('barberId', barberId);
-    return api.get(`/sales/daily-report?${params.toString()}`, false);
-  },
-  getBarberRangeReport: (type, date, barberId) => {
-    const params = new URLSearchParams({ type, date });
-    if (barberId) params.append('barberId', barberId);
-    return api.get(`/sales/reports?${params.toString()}`, false);
-  },
-  
-  // Crear venta de productos
-  createSale: (saleData) => api.post('/sales', saleData),
-  
-  // Crear venta de servicio de corte  
-  createWalkInSale: (walkInData) => api.post('/sales/walk-in', walkInData),
-  
-  // Crear venta desde carrito con métodos de pago múltiples
-  createCartSale: (cartData) => api.post('/sales/cart', cartData),
-  
-  // Nuevos endpoints para reportes detallados
-  getDetailedSalesReport: (barberId, startDate, endDate) => {
-    const params = new URLSearchParams({ barberId });
-    if (startDate !== undefined && startDate !== null) params.append('startDate', startDate);
-    if (endDate !== undefined && endDate !== null) params.append('endDate', endDate);
-    return api.get(`/sales/detailed-report?${params.toString()}`, false);
-  },
-  getWalkInDetails: (barberId, startDate, endDate) => {
-    const params = new URLSearchParams({ barberId });
-    if (startDate !== undefined && startDate !== null) params.append('startDate', startDate);
-    if (endDate !== undefined && endDate !== null) params.append('endDate', endDate);
-    return api.get(`/sales/walk-in-details?${params.toString()}`, false);
-  },
-  getDetailedCutsReport: (barberId, startDate, endDate) => {
-    const params = new URLSearchParams({ barberId });
-    if (startDate !== undefined && startDate !== null) params.append('startDate', startDate);
-    if (endDate !== undefined && endDate !== null) params.append('endDate', endDate);
-    return api.get(`/sales/detailed-cuts-report?${params.toString()}`, false);
-  },
-  
-  // Obtener todas las ventas con filtros
-  getAllSales: (filters = {}) => {
-    const params = new URLSearchParams();
-    Object.keys(filters).forEach(key => {
-      if (filters[key] !== undefined && filters[key] !== null && filters[key] !== '') {
-        params.append(key, filters[key]);
-      }
-    });
-    return api.get(`/sales?${params.toString()}`, false);
-  },
-  
-  // Obtener facturas de carrito (ventas con clientData)
-  getCartInvoices: (filters = {}) => {
-    const params = new URLSearchParams();
-    Object.keys(filters).forEach(key => {
-      if (filters[key] !== undefined && filters[key] !== null && filters[key] !== '') {
-        params.append(key, filters[key]);
-      }
-    });
-    return api.get(`/sales/cart-invoices?${params.toString()}`, false);
-  },
-  
-  // Cancelar/eliminar venta
-  cancelSale: (saleId) => api.put(`/sales/${saleId}/cancel`, {})
-};
 
 // Servicios de citas  
-export const appointmentsService = {
-  getBarberAppointmentStats: (barberId, params = {}) => {
-    const queryString = new URLSearchParams(params).toString();
-    const url = `/appointments/barber/${barberId}/stats${queryString ? `?${queryString}` : ''}`;
-    return api.get(url, true, 300000);
-  },
-  getAvailableDates: (barberId) => api.get(`/appointments/barber/${barberId}/available-dates`, true, 300000),
-  getDailyReport: (date, barberId = null) => {
-    const params = new URLSearchParams({ date });
-    if (barberId) params.append('barberId', barberId);
-    return api.get(`/appointments/daily-report?${params.toString()}`, false);
-  },
-  // Nuevo endpoint para citas completadas detalladas
-  getCompletedDetails: (barberId, startDate, endDate) => {
-    const params = new URLSearchParams({ barberId });
-    if (startDate !== undefined && startDate !== null) params.append('startDate', startDate);
-    if (endDate !== undefined && endDate !== null) params.append('endDate', endDate);
-    return api.get(`/appointments/completed-details?${params.toString()}`, false);
-  }
-};
-
-export const serviceService = {
-  getAllServices: () => api.get('/services', true, 300000),
-  getServiceById: (id) => api.get(`/services/${id}`, true, 300000),
-  createService: (data) => api.post('/services', data),
-  updateService: (id, data) => api.put(`/services/${id}`, data),
-  deleteService: (id) => api.delete(`/services/${id}`),
-};
-
-export const userService = {
-  getProfile: () => api.get('/users/me', true, 300000),
-  updateProfile: (data) => api.put('/users/me', data),
-  changePassword: (data) => api.put('/users/change-password', data),
-  getAllUsers: () => api.get('/users', true, 300000), // Para administradores
-  getUserById: (id) => api.get(`/users/${id}`, true, 300000),
-  updateUserRole: (id, data) => api.put(`/users/${id}/role`, data),
-};
-
-export const inventoryService = {
-  getInventory: (params = {}) => {
-    const queryString = new URLSearchParams(params).toString();
-    return api.get(`/inventory${queryString ? `?${queryString}` : ''}`, true, 300000);
-  },
-  getInventoryItem: (id) => api.get(`/inventory/${id}`, true, 300000),
-  createInventoryItem: (data) => api.post('/inventory', data),
-  updateInventoryItem: (id, data) => api.put(`/inventory/${id}`, data),
-  deleteInventoryItem: (id) => api.delete(`/inventory/${id}`),
-  adjustStock: (id, data) => api.post(`/inventory/${id}/stock`, data),
-  getLowStockItems: (threshold) => api.get(`/inventory/low-stock${threshold ? `?threshold=${threshold}` : ''}`, true, 300000),
-  getItemsByCategory: (category) => api.get(`/inventory/category/${category}`, true, 300000),
-  getMovementHistory: (id, startDate, endDate) => {
-    const params = new URLSearchParams();
-    if (startDate) params.append('startDate', startDate);
-    if (endDate) params.append('endDate', endDate);
-    return api.get(`/inventory/${id}/history${params.toString() ? `?${params.toString()}` : ''}`, true, 300000);
-  },
-  getStats: () => api.get('/inventory/stats/overview', true, 300000),
-  getLogs: (queryString) => api.get(`/inventory/logs${queryString ? `?${queryString}` : ''}`, true, 60000),
-  getLogStats: (startDate, endDate) => {
-    const params = new URLSearchParams();
-    if (startDate) params.append('startDate', startDate);
-    if (endDate) params.append('endDate', endDate);
-    return api.get(`/inventory/logs/stats${params.toString() ? `?${params.toString()}` : ''}`, true, 300000);
-  },
-  getDailyReport: (date) => {
-    const params = new URLSearchParams({ date });
-    return api.get(`/inventory/daily-report?${params.toString()}`, false);
-  },
-  fixConsistency: () => api.post('/inventory/fix-consistency', {})
-};
 
 // Servicios de snapshots de inventario
-export const inventorySnapshotService = {
-  createSnapshot: (data) => api.post('/inventory-snapshots', data),
-  getSnapshots: (params = {}) => {
-    const queryString = new URLSearchParams(params).toString();
-    return api.get(`/inventory-snapshots${queryString ? `?${queryString}` : ''}`, true, 300000);
-  },
-  getSnapshotById: (id) => api.get(`/inventory-snapshots/${id}`, true, 300000),
-  deleteSnapshot: (id) => api.delete(`/inventory-snapshots/${id}`),
-  getStats: (params = {}) => {
-    const queryString = new URLSearchParams(params).toString();
-    return api.get(`/inventory-snapshots/stats${queryString ? `?${queryString}` : ''}`, true, 300000);
-  },
-  downloadSnapshot: async (id) => {
-    try {
-      const token = getValidToken();
-      const response = await fetchWithRetry(`${API_URL}/inventory-snapshots/${id}/download`, {
-        method: 'GET',
-        headers: {
-          ...(token && { 'Authorization': `Bearer ${token}` }),
-        },
-      });
-
-      if (!response.ok) {
-        throw new Error(`Error al descargar: ${response.status}`);
-      }
-
-      return response.blob();
-    } catch (error) {
-      console.error('Error al descargar inventario guardado:', error);
-      throw error;
-    }
-  }
-};
 
 // API de métodos de pago (nuevo sistema centralizado)
-export const paymentMethodsApi = {
-  // Obtener todos los métodos de pago activos
-  getAll: () => api.get('/payment-methods'),
-  
-  // Crear un nuevo método de pago (solo admin)
-  create: (data) => api.post('/payment-methods', data),
-  
-  // Actualizar un método de pago (solo admin)
-  update: (backendId, data) => api.put(`/payment-methods/${backendId}`, data),
-  
-  // Eliminar/desactivar un método de pago (solo admin)
-  delete: (backendId, force = false) => api.delete(`/payment-methods/${backendId}?force=${force}`),
-  
-  // Inicializar métodos del sistema (solo admin)
-  initialize: () => api.post('/payment-methods/initialize'),
-  
-  // Normalizar métodos existentes (solo admin)
-  normalize: () => api.post('/payment-methods/normalize')
-};
 
 // ============================================================================
 // REVIEWS SERVICE
 // ============================================================================
-export const reviewService = {
-  // Crear una reseña
-  create: (data) => api.post('/reviews', data),
-  
-  // Obtener reseñas de un barbero
-  getBarberReviews: (barberId, params = {}) => {
-    const queryString = new URLSearchParams(params).toString();
-    return api.get(`/reviews/barber/${barberId}${queryString ? '?' + queryString : ''}`);
-  },
-  
-  // Obtener estadísticas de rating de un barbero
-  getBarberStats: (barberId) => api.get(`/reviews/barber/${barberId}/stats`),
-  
-  // Verificar elegibilidad para dejar reseña
-  checkEligibility: (appointmentId) => api.get(`/reviews/check/${appointmentId}`),
-  
-  // Obtener mis reseñas
-  getMyReviews: () => api.get('/reviews/my-reviews'),
-  
-  // Actualizar una reseña
-  update: (reviewId, data) => api.put(`/reviews/${reviewId}`, data),
-  
-  // Eliminar una reseña (admin)
-  delete: (reviewId) => api.delete(`/reviews/${reviewId}`)
-};
-

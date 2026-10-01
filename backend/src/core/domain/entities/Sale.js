@@ -1,6 +1,10 @@
 ﻿import mongoose from "mongoose";
 import { SALE_TYPES } from "../../../shared/constants/salesConstants.js";
 
+// Modelo Mongoose de ventas.
+// Cada venta es de tipo PRODUCT o SERVICE (campos obligatorios según el tipo),
+// registra cantidad, precio unitario, total, barbero y método de pago, y
+// soporta estados completed/cancelled/refunded con trazabilidad del reembolso.
 const saleSchema = new mongoose.Schema({
   productId: {
     type: mongoose.Schema.Types.ObjectId,
@@ -54,6 +58,7 @@ const saleSchema = new mongoose.Schema({
     required: [true, "El método de pago es requerido"],
     default: 'cash',
     // Permitir cualquier método de pago para flexibilidad con métodos dinámicos
+    // (los métodos configurables se aceptan como string no vacío).
     validate: {
       validator: function(value) {
         // Lista de métodos válidos conocidos
@@ -124,6 +129,7 @@ const saleSchema = new mongoose.Schema({
     default: "completed"
   },
   // Campos de reembolso
+  // Registran cuándo, por qué y quién marcó la venta como 'refunded'.
   refundedAt: {
     type: Date
   },
@@ -145,6 +151,7 @@ const saleSchema = new mongoose.Schema({
 });
 
 // Índices para mejorar performance de queries
+// Cubren los reportes por barbero, producto, servicio, fecha y tipo de venta.
 saleSchema.index({ barberId: 1, saleDate: -1 });
 saleSchema.index({ productId: 1, saleDate: -1 });
 saleSchema.index({ serviceId: 1, saleDate: -1 });

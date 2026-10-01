@@ -1,23 +1,37 @@
-﻿import React, { useEffect, useState } from 'react';
+﻿import React, { useEffect, useState, useMemo } from 'react';
 import { useAuth } from '@contexts/AuthContext';
+import { useTheme } from '@contexts/ThemeContext';
 import { useNotification } from '@contexts/NotificationContext';
 import { PageContainer } from '@components/layout/PageContainer';
 import GradientText from '@components/ui/GradientText';
 import UserAvatar from '@components/ui/UserAvatar';
+import Modal from '@components/ui/Modal';
 import { api } from '@services/api';
+import { AlertTriangle, Users, Search, Filter, Shield, User, Scissors, UserX, Trash2, X, Mail } from 'lucide-react';
+import { UserRoleManagerSkeleton } from '@components/ui/Skeleton';
 
+// Gestión de usuarios para administradores.
+// Carga la lista de usuarios, la enriquece con información de socios, permite
+// buscar/filtrar por rol y cambiar rol, desactivar o eliminar usuarios.
 import logger from '@utils/logger';
 function UserRoleManager() {
+  const { isLight } = useTheme();
   const { user, token } = useAuth();
   const { showSuccess, showError } = useNotification();
+  // Lista de usuarios enriquecida (rol, socio, fundador) y estados de los modales
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [userToDelete, setUserToDelete] = useState(null);
   const [userToDeactivate, setUserToDeactivate] = useState(null);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [showDeactivateModal, setShowDeactivateModal] = useState(false);
-  const [socios, setSocios] = useState([]);
 
+  // Estados de búsqueda y filtros
+  const [searchTerm, setSearchTerm] = useState('');
+  const [roleFilter, setRoleFilter] = useState('all'); // all | admin | barber | user | socio
+
+  // Carga usuarios y socios: cruza ambas fuentes, marca isSocio/fundador y
+  // ordena por jerarquía (fundadores, admins/socios, barberos, clientes).
   const fetchUsers = async () => {
     if (user?.role === 'admin') {
       try {
@@ -26,6 +40,7 @@ function UserRoleManager() {
         const usersData = await api.get('/users');
         
         // Obtener socios para identificar quien es socio (con manejo de errores)
+        // Si /socios falla, la lista se muestra igual sin la marca de socio
         let sociosData = { success: false, data: [] };
         try {
           sociosData = await api.get('/socios');
@@ -42,7 +57,6 @@ function UserRoleManager() {
         let sociosArray = [];
         if (sociosData.success && sociosData.data && Array.isArray(sociosData.data.socios)) {
           sociosArray = sociosData.data.socios;
-          setSocios(sociosData.data.socios);
         } else {
           console.warn('Respuesta de socios inválida o vacía:', sociosData);
         }
@@ -68,6 +82,7 @@ function UserRoleManager() {
         });
 
         // Ordenar usuarios por importancia
+        // 1) fundadores 2) admins (socios primero) 3) barberos 4) clientes
         const sortedUsers = enrichedUsers.sort((a, b) => {
           // Fundadores primero
           if (a.isFounder && !b.isFounder) return -1;
@@ -107,6 +122,7 @@ function UserRoleManager() {
     fetchUsers();
   }, [user, token]);
 
+  // Refresca la caché de barberos (sin caché) y devuelve solo los activos
   const refreshBarbers = async () => {
     try {
       // Forzar actualización de la cache de barberos
@@ -131,6 +147,8 @@ function UserRoleManager() {
     }
   };
 
+  // Cambia el rol del usuario; si pasa a barbero asegura su perfil y refresca
+  // la caché de barberos antes de recargar la lista completa.
   const handleRoleChange = async (userId, newRole) => {
     try {
       await api.put(`/users/${userId}/role`, { role: newRole });
@@ -153,18 +171,21 @@ function UserRoleManager() {
     }
   };
 
+  // Abre el modal de confirmación de eliminación permanente (hard delete)
   const handleDeleteUser = async (userId) => {
     const userToDelete = users.find(u => u._id === userId);
     setUserToDelete(userToDelete);
     setShowDeleteModal(true);
   };
 
+  // Abre el modal de confirmación de desactivación (soft delete)
   const handleDeactivateUser = async (userId) => {
     const userToDeactivate = users.find(u => u._id === userId);
     setUserToDeactivate(userToDeactivate);
     setShowDeactivateModal(true);
   };
 
+  // Confirma y ejecuta la eliminación permanente; recarga la lista al finalizar
   const confirmDelete = async () => {
     if (!userToDelete) return;
 
@@ -184,6 +205,7 @@ function UserRoleManager() {
     }
   };
 
+  // Confirma y ejecuta la desactivación; el usuario deja de poder iniciar sesión
   const confirmDeactivate = async () => {
     if (!userToDeactivate) return;
 
@@ -203,6 +225,7 @@ function UserRoleManager() {
   };
 
   // Función para renderizar badges de usuario
+  // Genera el badge de rol y, si aplica, el de socio o fundador (con su porcentaje)
   const renderUserBadges = (user) => {
     const badges = [];
     
@@ -211,13 +234,13 @@ function UserRoleManager() {
       badges.push({
         text: 'Admin',
         title: 'Administrador',
-        className: 'bg-gradient-to-r from-blue-500/30 to-blue-600/30 text-blue-300 border border-blue-500/40 shadow-lg shadow-blue-500/20'
+        className: 'bg-gradient-to-r from-blue-500/30 to-blue-600/30 text-blue-300 border border-blue-500/40 shadow-lg shadow-soft'
       });
     } else if (user.role === 'barber') {
       badges.push({
         text: 'Barbero',
         title: 'Barbero',
-        className: 'bg-gradient-to-r from-green-500/30 to-green-600/30 text-green-300 border border-green-500/40 shadow-lg shadow-green-500/20'
+        className: 'bg-gradient-to-r from-emerald-500/30 to-emerald-600/30 text-emerald-300 border border-emerald-500/40 shadow-lg shadow-soft'
       });
     } else {
       badges.push({
@@ -234,14 +257,14 @@ function UserRoleManager() {
         badges.push({
           text: 'FS',
           title: `Socio Fundador (${user.porcentajeSocio}%)`,
-          className: 'bg-gradient-to-r from-yellow-400/30 to-amber-400/30 text-yellow-300 border border-yellow-400/40 shadow-lg shadow-yellow-500/20'
+          className: 'bg-gradient-to-r from-amber-400/30 to-amber-500/30 text-amber-300 border border-amber-400/40 shadow-lg shadow-soft'
         });
       } else {
         // Badge normal para socio
         badges.push({
           text: 'S',
           title: `Socio (${user.porcentajeSocio}%)`,
-          className: 'bg-gradient-to-r from-amber-500/30 to-orange-500/30 text-amber-300 border border-amber-500/40 shadow-lg shadow-amber-500/20'
+          className: 'bg-gradient-to-r from-amber-500/30 to-amber-600/30 text-amber-300 border border-amber-500/40 shadow-lg shadow-amber-500/20'
         });
       }
     }
@@ -261,82 +284,201 @@ function UserRoleManager() {
     );
   };
 
+  // Usuarios filtrados por búsqueda y rol
+  // El filtro "socio" es especial: compara isSocio en vez de role
+  const filteredUsers = useMemo(() => {
+    const search = searchTerm.trim().toLowerCase();
+    return users.filter(u => {
+      const matchesSearch = !search ||
+        u.name?.toLowerCase().includes(search) ||
+        u.email?.toLowerCase().includes(search);
+      const matchesRole =
+        roleFilter === 'all' ||
+        (roleFilter === 'socio' ? u.isSocio : u.role === roleFilter);
+      return matchesSearch && matchesRole;
+    });
+  }, [users, searchTerm, roleFilter]);
+
+  // Indica si hay algún filtro activo (para mostrar el botón de limpiar)
+  const hasActiveFilters = searchTerm.trim() !== '' || roleFilter !== 'all';
+
+  // Solo administradores pueden gestionar roles
   if (user?.role !== 'admin') return null;
 
   return (
     <PageContainer>
-      <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-6 space-y-8">
-        {/* Header */}
-        <div className="text-center mb-8">
-          <div className="p-4 bg-gradient-to-r from-blue-600/20 to-purple-600/20 rounded-xl border border-blue-500/20 shadow-xl shadow-blue-500/20 w-20 h-20 mx-auto mb-6 flex items-center justify-center">
-            <svg className="w-10 h-10 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} 
-                d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
-            </svg>
+      <div className="relative z-10 w-full pb-6 space-y-5">
+        {/* ── Top Bar (siempre visible) ── */}
+        <div className="flex flex-col lg:flex-row lg:items-center gap-4">
+          <div className="flex items-center gap-3 flex-shrink-0">
+            <div className="p-2.5 bg-gradient-to-r from-blue-600/20 to-brand-500/20 rounded-xl border border-blue-500/20 shadow-lg shadow-soft">
+              <Users className="w-5 h-5 sm:w-6 sm:h-6 text-blue-400" />
+            </div>
+            <div>
+              <GradientText className="text-lg sm:text-xl lg:text-2xl font-bold">
+                Gestión de Usuarios
+              </GradientText>
+              <p className="text-gray-400 text-xs sm:text-sm hidden sm:block">
+                Administra los roles, permisos y jerarquía de la plataforma
+              </p>
+            </div>
           </div>
-          <div className="mb-4">
-            <GradientText className="text-xl sm:text-2xl lg:text-3xl font-bold">
-              Gestión de Usuarios
-            </GradientText>
+
+          <div className="flex-1 flex flex-col sm:flex-row items-stretch sm:items-center gap-3 lg:justify-end">
+            <div className="relative flex-1 sm:max-w-xs">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+              <input
+                type="text"
+                placeholder="Buscar por nombre o email..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="glassmorphism-input pl-10 w-full"
+              />
+            </div>
+            <div className="relative sm:w-48">
+              <Filter className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4 z-10" />
+              <select
+                value={roleFilter}
+                onChange={(e) => setRoleFilter(e.target.value)}
+                className="glassmorphism-select pl-10 w-full"
+              >
+                <option value="all">Todos los roles</option>
+                <option value="admin">Administradores</option>
+                <option value="barber">Barberos</option>
+                <option value="user">Clientes</option>
+                <option value="socio">Socios</option>
+              </select>
+            </div>
           </div>
-          <p className="text-gray-400 text-lg sm:text-xl max-w-2xl mx-auto leading-relaxed">
-            Administra los roles, permisos y jerarquía de los usuarios de la plataforma
-          </p>
         </div>
 
         {loading ? (
-          <div className="bg-white/5 border border-white/10 rounded-2xl backdrop-blur-sm shadow-2xl shadow-blue-500/20 p-12">
-            <div className="flex flex-col items-center justify-center">
-              <div className="relative w-16 h-16 mb-6">
-                <div className="absolute inset-0">
-                  <div className="w-full h-full border-4 border-blue-500/20 rounded-full"></div>
-                  <div className="w-full h-full border-4 border-transparent border-t-blue-500 rounded-full animate-spin"></div>
+          <UserRoleManagerSkeleton />
+        ) : (
+          <>
+            {/* ── Stats Strip ── */}
+            {/* Contadores por rol calculados sobre la lista completa de usuarios */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+              <div className="flex items-center gap-3 p-3 rounded-xl border border-white/10 bg-white/5 backdrop-blur-sm">
+                <div className="p-2 rounded-lg bg-blue-500/15 border border-blue-500/25 flex-shrink-0">
+                  <Users className="w-5 h-5 text-blue-400" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-xl font-bold text-white leading-tight">{users.length}</p>
+                  <p className="text-gray-400 text-xs truncate">Total Usuarios</p>
                 </div>
               </div>
-              <div className="bg-gradient-to-r from-blue-400 to-blue-400 bg-clip-text text-transparent">
-                <p className="text-xl font-semibold">Cargando usuarios...</p>
+
+              <div className="flex items-center gap-3 p-3 rounded-xl border border-white/10 bg-white/5 backdrop-blur-sm">
+                <div className="p-2 rounded-lg bg-blue-500/15 border border-blue-500/25 flex-shrink-0">
+                  <Shield className="w-5 h-5 text-blue-400" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-xl font-bold text-white leading-tight">{users.filter(u => u.role === 'admin').length}</p>
+                  <p className="text-gray-400 text-xs truncate">Administradores</p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-3 p-3 rounded-xl border border-white/10 bg-white/5 backdrop-blur-sm">
+                <div className="p-2 rounded-lg bg-emerald-500/15 border border-emerald-500/25 flex-shrink-0">
+                  <Scissors className="w-5 h-5 text-emerald-400" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-xl font-bold text-white leading-tight">{users.filter(u => u.role === 'barber').length}</p>
+                  <p className="text-gray-400 text-xs truncate">Barberos</p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-3 p-3 rounded-xl border border-white/10 bg-white/5 backdrop-blur-sm">
+                <div className="p-2 rounded-lg bg-gray-500/15 border border-gray-500/25 flex-shrink-0">
+                  <User className="w-5 h-5 text-gray-300" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-xl font-bold text-white leading-tight">{users.filter(u => u.role === 'user').length}</p>
+                  <p className="text-gray-400 text-xs truncate">Clientes</p>
+                </div>
               </div>
             </div>
-          </div>
-        ) : (
-          <div className="bg-white/5 border border-white/10 rounded-2xl backdrop-blur-sm shadow-2xl shadow-blue-500/20 overflow-hidden">
+
+            {/* ── Filter pills ── */}
+            {/* Atajos de filtro por rol con contador; incluye "Socios" (isSocio) */}
+            <div className="flex items-center gap-2 overflow-x-auto pb-1 flex-nowrap sm:flex-wrap sm:overflow-visible sm:pb-0">
+              {[
+                { key: 'all', label: 'Todos', count: users.length },
+                { key: 'admin', label: 'Admins', count: users.filter(u => u.role === 'admin').length },
+                { key: 'barber', label: 'Barberos', count: users.filter(u => u.role === 'barber').length },
+                { key: 'user', label: 'Clientes', count: users.filter(u => u.role === 'user').length },
+                { key: 'socio', label: 'Socios', count: users.filter(u => u.isSocio).length }
+              ].map(({ key, label, count }) => (
+                <button
+                  key={key}
+                  onClick={() => setRoleFilter(key)}
+                  className={`inline-flex min-h-10 items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium border transition-colors duration-200 ${
+                    roleFilter === key
+                      ? 'bg-blue-500/15 border-blue-500/40 text-blue-300'
+                      : 'bg-white/5 border-white/10 text-gray-400 hover:text-white hover:border-white/25'
+                  }`}
+                >
+                  {label}
+                  <span className={`px-1.5 py-0.5 rounded-md text-[10px] font-semibold ${
+                    roleFilter === key ? 'bg-blue-500/20 text-blue-200' : 'bg-white/10 text-gray-400'
+                  }`}>
+                    {count}
+                  </span>
+                </button>
+              ))}
+
+              {hasActiveFilters && (
+                <button
+                  onClick={() => {
+                    setSearchTerm('');
+                    setRoleFilter('all');
+                  }}
+                  className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium text-red-400 hover:text-red-300 hover:bg-red-500/10 transition-colors"
+                >
+                  <X className="w-3 h-3" />
+                  Limpiar filtros
+                </button>
+              )}
+            </div>
+
+            {/* ── Tabla / Cards ── */}
+            {filteredUsers.length === 0 ? (
+              <div className="text-center py-16 bg-white/5 rounded-2xl border border-white/10">
+                <Search className="w-12 h-12 text-gray-500 mx-auto mb-3" />
+                <h3 className="text-lg font-semibold text-gray-300 mb-1">Sin resultados</h3>
+                <p className="text-gray-500 text-sm">Ningún usuario coincide con los filtros aplicados</p>
+              </div>
+            ) : (
+              <div className="bg-white/5 border border-white/10 rounded-2xl backdrop-blur-sm shadow-soft overflow-hidden">
             {/* Desktop Table */}
-            <div className="hidden md:block overflow-x-auto">
+            <div className="hidden lg:block overflow-x-auto">
               <table className="min-w-full divide-y divide-white/10">
                 <thead className="bg-gradient-to-r from-white/10 to-white/5">
                   <tr>
                     <th className="px-6 py-4 text-left text-sm font-semibold text-blue-400">
                       <div className="flex items-center gap-2">
-                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} 
-                            d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                        </svg>
+                        <User className="w-4 h-4" />
                         Usuario
                       </div>
                     </th>
                     <th className="px-6 py-4 text-left text-sm font-semibold text-blue-400">
                       <div className="flex items-center gap-2">
-                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                            d="M16 12a4 4 0 10-8 0 4 4 0 008 0zm0 0v1.5a2.5 2.5 0 005 0V12a9 9 0 10-9 9m4.5-1.206a8.959 8.959 0 01-4.5 1.207" />
-                        </svg>
+                        <Mail className="w-4 h-4" />
                         Email
                       </div>
                     </th>
-                    <th className="px-6 py-4 text-left text-sm font-semibold text-green-400">
+                    <th className="px-6 py-4 text-left text-sm font-semibold text-emerald-400">
                       <div className="flex items-center gap-2">
-                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                            d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
-                        </svg>
+                        <Shield className="w-4 h-4" />
                         Rol
                       </div>
                     </th>
-                    <th className="px-6 py-4 text-right text-sm font-semibold text-pink-400">Acciones</th>
+                    <th className="px-6 py-4 text-right text-sm font-semibold text-red-400">Acciones</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-white/5">
-                  {users.map(u => (
+                  {filteredUsers.map(u => (
                     <tr key={u._id} className="hover:bg-white/5 transition-colors group">
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="flex items-center gap-3">
@@ -365,43 +507,42 @@ function UserRoleManager() {
                             value={u.role}
                             onChange={e => handleRoleChange(u._id, e.target.value)}
                             disabled={u.isFounder}
-                            className={`block px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 backdrop-blur-sm shadow-xl shadow-blue-500/20 ${
+                            className={`block px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 backdrop-blur-sm shadow-soft ${
                               u.isFounder 
-                                ? 'bg-yellow-500/10 border-yellow-500/30 cursor-not-allowed opacity-60 text-yellow-300' 
+                                ? 'bg-amber-500/10 border-amber-500/30 cursor-not-allowed opacity-60 text-amber-300' 
                                 : 'bg-gray-800/80 border-white/20 text-white'
                             }`}
                             style={{ 
-                              backgroundColor: u.isFounder ? 'rgba(234, 179, 8, 0.1)' : 'rgba(31, 41, 55, 0.8)',
-                              color: u.isFounder ? '#fcd34d' : '#ffffff'
+                              backgroundColor: u.isFounder
+                                ? 'rgba(234, 179, 8, 0.1)'
+                                : (isLight ? 'rgba(255,255,255,0.65)' : 'rgba(31, 41, 55, 0.8)'),
+                              color: u.isFounder
+                                ? (isLight ? '#b45309' : '#fcd34d')
+                                : (isLight ? '#1f2329' : '#ffffff')
                             }}
                             title={u.isFounder ? 'No se puede cambiar el rol del socio fundador' : ''}
                           >
-                            <option value="user" style={{backgroundColor: '#1f2937', color: '#ffffff'}}>Usuario Regular</option>
-                            <option value="barber" style={{backgroundColor: '#1f2937', color: '#ffffff'}}>Barbero</option>
-                            <option value="admin" style={{backgroundColor: '#1f2937', color: '#ffffff'}}>Administrador</option>
+                            <option value="user" style={{ backgroundColor: isLight ? '#ffffff' : '#1f2937', color: isLight ? '#1f2329' : '#ffffff' }}>Usuario Regular</option>
+                            <option value="barber" style={{ backgroundColor: isLight ? '#ffffff' : '#1f2937', color: isLight ? '#1f2329' : '#ffffff' }}>Barbero</option>
+                            <option value="admin" style={{ backgroundColor: isLight ? '#ffffff' : '#1f2937', color: isLight ? '#1f2329' : '#ffffff' }}>Administrador</option>
                           </select>
                           
+                          {/* Acciones destructivas: no disponibles para uno mismo, fundadores ni admins */}
                           {u._id !== (user._id || user.id) && !u.isFounder && u.role !== 'admin' && (
                             <>
                               <button
                                 onClick={() => handleDeactivateUser(u._id)}
-                                className="inline-flex items-center p-2 border border-orange-500/30 rounded-lg bg-orange-600/20 text-orange-400 hover:bg-orange-600/30 transition-all duration-200 shadow-xl shadow-orange-500/20 hover:shadow-xl hover:shadow-orange-500/30"
+                                className="inline-flex items-center justify-center w-9 h-9 border border-amber-500/30 rounded-lg bg-amber-600/20 text-amber-400 hover:bg-amber-600/30 transition-colors duration-200"
                                 title="Desactivar usuario (soft delete - conserva datos)"
                               >
-                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} 
-                                    d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
-                                </svg>
+                                <UserX className="w-4 h-4" />
                               </button>
                               <button
                                 onClick={() => handleDeleteUser(u._id)}
-                                className="inline-flex items-center p-2 border border-red-500/30 rounded-lg bg-red-600/20 text-red-400 hover:bg-red-600/30 transition-all duration-200 shadow-xl shadow-red-500/20 hover:shadow-xl hover:shadow-red-500/30"
+                                className="inline-flex items-center justify-center w-9 h-9 border border-red-500/30 rounded-lg bg-red-600/20 text-red-400 hover:bg-red-600/30 transition-colors duration-200"
                                 title="Eliminar permanentemente (hard delete - elimina todos los datos)"
                               >
-                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} 
-                                    d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                                </svg>
+                                <Trash2 className="w-4 h-4" />
                               </button>
                             </>
                           )}
@@ -414,13 +555,13 @@ function UserRoleManager() {
             </div>
 
             {/* Mobile Layout - Card Style */}
-            <div className="block md:hidden space-y-4">
-              {users.map(u => (
+            <div className="block md:hidden space-y-4 p-4">
+              {filteredUsers.map(u => (
                 <div key={u._id} className={`p-6 rounded-xl border transition-all duration-200 hover:shadow-xl ${
-                  u.isFounder ? 'bg-gradient-to-r from-yellow-400/10 to-amber-400/10 border-yellow-400/20 hover:shadow-yellow-500/20' :
-                  u.role === 'admin' ? 'bg-gradient-to-r from-blue-500/10 to-blue-600/10 border-blue-500/20 hover:shadow-blue-500/20' :
-                  u.role === 'barber' ? 'bg-gradient-to-r from-green-500/10 to-green-600/10 border-green-500/20 hover:shadow-green-500/20' :
-                  'bg-white/5 border-white/10 hover:shadow-blue-500/20'
+                  u.isFounder ? 'bg-gradient-to-r from-amber-400/10 to-amber-500/10 border-amber-400/20 hover:shadow-soft' :
+                  u.role === 'admin' ? 'bg-gradient-to-r from-blue-500/10 to-blue-600/10 border-blue-500/20 hover:shadow-soft' :
+                  u.role === 'barber' ? 'bg-gradient-to-r from-emerald-500/10 to-emerald-600/10 border-emerald-500/20 hover:shadow-soft' :
+                  'bg-white/5 border-white/10 hover:shadow-soft'
                 } backdrop-blur-sm`}>
                   {/* User Info */}
                   <div className="flex items-start gap-4 mb-4">
@@ -453,19 +594,23 @@ function UserRoleManager() {
                         value={u.role}
                         onChange={e => handleRoleChange(u._id, e.target.value)}
                         disabled={u.isFounder}
-                        className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 backdrop-blur-sm shadow-xl shadow-blue-500/20 ${
+                        className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 backdrop-blur-sm shadow-soft ${
                           u.isFounder 
-                            ? 'bg-yellow-500/10 border-yellow-500/30 cursor-not-allowed opacity-60 text-yellow-300' 
+                            ? 'bg-amber-500/10 border-amber-500/30 cursor-not-allowed opacity-60 text-amber-300' 
                             : 'bg-gray-800/80 border-white/20 text-white'
                         }`}
                         style={{ 
-                          backgroundColor: u.isFounder ? 'rgba(234, 179, 8, 0.1)' : 'rgba(31, 41, 55, 0.8)',
-                          color: u.isFounder ? '#fcd34d' : '#ffffff'
+                          backgroundColor: u.isFounder
+                            ? 'rgba(234, 179, 8, 0.1)'
+                            : (isLight ? 'rgba(255,255,255,0.65)' : 'rgba(31, 41, 55, 0.8)'),
+                          color: u.isFounder
+                            ? (isLight ? '#b45309' : '#fcd34d')
+                            : (isLight ? '#1f2329' : '#ffffff')
                         }}
                       >
-                        <option value="user" style={{backgroundColor: '#1f2937', color: '#ffffff'}}>Usuario Regular</option>
-                        <option value="barber" style={{backgroundColor: '#1f2937', color: '#ffffff'}}>Barbero</option>
-                        <option value="admin" style={{backgroundColor: '#1f2937', color: '#ffffff'}}>Administrador</option>
+                        <option value="user" style={{ backgroundColor: isLight ? '#ffffff' : '#1f2937', color: isLight ? '#1f2329' : '#ffffff' }}>Usuario Regular</option>
+                        <option value="barber" style={{ backgroundColor: isLight ? '#ffffff' : '#1f2937', color: isLight ? '#1f2329' : '#ffffff' }}>Barbero</option>
+                        <option value="admin" style={{ backgroundColor: isLight ? '#ffffff' : '#1f2937', color: isLight ? '#1f2329' : '#ffffff' }}>Administrador</option>
                       </select>
                     </div>
                     
@@ -473,22 +618,16 @@ function UserRoleManager() {
                       <div className="grid grid-cols-2 gap-3">
                         <button
                           onClick={() => handleDeactivateUser(u._id)}
-                          className="flex items-center justify-center gap-2 px-4 py-3 border border-orange-500/30 rounded-lg bg-orange-600/20 text-orange-400 hover:bg-orange-600/30 transition-all duration-200 shadow-xl shadow-orange-500/20 hover:shadow-xl hover:shadow-orange-500/30"
+                          className="flex items-center justify-center gap-2 px-4 py-3 border border-amber-500/30 rounded-lg bg-amber-600/20 text-amber-400 hover:bg-amber-600/30 transition-colors duration-200"
                         >
-                          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} 
-                              d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
-                          </svg>
+                          <UserX className="w-4 h-4" />
                           <span className="font-medium text-sm">Desactivar</span>
                         </button>
                         <button
                           onClick={() => handleDeleteUser(u._id)}
-                          className="flex items-center justify-center gap-2 px-4 py-3 border border-red-500/30 rounded-lg bg-red-600/20 text-red-400 hover:bg-red-600/30 transition-all duration-200 shadow-xl shadow-red-500/20 hover:shadow-xl hover:shadow-red-500/30"
+                          className="flex items-center justify-center gap-2 px-4 py-3 border border-red-500/30 rounded-lg bg-red-600/20 text-red-400 hover:bg-red-600/30 transition-colors duration-200"
                         >
-                          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} 
-                              d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                          </svg>
+                          <Trash2 className="w-4 h-4" />
                           <span className="font-medium text-sm">Eliminar</span>
                         </button>
                       </div>
@@ -497,182 +636,116 @@ function UserRoleManager() {
                 </div>
               ))}
             </div>
-          </div>
+              </div>
+            )}
+          </>
         )}
 
         {/* Modal de confirmación de eliminación */}
-        {showDeleteModal && (
-          <div className="fixed inset-0 z-50">
-            {/* Backdrop */}
-            <div 
-              className="absolute inset-0 bg-black/70 backdrop-blur-sm" 
-              onClick={() => {
-                setShowDeleteModal(false);
-                setUserToDelete(null);
-              }}
-            />
-            
-            {/* Modal */}
-            <div className="absolute inset-0 overflow-y-auto">
-              <div className="flex min-h-full items-end sm:items-center justify-center p-4">
-                <div className="relative bg-white/10 border border-white/20 rounded-2xl backdrop-blur-md shadow-2xl shadow-blue-500/20 w-full max-w-md transform transition-all animate-modal">
-                  {/* Header */}
-                  <div className="border-b border-white/10 px-6 py-6">
-                    <div className="flex items-center">
-                      <div className="mr-4 flex-shrink-0">
-                        <div className="flex h-16 w-16 items-center justify-center rounded-full bg-red-600/20 border border-red-500/30 shadow-xl shadow-red-500/20">
-                          <svg className="h-8 w-8 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} 
-                              d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                          </svg>
-                        </div>
-                      </div>
-                      <div className="flex-1">
-                        <div className="bg-gradient-to-r from-red-400 to-pink-400 bg-clip-text text-transparent">
-                          <h3 className="text-xl font-bold">Eliminar Permanentemente</h3>
-                        </div>
-                        <p className="mt-2 text-gray-400">⚠️ Esta acción NO se puede deshacer</p>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Content */}
-                  <div className="px-6 py-6">
-                    <p className="text-gray-300 text-lg leading-relaxed mb-4">
-                      ¿Estás seguro que deseas <span className="font-bold text-red-400">eliminar permanentemente</span> al usuario{' '}
-                      <span className="font-semibold bg-gradient-to-r from-blue-400 to-blue-400 bg-clip-text text-transparent">
-                        {userToDelete?.name || userToDelete?.email}
-                      </span>?
-                    </p>
-                    <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-4">
-                      <p className="text-sm text-red-300">
-                        <strong>Hard Delete:</strong> Se eliminarán TODOS los datos del usuario:
-                      </p>
-                      <ul className="mt-2 text-xs text-red-200 space-y-1 list-disc list-inside">
-                        <li>Cuenta de usuario</li>
-                        <li>Perfil de barbero (si aplica)</li>
-                        <li>Ventas marcadas como canceladas</li>
-                        <li>Citas marcadas como canceladas</li>
-                      </ul>
-                    </div>
-                  </div>
-
-                  {/* Footer */}
-                  <div className="border-t border-white/10 px-6 py-6">
-                    <div className="flex flex-col-reverse sm:flex-row justify-end gap-4">
-                      <button
-                        onClick={() => {
-                          setShowDeleteModal(false);
-                          setUserToDelete(null);
-                        }}
-                        className="w-full sm:w-auto px-6 py-3 rounded-lg bg-white/10 border border-white/20 text-gray-300 hover:bg-white/20 transition-all duration-200 backdrop-blur-sm shadow-xl shadow-blue-500/20"
-                      >
-                        Cancelar
-                      </button>
-                      <button
-                        onClick={confirmDelete}
-                        className="w-full sm:w-auto inline-flex items-center justify-center px-6 py-3 rounded-lg bg-red-600/80 border border-red-500/50 text-white hover:bg-red-600 transition-all duration-200 shadow-xl shadow-red-500/30 hover:shadow-xl hover:shadow-red-500/50"
-                      >
-                        <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} 
-                            d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                        </svg>
-                        Eliminar permanentemente
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              </div>
+        {/* Hard delete: elimina la cuenta y sus datos asociados (irreversible) */}
+        <Modal
+          isOpen={showDeleteModal}
+          onClose={() => {
+            setShowDeleteModal(false);
+            setUserToDelete(null);
+          }}
+          color="red"
+          title="Eliminar Permanentemente"
+          subtitle="Esta acción NO se puede deshacer"
+          icon={AlertTriangle}
+          size="md"
+          footer={
+            <div className="flex flex-col-reverse sm:flex-row justify-end gap-3">
+              <button
+                onClick={() => {
+                  setShowDeleteModal(false);
+                  setUserToDelete(null);
+                }}
+                className="px-4 py-2.5 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.08] text-gray-300 hover:text-white text-sm font-medium transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={confirmDelete}
+                className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-red-500/80 hover:bg-red-500 border border-red-500/50 text-white text-sm font-medium transition-colors"
+              >
+                <Trash2 className="w-4 h-4" />
+                Eliminar permanentemente
+              </button>
             </div>
+          }
+        >
+          <p className="text-gray-300 text-sm leading-relaxed mb-4">
+            ¿Estás seguro que deseas <span className="font-bold text-red-400">eliminar permanentemente</span> al usuario{' '}
+            <span className="font-semibold text-blue-400">
+              {userToDelete?.name || userToDelete?.email}
+            </span>?
+          </p>
+          <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-4">
+            <p className="text-sm text-red-300">
+              <strong>Hard Delete:</strong> Se eliminarán TODOS los datos del usuario:
+            </p>
+            <ul className="mt-2 text-xs text-red-200 space-y-1 list-disc list-inside">
+              <li>Cuenta de usuario</li>
+              <li>Perfil de barbero (si aplica)</li>
+              <li>Ventas marcadas como canceladas</li>
+              <li>Citas marcadas como canceladas</li>
+            </ul>
           </div>
-        )}
+        </Modal>
 
         {/* Modal de confirmación de desactivación */}
-        {showDeactivateModal && (
-          <div className="fixed inset-0 z-50">
-            {/* Backdrop */}
-            <div 
-              className="absolute inset-0 bg-black/70 backdrop-blur-sm" 
-              onClick={() => {
-                setShowDeactivateModal(false);
-                setUserToDeactivate(null);
-              }}
-            />
-            
-            {/* Modal */}
-            <div className="absolute inset-0 overflow-y-auto">
-              <div className="flex min-h-full items-end sm:items-center justify-center p-4">
-                <div className="relative bg-white/10 border border-white/20 rounded-2xl backdrop-blur-md shadow-2xl shadow-blue-500/20 w-full max-w-md transform transition-all animate-modal">
-                  {/* Header */}
-                  <div className="border-b border-white/10 px-6 py-6">
-                    <div className="flex items-center">
-                      <div className="mr-4 flex-shrink-0">
-                        <div className="flex h-16 w-16 items-center justify-center rounded-full bg-orange-600/20 border border-orange-500/30 shadow-xl shadow-orange-500/20">
-                          <svg className="h-8 w-8 text-orange-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} 
-                              d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
-                          </svg>
-                        </div>
-                      </div>
-                      <div className="flex-1">
-                        <div className="bg-gradient-to-r from-orange-400 to-amber-400 bg-clip-text text-transparent">
-                          <h3 className="text-xl font-bold">Desactivar Usuario</h3>
-                        </div>
-                        <p className="mt-2 text-gray-400">✅ Se pueden reactivar después</p>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Content */}
-                  <div className="px-6 py-6">
-                    <p className="text-gray-300 text-lg leading-relaxed mb-4">
-                      ¿Deseas <span className="font-bold text-orange-400">desactivar</span> al usuario{' '}
-                      <span className="font-semibold bg-gradient-to-r from-blue-400 to-blue-400 bg-clip-text text-transparent">
-                        {userToDeactivate?.name || userToDeactivate?.email}
-                      </span>?
-                    </p>
-                    <div className="bg-orange-500/10 border border-orange-500/30 rounded-lg p-4">
-                      <p className="text-sm text-orange-300">
-                        <strong>Soft Delete:</strong> Desactivación reversible:
-                      </p>
-                      <ul className="mt-2 text-xs text-orange-200 space-y-1 list-disc list-inside">
-                        <li>El usuario NO podrá iniciar sesión</li>
-                        <li>Se conservan TODOS sus datos</li>
-                        <li>Puede ser reactivado en cualquier momento</li>
-                        <li>Ideal para suspensiones temporales</li>
-                      </ul>
-                    </div>
-                  </div>
-
-                  {/* Footer */}
-                  <div className="border-t border-white/10 px-6 py-6">
-                    <div className="flex flex-col-reverse sm:flex-row justify-end gap-4">
-                      <button
-                        onClick={() => {
-                          setShowDeactivateModal(false);
-                          setUserToDeactivate(null);
-                        }}
-                        className="w-full sm:w-auto px-6 py-3 rounded-lg bg-white/10 border border-white/20 text-gray-300 hover:bg-white/20 transition-all duration-200 backdrop-blur-sm shadow-xl shadow-blue-500/20"
-                      >
-                        Cancelar
-                      </button>
-                      <button
-                        onClick={confirmDeactivate}
-                        className="w-full sm:w-auto inline-flex items-center justify-center px-6 py-3 rounded-lg bg-orange-600/80 border border-orange-500/50 text-white hover:bg-orange-600 transition-all duration-200 shadow-xl shadow-orange-500/30 hover:shadow-xl hover:shadow-orange-500/50"
-                      >
-                        <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} 
-                            d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
-                        </svg>
-                        Desactivar usuario
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              </div>
+        {/* Soft delete: desactiva el acceso conservando todos los datos */}
+        <Modal
+          isOpen={showDeactivateModal}
+          onClose={() => {
+            setShowDeactivateModal(false);
+            setUserToDeactivate(null);
+          }}
+          color="red"
+          title="Desactivar Usuario"
+          subtitle="Se pueden reactivar después"
+          icon={UserX}
+          size="md"
+          footer={
+            <div className="flex flex-col-reverse sm:flex-row justify-end gap-3">
+              <button
+                onClick={() => {
+                  setShowDeactivateModal(false);
+                  setUserToDeactivate(null);
+                }}
+                className="px-4 py-2.5 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.08] text-gray-300 hover:text-white text-sm font-medium transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={confirmDeactivate}
+                className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-red-600 hover:bg-red-700 text-white text-sm font-medium transition-colors"
+              >
+                <UserX className="w-4 h-4" />
+                Desactivar usuario
+              </button>
             </div>
+          }
+        >
+          <p className="text-gray-300 text-sm leading-relaxed mb-4">
+            ¿Deseas <span className="font-bold text-red-400">desactivar</span> al usuario{' '}
+            <span className="font-semibold text-blue-400">
+              {userToDeactivate?.name || userToDeactivate?.email}
+            </span>?
+          </p>
+          <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-4">
+            <p className="text-sm text-red-300">
+              <strong>Soft Delete:</strong> Desactivación reversible:
+            </p>
+            <ul className="mt-2 text-xs text-red-200 space-y-1 list-disc list-inside">
+              <li>El usuario NO podrá iniciar sesión</li>
+              <li>Se conservan TODOS sus datos</li>
+              <li>Puede ser reactivado en cualquier momento</li>
+              <li>Ideal para suspensiones temporales</li>
+            </ul>
           </div>
-        )}
+        </Modal>
 
         <style>{`
           @keyframes fade-in {

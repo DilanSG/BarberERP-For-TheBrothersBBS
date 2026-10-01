@@ -1,7 +1,14 @@
 import React, { useState, useEffect } from 'react';
-import { X, CreditCard, Filter, ShoppingCart, Scissors, Calendar, ChevronDown, ChevronUp } from 'lucide-react';
+import { CreditCard, Filter, ShoppingCart, Scissors, Calendar, ChevronDown, ChevronUp } from 'lucide-react';
+import Modal from '../ui/Modal';
+import { api } from '@services/api';
 import { SALE_TYPES } from '../../constants/salesConstants';
+import { BreakdownListSkeleton, BreakdownSummarySkeleton } from '@components/ui/Skeleton';
+import { formatCurrency } from '@utils/formatters';
 
+// Modal de desglose de ventas pagadas con métodos digitales (no efectivo).
+// Combina ventas y citas completadas, elimina duplicados y permite filtrar
+// por tipo de venta y por método de pago.
 const DigitalPaymentsBreakdownModal = ({ isOpen, onClose, revenueData, dashboardData, dateRange, formatCurrency: externalFormatCurrency }) => {
   const [digitalSales, setDigitalSales] = useState([]);
   const [filteredSales, setFilteredSales] = useState([]);
@@ -12,6 +19,7 @@ const DigitalPaymentsBreakdownModal = ({ isOpen, onClose, revenueData, dashboard
   const [filtersExpanded, setFiltersExpanded] = useState(true);
 
   // Tipos de venta disponibles
+  // Tipos de venta disponibles para el filtro.
   const saleTypes = [
     { id: 'all', label: 'Todos', icon: Filter },
     { id: 'corte', label: 'Cortes', icon: Scissors },
@@ -20,6 +28,7 @@ const DigitalPaymentsBreakdownModal = ({ isOpen, onClose, revenueData, dashboard
   ];
 
   // Función para convertir ID del método de pago a nombre legible
+  // Traduce el id del método de pago a un nombre legible.
   const getPaymentMethodDisplayName = (methodId) => {
     const paymentNames = {
       'cash': 'Efectivo',
@@ -43,17 +52,18 @@ const DigitalPaymentsBreakdownModal = ({ isOpen, onClose, revenueData, dashboard
   };
 
   // Colores para métodos de pago (del contexto PaymentMethods)
+  // Colores del badge según el método de pago.
   const getPaymentMethodColor = (method) => {
     const colors = {
-      'cash': { bg: 'bg-green-500/10', border: 'border-green-500/30', text: 'text-green-300' },
-      'nequi': { bg: 'bg-purple-500/10', border: 'border-purple-500/30', text: 'text-purple-300' },
+      'cash': { bg: 'bg-emerald-500/10', border: 'border-emerald-500/30', text: 'text-emerald-300' },
+      'nequi': { bg: 'bg-brand-400/10', border: 'border-brand-400/30', text: 'text-brand-200' },
       'daviplata': { bg: 'bg-red-500/10', border: 'border-red-500/30', text: 'text-red-300' },
-      'bancolombia': { bg: 'bg-yellow-500/10', border: 'border-yellow-500/30', text: 'text-yellow-300' },
-      'nu': { bg: 'bg-purple-500/10', border: 'border-purple-500/30', text: 'text-purple-300' },
+      'bancolombia': { bg: 'bg-amber-500/10', border: 'border-amber-500/30', text: 'text-amber-300' },
+      'nu': { bg: 'bg-brand-400/10', border: 'border-brand-400/30', text: 'text-brand-200' },
       'tarjeta': { bg: 'bg-blue-500/10', border: 'border-blue-500/30', text: 'text-blue-300' },
-      'transferencia': { bg: 'bg-green-500/10', border: 'border-green-500/30', text: 'text-green-300' },
-      'digital': { bg: 'bg-cyan-500/10', border: 'border-cyan-500/30', text: 'text-cyan-300' },
-      'pagodigital': { bg: 'bg-cyan-500/10', border: 'border-cyan-500/30', text: 'text-cyan-300' }
+      'transferencia': { bg: 'bg-emerald-500/10', border: 'border-emerald-500/30', text: 'text-emerald-300' },
+      'digital': { bg: 'bg-blue-500/10', border: 'border-blue-500/30', text: 'text-blue-300' },
+      'pagodigital': { bg: 'bg-blue-500/10', border: 'border-blue-500/30', text: 'text-blue-300' }
     };
 
     const methodLower = method.toLowerCase();
@@ -67,25 +77,8 @@ const DigitalPaymentsBreakdownModal = ({ isOpen, onClose, revenueData, dashboard
     return { bg: 'bg-blue-500/10', border: 'border-blue-500/30', text: 'text-blue-300' };
   };
 
-  // Formatear moneda
-  const formatCurrency = (amount) => {
-    return new Intl.NumberFormat('es-CO', {
-      style: 'currency',
-      currency: 'COP',
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0
-    }).format(amount);
-  };
-
-  // Bloquear scroll del body
-  useEffect(() => {
-    if (isOpen) {
-      document.body.style.overflow = 'hidden';
-      return () => { document.body.style.overflow = 'unset'; };
-    }
-  }, [isOpen]);
-
   // Cargar ventas digitales al abrir el modal
+  // Al abrir el modal (o cambiar rango/dashboard) carga las transacciones digitales.
   useEffect(() => {
     if (isOpen) {
       loadDigitalSales();
@@ -96,6 +89,7 @@ const DigitalPaymentsBreakdownModal = ({ isOpen, onClose, revenueData, dashboard
   // Análisis silencioso de transacciones digitales
 
   // Filtrar ventas cuando cambien los filtros (igual que otros modales)
+  // Aplica los filtros de tipo de venta y método de pago sobre las transacciones.
   useEffect(() => {
     let filtered = digitalSales;
 
@@ -115,44 +109,19 @@ const DigitalPaymentsBreakdownModal = ({ isOpen, onClose, revenueData, dashboard
     setFilteredSales(filtered);
   }, [digitalSales, saleTypeFilter, paymentMethodFilter]);
 
+  // Carga ventas y citas completadas del rango (caché de 2 min), conserva las
+  // pagadas con métodos digitales y convierte las citas a formato de venta.
   const loadDigitalSales = async () => {
     setLoading(true);
     try {
-      console.log('💳 Cargando ventas individuales con pagos digitales...');
-      
-      const token = localStorage.getItem('token');
-      
-      let salesUrl = `${import.meta.env.VITE_API_URL}/sales`;
-      let appointmentsUrl = `${import.meta.env.VITE_API_URL}/appointments?status=completed`;
-      
-      if (dateRange) {
-        const searchParams = new URLSearchParams();
-        searchParams.append('startDate', dateRange.startDate);
-        searchParams.append('endDate', dateRange.endDate);
-        
-        salesUrl += `?${searchParams.toString()}`;
-        appointmentsUrl += `&${searchParams.toString()}`;
-      }
-      
-      // Cargar ventas filtradas por fecha
-      const allSalesResponse = await fetch(salesUrl, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      });
+      // Caché (2 min) + stale-while-revalidate: reabrir el modal es instantáneo
+      const dateParams = dateRange ? { startDate: dateRange.startDate, endDate: dateRange.endDate } : undefined;
+      const [allSalesResult, appointmentsResult] = await Promise.all([
+        api.get('/sales', { params: dateParams, cacheTTL: 120000 }),
+        api.get('/appointments', { params: { status: 'completed', ...(dateParams || {}) }, cacheTTL: 120000 }),
+      ]);
 
-      // Cargar citas completadas filtradas por fecha
-      const appointmentsResponse = await fetch(appointmentsUrl, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      });
-
-      if (allSalesResponse.ok && appointmentsResponse.ok) {
-        const allSalesResult = await allSalesResponse.json();
-        const appointmentsResult = await appointmentsResponse.json();
+      if (allSalesResult && appointmentsResult) {
         
         const allSales = allSalesResult.data || [];
         const completedAppointments = appointmentsResult.data || [];
@@ -174,6 +143,7 @@ const DigitalPaymentsBreakdownModal = ({ isOpen, onClose, revenueData, dashboard
         );
         
         // ✅ Convertir citas a formato de venta (igual estructura que ventas)
+        // Adapta las citas al formato de venta para unificar la lista.
         const appointmentsAsSales = digitalAppointments.map(apt => ({
             _id: apt._id,
             type: 'appointment', // ✅ Usar tipo específico para citas
@@ -189,6 +159,7 @@ const DigitalPaymentsBreakdownModal = ({ isOpen, onClose, revenueData, dashboard
             originalAppointment: apt
           }));
         
+        // Une ventas y citas evitando duplicados, priorizando las citas convertidas.
         // ✅ Combinar evitando duplicados por ID
         const allDigitalTransactions = [...digitalSalesFiltered, ...appointmentsAsSales];
         
@@ -222,6 +193,7 @@ const DigitalPaymentsBreakdownModal = ({ isOpen, onClose, revenueData, dashboard
     }
   };
 
+  // Formatea fecha y hora en formato colombiano.
   const formatDate = (dateString) => {
     return new Date(dateString).toLocaleDateString('es-CO', {
       day: '2-digit',
@@ -232,6 +204,7 @@ const DigitalPaymentsBreakdownModal = ({ isOpen, onClose, revenueData, dashboard
     });
   };
 
+  // Determina el tipo de la transacción (cita, producto o corte).
   const getSaleTypeInfo = (sale) => {
     // ✅ PRIMERO verificar si es cita (tiene prioridad absoluta)
     if (sale.isFromAppointment || sale.type === 'appointment') {
@@ -251,6 +224,7 @@ const DigitalPaymentsBreakdownModal = ({ isOpen, onClose, revenueData, dashboard
     }
   };
 
+  // Cuenta las transacciones de un tipo (o todas).
   const calculateCountByType = (type) => {
     if (type === 'all') return digitalSales.length;
     
@@ -262,6 +236,7 @@ const DigitalPaymentsBreakdownModal = ({ isOpen, onClose, revenueData, dashboard
     return sales.length;
   };
 
+  // Cuenta transacciones por método de pago considerando el filtro de tipo activo.
   const calculateCountByPaymentMethod = (method) => {
     if (method === 'all') {
       // Si hay filtro de tipo, aplicarlo también
@@ -288,279 +263,253 @@ const DigitalPaymentsBreakdownModal = ({ isOpen, onClose, revenueData, dashboard
   };
 
   // Método para alternar la visibilidad de los filtros
+  // Muestra u oculta el panel de filtros.
   const toggleFilters = () => {
     setFiltersExpanded(!filtersExpanded);
   };
 
   // Verificar si hay filtros activos (no todos en 'all')
+  // Indica si hay algún filtro activo.
   const hasActiveFilters = () => {
     return saleTypeFilter !== 'all' || paymentMethodFilter !== 'all';
   };
 
-  if (!isOpen) return null;
-
+  // Vista: resumen, filtros por método y tipo, y lista de transacciones digitales.
   return (
-    <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-[9999] p-2 sm:p-4 lg:p-8 pt-8 sm:pt-10">
-      <div className="relative w-full max-w-xs sm:max-w-md lg:max-w-2xl mx-auto h-[85vh] sm:h-[80vh] lg:h-[75vh] flex flex-col">
-        <div className="relative bg-blue-500/5 backdrop-blur-md border border-blue-500/20 rounded-2xl shadow-2xl shadow-blue-500/20 h-full flex flex-col overflow-hidden">
-          {/* Header fijo */}
-          <div className="relative z-10 flex-shrink-0 p-2 sm:p-3 lg:p-4">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-1.5 sm:gap-2">
-                <div className="p-1 sm:p-1.5 rounded-lg bg-blue-500/20 border border-blue-500/30">
-                  <CreditCard className="w-3 h-3 sm:w-4 sm:h-4 text-blue-400" />
-                </div>
-                <div>
-                  <h3 className="text-xs sm:text-sm lg:text-base font-semibold text-white">
-                    Desglose de Pagos Digitales
-                  </h3>
-                  {dateRange ? (
-                    <p className="text-xs text-blue-300">
-                      {dateRange.startDate} - {dateRange.endDate}
-                    </p>
-                  ) : (
-                    <p className="text-xs text-blue-300">
-                      Detalle de ventas con métodos digitales
-                    </p>
-                  )}
-                </div>
-              </div>
-              <button 
-                onClick={onClose}
-                className="p-1 sm:p-1.5 bg-red-500/20 border border-red-500/50 rounded-lg text-red-400 hover:bg-red-500/30 transition-colors duration-200 touch-manipulation"
-              >
-                <X className="w-3 h-3 sm:w-4 sm:h-4" />
-              </button>
-            </div>
-            
-            {/* Resumen */}
-            <div className="mt-2 sm:mt-3 p-2 sm:p-3 bg-blue-500/10 rounded-xl border border-blue-500/20">
-              <div className="grid grid-cols-2 gap-2 sm:gap-3">
-                <div className="text-center">
-                  <p className="text-xs text-blue-300">Total Ventas</p>
-                  <p className="text-sm sm:text-base font-bold text-white">{filteredSales.length}</p>
-                </div>
-                <div className="text-center">
-                  <p className="text-xs text-blue-300">Total Digital</p>
-                  <p className="text-sm sm:text-base font-bold text-blue-400">
-                    {formatCurrency(filteredSales.reduce((total, sale) => total + (sale.totalAmount || sale.total || sale.amount || 0), 0))}
-                  </p>
-                </div>
-              </div>
-            </div>
-            
-            {/* Header de filtros transparente */}
-            <div className="mt-2 sm:mt-3 flex items-center justify-between p-2 border-b border-white/10 bg-transparent">
-              <div className="flex items-center gap-2">
-                <Filter size={14} className="text-blue-400" />
-                <span className="font-medium text-sm text-blue-400">Filtros</span>
-                {hasActiveFilters() && (
-                  <span className="px-1.5 py-0.5 bg-blue-500/20 text-blue-300 border border-blue-500/30 rounded-full text-xs font-medium">
-                    Activos
-                  </span>
-                )}
-              </div>
-              <button
-                onClick={toggleFilters}
-                className="p-1 hover:bg-white/5 rounded-md transition-colors duration-200 text-blue-400 hover:text-blue-300"
-              >
-                {filtersExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
-              </button>
-            </div>
-            
-            {/* Filtros expandibles */}
-            {filtersExpanded && (
-              <div className="p-3 space-y-3 border-b border-white/10 bg-transparent animate-in slide-in-from-top-2 duration-300">
-                {/* Filtros por método de pago */}
-                <div>
-                  <p className="text-xs text-blue-300 mb-2 font-medium">Método de pago:</p>
-                  <div className="flex flex-wrap gap-1.5">
-                    <button
-                      onClick={() => setPaymentMethodFilter('all')}
-                      className={`group relative px-2 py-1 rounded-lg border cursor-pointer transition-all duration-300 hover:scale-105 overflow-hidden backdrop-blur-sm flex items-center gap-1.5 touch-manipulation ${
-                        paymentMethodFilter === 'all'
-                          ? 'border-blue-500/50 bg-blue-500/20 shadow-lg shadow-blue-500/20'
-                          : 'border-white/20 bg-white/5 hover:border-blue-500/40 hover:bg-blue-500/10'
-                      }`}
-                    >
-                      <Filter size={12} className={`transition-colors duration-300 ${
-                        paymentMethodFilter === 'all' ? 'text-blue-300' : 'text-blue-400'
-                      }`} />
-                      <span className={`font-medium text-xs ${
-                        paymentMethodFilter === 'all' ? 'text-blue-300' : 'text-white'
-                      }`}>
-                        Todos
-                      </span>
-                      <span className={`ml-0.5 px-1.5 py-0.5 rounded-full text-xs font-medium ${
-                        paymentMethodFilter === 'all' 
-                          ? 'bg-blue-500/30 text-blue-200 border border-blue-500/50'
-                          : 'bg-white/10 text-gray-300 border border-white/20'
-                      }`}>
-                        {calculateCountByPaymentMethod('all')}
-                      </span>
-                    </button>
-                    {availablePaymentMethods.map((method) => {
-                      const methodColor = getPaymentMethodColor(method);
-                      const isActive = paymentMethodFilter === method;
-                      return (
-                        <button
-                          key={method}
-                          onClick={() => setPaymentMethodFilter(method)}
-                          className={`group relative px-2 py-1 rounded-lg border cursor-pointer transition-all duration-300 hover:scale-105 overflow-hidden backdrop-blur-sm flex items-center gap-1.5 touch-manipulation ${
-                            isActive
-                              ? `${methodColor.border} ${methodColor.bg} shadow-lg`
-                              : 'border-white/20 bg-white/5 hover:border-blue-500/40 hover:bg-blue-500/10'
-                          }`}
-                        >
-                          <CreditCard size={12} className={`transition-colors duration-300 ${
-                            isActive ? methodColor.text : 'text-blue-400'
-                          }`} />
-                          <span className={`font-medium text-xs ${
-                            isActive ? methodColor.text : 'text-white'
-                          }`}>
-                            {getPaymentMethodDisplayName(method)}
-                          </span>
-                          <span className={`ml-0.5 px-1.5 py-0.5 rounded-full text-xs font-medium ${
-                            isActive 
-                              ? `${methodColor.bg} ${methodColor.text} ${methodColor.border}`
-                              : 'bg-white/10 text-gray-300 border border-white/20'
-                          }`}>
-                            {calculateCountByPaymentMethod(method)}
-                          </span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                {/* Filtros por tipo de venta */}
-                <div>
-                  <p className="text-xs text-blue-300 mb-2 font-medium">Tipo de venta:</p>
-                  <div className="flex flex-wrap gap-1.5">
-                    {saleTypes.map(({ id, label, icon: Icon }) => (
-                      <button
-                        key={id}
-                        onClick={() => setSaleTypeFilter(id)}
-                        className={`group relative px-2 py-1 rounded-lg border cursor-pointer transition-all duration-300 hover:scale-105 overflow-hidden backdrop-blur-sm flex items-center gap-1.5 touch-manipulation ${
-                          saleTypeFilter === id
-                            ? 'border-blue-500/50 bg-blue-500/20 shadow-lg shadow-blue-500/20'
-                            : 'border-white/20 bg-white/5 hover:border-blue-500/40 hover:bg-blue-500/10'
-                        }`}
-                      >
-                        <Icon size={12} className={`transition-colors duration-300 ${
-                          saleTypeFilter === id ? 'text-blue-300' : 'text-blue-400'
-                        }`} />
-                        <span className={`font-medium text-xs ${
-                          saleTypeFilter === id ? 'text-blue-300' : 'text-white'
-                        }`}>
-                          {label}
-                        </span>
-                        <span className={`ml-0.5 px-1.5 py-0.5 rounded-full text-xs font-medium ${
-                          saleTypeFilter === id 
-                            ? 'bg-blue-500/30 text-blue-200 border border-blue-500/50'
-                            : 'bg-white/10 text-gray-300 border border-white/20'
-                        }`}>
-                          {calculateCountByType(id)}
-                        </span>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            )}
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      color="blue"
+      title="Desglose de Pagos Digitales"
+      subtitle={dateRange ? `${dateRange.startDate} - ${dateRange.endDate}` : 'Detalle de ventas con métodos digitales'}
+      icon={CreditCard}
+      size="2xl"
+      footer={
+        <div className="flex justify-end">
+          <button
+            onClick={onClose}
+            className="px-4 py-2.5 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.08] text-gray-300 hover:text-white text-sm font-medium transition-colors"
+          >
+            Cerrar
+          </button>
+        </div>
+      }
+    >
+      {/* Resumen */}
+      {loading && filteredSales.length === 0 ? (
+        <BreakdownSummarySkeleton color="blue" />
+      ) : (
+      <div className="mb-4 p-4 bg-blue-500/10 rounded-xl border border-blue-500/20">
+        <div className="grid grid-cols-2 gap-3">
+          <div className="text-center">
+            <p className="text-xs text-blue-300">Total Ventas</p>
+            <p className="text-sm sm:text-base font-bold text-blue-300">{filteredSales.length}</p>
           </div>
-
-          {/* Contenido scrolleable */}
-          <div className="flex-1 overflow-y-auto overflow-x-hidden custom-scrollbar px-2 sm:px-3 lg:px-4 pb-2 sm:pb-3">
-            {loading ? (
-              <div className="flex flex-col items-center justify-center py-8 text-center">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-400 mb-4"></div>
-                <p className="text-blue-300">Cargando ventas...</p>
-              </div>
-            ) : filteredSales.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-8 text-center">
-                <div className="p-4 rounded-full bg-blue-500/10 border border-blue-500/20 mb-4">
-                  <CreditCard className="w-8 h-8 text-blue-400" />
-                </div>
-                <p className="text-gray-400">No hay ventas digitales</p>
-                <p className="text-blue-300 text-sm mt-1">
-                  No se encontraron ventas con los filtros seleccionados
-                </p>
-              </div>
-            ) : (
-              <div className="space-y-2 sm:space-y-3">
-                {filteredSales.map((sale, index) => {
-                  const typeInfo = getSaleTypeInfo(sale);
-                  const TypeIcon = typeInfo.icon;
-                  const methodColor = getPaymentMethodColor(sale.paymentMethod);
-                  
-                  return (
-                    <div
-                      key={`${sale.isFromAppointment ? 'digital-appointment' : 'digital-sale'}-${sale._id || sale.id || `${index}-${sale.createdAt || sale.saleDate || Date.now()}`}`}
-                      className={`group relative p-3 sm:p-4 ${methodColor.bg} border ${methodColor.border} rounded-lg sm:rounded-xl hover:scale-[1.02] transition-all duration-300`}
-                    >
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="flex items-start gap-2 sm:gap-3 flex-1 min-w-0">
-                          <div className={`p-1.5 sm:p-2 ${methodColor.bg} rounded-lg border ${methodColor.border} flex-shrink-0`}>
-                            <TypeIcon className={`w-3 h-3 sm:w-4 sm:h-4 ${methodColor.text}`} />
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2 mb-1">
-                              <h4 className="font-medium text-white text-xs sm:text-sm truncate">
-                                {sale.productName || sale.serviceName || 'Servicio'}
-                              </h4>
-                              <div className="flex gap-1 flex-wrap">
-                                <span className={`px-1.5 sm:px-2 py-0.5 ${methodColor.bg} ${methodColor.text} border ${methodColor.border} rounded-full text-xs font-medium self-start flex-shrink-0`}>
-                                  {typeInfo.label}
-                                </span>
-                                <span className={`px-1.5 sm:px-2 py-0.5 ${methodColor.bg} ${methodColor.text} border ${methodColor.border} rounded-full text-xs font-medium self-start flex-shrink-0`}>
-                                  {getPaymentMethodDisplayName(sale.paymentMethod)}
-                                </span>
-                              </div>
-                            </div>
-                            <p className={`text-xs ${methodColor.text} mb-1 sm:mb-2`}>
-                              {sale.barberName && `${sale.barberName} • `}
-                              {formatDate(sale.saleDate || sale.createdAt)}
-                            </p>
-                            {sale.notes && (
-                              <p className="text-xs text-gray-400 mt-1 truncate">{sale.notes}</p>
-                            )}
-                          </div>
-                        </div>
-                        
-                        <div className="text-right flex-shrink-0">
-                          <div className={`text-sm sm:text-base font-bold ${methodColor.text}`}>
-                            {formatCurrency(sale.totalAmount || sale.total || sale.amount || 0)}
-                          </div>
-                          <div className="text-xs text-gray-400">
-                            Digital
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-
-          {/* Footer con botón de cerrar */}
-          <div className="flex-shrink-0 p-2 sm:p-3 border-t border-blue-500/20">
-            <button
-              onClick={onClose}
-              className="group relative w-full px-3 py-2 sm:py-2.5 bg-gradient-to-r from-blue-600/20 to-cyan-600/20 border border-blue-500/30 rounded-xl text-blue-300 hover:from-blue-600/30 hover:to-cyan-600/30 hover:border-blue-500/50 transition-all duration-300 font-medium shadow-xl shadow-blue-500/20 overflow-hidden touch-manipulation"
-            >
-              {/* Efecto de brillo */}
-              <div className="absolute inset-0 bg-gradient-to-r from-transparent via-blue-400/10 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-700 ease-out"></div>
-              <span className="relative flex items-center justify-center gap-2">
-                <X className="w-3 h-3 sm:w-4 sm:h-4" />
-                <span className="text-sm">Cerrar</span>
-              </span>
-            </button>
+          <div className="text-center">
+            <p className="text-xs text-blue-300">Total Digital</p>
+            <p className="text-sm sm:text-base font-bold text-blue-400">
+              {formatCurrency(filteredSales.reduce((total, sale) => total + (sale.totalAmount || sale.total || sale.amount || 0), 0))}
+            </p>
           </div>
         </div>
       </div>
-    </div>
+      )}
+
+      {/* Filtros */}
+      <div className="mb-4 rounded-xl border border-white/[0.08] bg-white/[0.02] p-4">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Filter size={14} className="text-blue-400" />
+            <span className="font-medium text-sm text-blue-400">Filtros</span>
+            {hasActiveFilters() && (
+              <span className="px-1.5 py-0.5 bg-blue-500/20 text-blue-300 border border-blue-500/30 rounded-full text-xs font-medium">
+                Activos
+              </span>
+            )}
+          </div>
+          <button
+            onClick={toggleFilters}
+            className="p-1 hover:bg-white/5 rounded-md transition-colors duration-200 text-blue-400 hover:text-blue-300"
+          >
+            {filtersExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+          </button>
+        </div>
+
+        {filtersExpanded && (
+          <div className="mt-3 pt-3 border-t border-white/10 space-y-3 animate-in slide-in-from-top-2 duration-300">
+            {/* Filtros por método de pago */}
+            <div>
+              <p className="text-xs text-blue-300 mb-2 font-medium">Método de pago:</p>
+              <div className="flex flex-wrap gap-1.5">
+                <button
+                  onClick={() => setPaymentMethodFilter('all')}
+                  className={`group relative px-2 py-1 rounded-lg border cursor-pointer transition-all duration-300 hover:scale-105 overflow-hidden backdrop-blur-sm flex items-center gap-1.5 touch-manipulation ${
+                    paymentMethodFilter === 'all'
+                      ? 'border-blue-500/50 bg-blue-500/20 shadow-lg shadow-soft'
+                      : 'border-white/20 bg-white/5 hover:border-blue-500/40 hover:bg-blue-500/10'
+                  }`}
+                >
+                  <Filter size={12} className={`transition-colors duration-300 ${
+                    paymentMethodFilter === 'all' ? 'text-blue-300' : 'text-blue-400'
+                  }`} />
+                  <span className={`font-medium text-xs ${
+                    paymentMethodFilter === 'all' ? 'text-blue-300' : 'text-blue-200'
+                  }`}>
+                    Todos
+                  </span>
+                  <span className={`ml-0.5 px-1.5 py-0.5 rounded-full text-xs font-medium ${
+                    paymentMethodFilter === 'all' 
+                      ? 'bg-blue-500/30 text-blue-200 border border-blue-500/50'
+                      : 'bg-blue-500/10 text-blue-200 border border-blue-500/25'
+                  }`}>
+                    {calculateCountByPaymentMethod('all')}
+                  </span>
+                </button>
+                {availablePaymentMethods.map((method) => {
+                  // Colores y estado activo del método para el botón de filtro.
+                  const methodColor = getPaymentMethodColor(method);
+                  const isActive = paymentMethodFilter === method;
+                  return (
+                    <button
+                      key={method}
+                      onClick={() => setPaymentMethodFilter(method)}
+                      className={`group relative px-2 py-1 rounded-lg border cursor-pointer transition-all duration-300 hover:scale-105 overflow-hidden backdrop-blur-sm flex items-center gap-1.5 touch-manipulation ${
+                        isActive
+                          ? `${methodColor.border} ${methodColor.bg} shadow-lg`
+                          : 'border-white/20 bg-white/5 hover:border-blue-500/40 hover:bg-blue-500/10'
+                      }`}
+                    >
+                      <CreditCard size={12} className={`transition-colors duration-300 ${
+                        isActive ? methodColor.text : 'text-blue-400'
+                      }`} />
+                      <span className={`font-medium text-xs ${
+                        isActive ? methodColor.text : 'text-blue-200'
+                      }`}>
+                        {getPaymentMethodDisplayName(method)}
+                      </span>
+                      <span className={`ml-0.5 px-1.5 py-0.5 rounded-full text-xs font-medium ${
+                        isActive 
+                          ? `${methodColor.bg} ${methodColor.text} ${methodColor.border}`
+                          : 'bg-blue-500/10 text-blue-200 border border-blue-500/25'
+                      }`}>
+                        {calculateCountByPaymentMethod(method)}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Filtros por tipo de venta */}
+            <div>
+              <p className="text-xs text-blue-300 mb-2 font-medium">Tipo de venta:</p>
+              <div className="flex flex-wrap gap-1.5">
+                {saleTypes.map(({ id, label, icon: Icon }) => (
+                  <button
+                    key={id}
+                    onClick={() => setSaleTypeFilter(id)}
+                    className={`group relative px-2 py-1 rounded-lg border cursor-pointer transition-all duration-300 hover:scale-105 overflow-hidden backdrop-blur-sm flex items-center gap-1.5 touch-manipulation ${
+                      saleTypeFilter === id
+                        ? 'border-blue-500/50 bg-blue-500/20 shadow-lg shadow-soft'
+                        : 'border-white/20 bg-white/5 hover:border-blue-500/40 hover:bg-blue-500/10'
+                    }`}
+                  >
+                    <Icon size={12} className={`transition-colors duration-300 ${
+                      saleTypeFilter === id ? 'text-blue-300' : 'text-blue-400'
+                    }`} />
+                    <span className={`font-medium text-xs ${
+                      saleTypeFilter === id ? 'text-blue-300' : 'text-blue-200'
+                    }`}>
+                      {label}
+                    </span>
+                    <span className={`ml-0.5 px-1.5 py-0.5 rounded-full text-xs font-medium ${
+                      saleTypeFilter === id 
+                        ? 'bg-blue-500/30 text-blue-200 border border-blue-500/50'
+                        : 'bg-blue-500/10 text-blue-200 border border-blue-500/25'
+                    }`}>
+                      {calculateCountByType(id)}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Contenido */}
+      {loading && filteredSales.length === 0 ? (
+        <div className="py-2">
+          <BreakdownListSkeleton rows={3} color="blue" />
+          <p className="text-blue-300 text-center mt-3">Cargando ventas...</p>
+        </div>
+      ) : filteredSales.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-8 text-center">
+          <div className="p-4 rounded-full bg-blue-500/10 border border-blue-500/20 mb-4">
+            <CreditCard className="w-8 h-8 text-blue-400" />
+          </div>
+          <p className="text-gray-400">No hay ventas digitales</p>
+          <p className="text-blue-300 text-sm mt-1">
+            No se encontraron ventas con los filtros seleccionados
+          </p>
+        </div>
+      ) : (
+        <div className="space-y-2 sm:space-y-3">
+          {filteredSales.map((sale, index) => {
+            // Tipo, icono y color de la transacción digital listada.
+            const typeInfo = getSaleTypeInfo(sale);
+            const TypeIcon = typeInfo.icon;
+            const methodColor = getPaymentMethodColor(sale.paymentMethod);
+            
+            return (
+              <div
+                key={`${sale.isFromAppointment ? 'digital-appointment' : 'digital-sale'}-${sale._id || sale.id || `${index}-${sale.createdAt || sale.saleDate || Date.now()}`}`}
+                className={`group relative p-3 sm:p-4 ${methodColor.bg} border ${methodColor.border} rounded-lg sm:rounded-xl hover:scale-[1.02] transition-all duration-300`}
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex items-start gap-2 sm:gap-3 flex-1 min-w-0">
+                    <div className={`p-1.5 sm:p-2 ${methodColor.bg} rounded-lg border ${methodColor.border} flex-shrink-0`}>
+                      <TypeIcon className={`w-3 h-3 sm:w-4 sm:h-4 ${methodColor.text}`} />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2 mb-1">
+                        <h4 className="font-medium text-blue-200 text-xs sm:text-sm truncate">
+                          {sale.productName || sale.serviceName || 'Servicio'}
+                        </h4>
+                        <div className="flex gap-1 flex-wrap">
+                          <span className={`px-1.5 sm:px-2 py-0.5 ${methodColor.bg} ${methodColor.text} border ${methodColor.border} rounded-full text-xs font-medium self-start flex-shrink-0`}>
+                            {typeInfo.label}
+                          </span>
+                          <span className={`px-1.5 sm:px-2 py-0.5 ${methodColor.bg} ${methodColor.text} border ${methodColor.border} rounded-full text-xs font-medium self-start flex-shrink-0`}>
+                            {getPaymentMethodDisplayName(sale.paymentMethod)}
+                          </span>
+                        </div>
+                      </div>
+                      <p className={`text-xs ${methodColor.text} mb-1 sm:mb-2`}>
+                        {sale.barberName && `${sale.barberName} • `}
+                        {formatDate(sale.saleDate || sale.createdAt)}
+                      </p>
+                      {sale.notes && (
+                        <p className="text-xs text-gray-400 mt-1 truncate">{sale.notes}</p>
+                      )}
+                    </div>
+                  </div>
+                  
+                  <div className="text-right flex-shrink-0">
+                    <div className={`text-sm sm:text-base font-bold ${methodColor.text}`}>
+                      {formatCurrency(sale.totalAmount || sale.total || sale.amount || 0)}
+                    </div>
+                    <div className="text-xs text-gray-400">
+                      Digital
+                    </div>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </Modal>
   );
 };
 

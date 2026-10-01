@@ -1,10 +1,10 @@
+// Servicio de procesamiento en lotes para optimizar requests concurrentes.
+// Limita el número de peticiones simultáneas, reintenta con backoff y usa la caché de cacheService.
 import cacheService from './cacheService';
 import logger from '../utils/logger';
 
-/**
- * Servicio de procesamiento en lotes para optimizar requests concurrentes
- * Limita el número de peticiones simultáneas y usa cache inteligente
- */
+// Procesa colecciones de barberos en lotes pequeños con caché, timeouts y reintentos.
+// Configuración por defecto: 3 simultáneos, 100ms entre lotes, 2 reintentos, timeout 10s.
 class BatchProcessingService {
   constructor() {
     this.batchSize = 3; // Máximo 3 requests simultáneos
@@ -14,9 +14,10 @@ class BatchProcessingService {
     this.activeRequests = new Set();
   }
 
-  /**
-   * Procesar barberos en lotes con cache y control de concurrencia
-   */
+  // Procesar barberos en lotes con cache y control de concurrencia.
+  // Primero sirve lo cacheado; el resto se reparte en lotes de `batchSize`.
+  // Devuelve { results, errors, cacheHits }: un objeto por barber._id.
+  // Si un barbero falla, se devuelven arrays vacíos para no romper la UI.
   async processBarbersWithCache(barbers, fetchFunction, filterType, startDate, endDate = null) {
     const results = {};
     const errors = {};
@@ -110,9 +111,9 @@ class BatchProcessingService {
     return { results, errors, cacheHits };
   }
 
-  /**
-   * Procesar un barbero individual con reintentos
-   */
+  // Procesar un barbero individual con reintentos.
+  // Envuelve fetchFunction en un timeout (this.timeout) y reintenta con
+  // backoff exponencial hasta `retryAttempts`; registra el request como activo.
   async processBarberWithRetry(barber, fetchFunction, filterType, startDate, endDate, attempt = 1) {
     const requestId = `${barber._id}_${Date.now()}`;
     
@@ -148,9 +149,9 @@ class BatchProcessingService {
     }
   }
 
-  /**
-   * Precargar datos comunes en background
-   */
+  // Precargar datos comunes en background.
+  // Espera 2s (para no competir con la carga inicial) y precarga "Hoy" y "7 días"
+  // para todos los barberos indicados.
   async preloadCommonFilters(barbers, fetchFunction) {
     logger.cache(`Precargando filtros comunes para ${barbers.length} barberos...`);
     
@@ -178,9 +179,7 @@ class BatchProcessingService {
     }, 2000); // Esperar 2 segundos después de carga inicial
   }
 
-  /**
-   * Obtener estadísticas del servicio
-   */
+  // Obtener estadísticas del servicio (configuración actual y requests activos)
   getStats() {
     return {
       batchSize: this.batchSize,
@@ -191,9 +190,7 @@ class BatchProcessingService {
     };
   }
 
-  /**
-   * Configurar parámetros del servicio
-   */
+  // Configurar parámetros del servicio (batchSize, batchDelay, retryAttempts, timeout)
   configure(options = {}) {
     if (options.batchSize) this.batchSize = options.batchSize;
     if (options.batchDelay) this.batchDelay = options.batchDelay;

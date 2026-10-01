@@ -1,9 +1,7 @@
-/**
- * Barrel exports para backend - Índice central de utilidades compartidas
- * 
- * Centraliza las exportaciones más utilizadas para simplificar imports
- * y reducir la complejidad de rutas relativas profundas.
- */
+// Barrel exports para backend - Índice central de utilidades compartidas
+//
+// Centraliza las exportaciones más utilizadas para simplificar imports
+// y reducir la complejidad de rutas relativas profundas.
 
 // Utilidades compartidas más utilizadas
 export { AppError, CommonErrors, asyncHandler } from './shared/utils/errors.js';
@@ -12,7 +10,6 @@ export { logger } from './shared/utils/logger.js';
 // Configuraciones centralizadas
 export { default as config } from './shared/config/index.js';
 export { corsOptions } from './shared/config/cors.js';
-export { generateToken, verifyToken, generateRefreshToken, verifyRefreshToken } from './shared/config/jwt.js';
 
 // Middleware de validación
 export { handleValidationErrors, validateMongoId, validateId, validateBarberId, validateUserUpdate, commonValidations } from './presentation/middleware/validation.js';

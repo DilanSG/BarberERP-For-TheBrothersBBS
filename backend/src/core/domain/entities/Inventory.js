@@ -1,5 +1,7 @@
 import mongoose from 'mongoose';
 
+// Subdocumento embebido que registra cada movimiento de stock de un producto:
+// tipo (add/remove/set), cantidad, stock antes/después, motivo, fecha y usuario.
 const movementSchema = new mongoose.Schema({
   type: {
     type: String,
@@ -32,6 +34,10 @@ const movementSchema = new mongoose.Schema({
   }
 });
 
+// Modelo Mongoose de inventario (productos).
+// Además del stock actual guarda contadores acumulados (initialStock, entries,
+// exits, sales, realStock) para comparar el stock teórico contra el conteo
+// físico, y el historial embebido de movimientos.
 const inventorySchema = new mongoose.Schema({
   code: {
     type: String,
@@ -148,10 +154,13 @@ const inventorySchema = new mongoose.Schema({
 });
 
 // Virtuals para cálculos automáticos
+// finalStock: stock teórico del sistema (inicial + entradas - salidas).
 inventorySchema.virtual('finalStock').get(function() {
   return this.initialStock + this.entries - this.exits;
 });
 
+// stockComparison: diferencia entre el stock real contado y el teórico,
+// clasificada como 'sobrante', 'faltante' o 'exacto' con su monto absoluto.
 inventorySchema.virtual('stockComparison').get(function() {
   const theoretical = this.finalStock;
   const actual = this.stock;
@@ -167,6 +176,8 @@ inventorySchema.virtual('stockComparison').get(function() {
 });
 
 inventorySchema.virtual('stockStatus').get(function() {
+  // Clasifica el stock: 'bajo' si está en o por debajo del mínimo,
+  // 'medio' hasta 1.5x el mínimo y 'alto' por encima de ese umbral.
   if (this.stock <= this.minStock) {
     return 'bajo';
   } else if (this.stock <= this.minStock * 1.5) {
@@ -177,6 +188,7 @@ inventorySchema.virtual('stockStatus').get(function() {
 });
 
 // Índices
+// Agilizan filtros por categoría/estado/ubicación, orden por stock y últimos movimientos.
 inventorySchema.index({ category: 1 });
 inventorySchema.index({ isActive: 1 });
 inventorySchema.index({ stock: 1 });
@@ -184,6 +196,7 @@ inventorySchema.index({ location: 1 });
 inventorySchema.index({ 'movements.date': -1 });
 
 // Validación pre-save para stock mínimo
+// Efecto secundario: si el stock cae por debajo del mínimo, sube la prioridad a 'alta'.
 inventorySchema.pre('save', function(next) {
   if (this.stock < this.minStock) {
     this.priority = 'alta';

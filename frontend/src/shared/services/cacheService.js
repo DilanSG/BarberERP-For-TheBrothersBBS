@@ -1,9 +1,9 @@
-﻿/**
- * Servicio de Cache Local con TTL para optimizar requests
- * Evita peticiones redundantes al servidor durante cambios de filtros
- */
+﻿// Servicio de caché local en memoria con TTL para optimizar requests.
+// Evita peticiones redundantes al servidor durante cambios de filtros.
 import logger from '../utils/logger';
 
+// Caché con expiración (TTL), tamaño máximo y limpieza automática.
+// Usa una instancia singleton exportada por defecto.
 class CacheService {
   constructor() {
     this.cache = new Map();
@@ -17,24 +17,20 @@ class CacheService {
     }
   }
 
-  /**
-   * Generar clave única para cache basada en parámetros de consulta
-   */
+  // Generar clave única para cache basada en parámetros de consulta
+  // Formato: barber_<id>_<tipo>_<inicio>_<fin>
   generateKey(barberId, filterType, dateStart, dateEnd = null) {
     const endDate = dateEnd || dateStart;
     return `barber_${barberId}_${filterType}_${dateStart}_${endDate}`;
   }
 
-  /**
-   * Generar clave para cache de fechas disponibles
-   */
+  // Generar clave para cache de fechas disponibles
   generateDatesKey(startDate, endDate) {
     return `available_dates_${startDate}_${endDate}`;
   }
 
-  /**
-   * Guardar datos en cache con timestamp
-   */
+  // Guardar datos en cache con timestamp
+  // Si el cache está lleno, limpia expirados y, si sigue lleno, descarta el más antiguo
   set(key, data) {
     // Si el cache está lleno, limpiar entradas expiradas
     if (this.cache.size >= this.maxSize) {
@@ -56,9 +52,7 @@ class CacheService {
     logger.debug(`💾 Cache SET: ${key} (${this.cache.size}/${this.maxSize})`);
   }
 
-  /**
-   * Obtener datos del cache si no han expirado
-   */
+  // Obtener datos del cache si no han expirado (null en MISS o expirado)
   get(key) {
     const item = this.cache.get(key);
     
@@ -77,9 +71,7 @@ class CacheService {
     return item.data;
   }
 
-  /**
-   * Verificar si existe una clave en cache válido
-   */
+  // Verificar si existe una clave en cache válido
   has(key) {
     const item = this.cache.get(key);
     if (!item || Date.now() > item.expires) {
@@ -88,9 +80,7 @@ class CacheService {
     return true;
   }
 
-  /**
-   * Limpiar entradas expiradas del cache
-   */
+  // Limpiar entradas expiradas del cache (devuelve cuántas eliminó)
   cleanup() {
     const now = Date.now();
     let cleanedCount = 0;
@@ -109,18 +99,14 @@ class CacheService {
     return cleanedCount;
   }
 
-  /**
-   * Limpiar todo el cache
-   */
+  // Limpiar todo el cache
   clear() {
     const size = this.cache.size;
     this.cache.clear();
     logger.debug(`🗑️ Cache cleared: ${size} entradas eliminadas`);
   }
 
-  /**
-   * Obtener estadísticas del cache
-   */
+  // Obtener estadísticas del cache (tamaño, límite, TTL y claves)
   getStats() {
     return {
       size: this.cache.size,
@@ -130,9 +116,7 @@ class CacheService {
     };
   }
 
-  /**
-   * Invalidar cache por barbero específico
-   */
+  // Invalidar cache por barbero específico (devuelve el nº de entradas borradas)
   invalidateBarber(barberId) {
     let invalidatedCount = 0;
     
@@ -150,9 +134,7 @@ class CacheService {
     return invalidatedCount;
   }
 
-  /**
-   * Invalidar cache por tipo de filtro
-   */
+  // Invalidar cache por tipo de filtro (devuelve el nº de entradas borradas)
   invalidateFilterType(filterType) {
     let invalidatedCount = 0;
     
@@ -170,9 +152,8 @@ class CacheService {
     return invalidatedCount;
   }
 
-  /**
-   * Precargar datos en cache
-   */
+  // Precargar datos en cache a partir de una promesa.
+  // Si ya hay una entrada válida, no repite la petición.
   preload(key, dataPromise) {
     // Si ya existe en cache válido, no precargar
     if (this.has(key)) {

@@ -1,17 +1,14 @@
-/**
- * Implementación Repository de Barberos
- * Implementación concreta del repositorio de barberos usando Mongoose
- */
+// Implementación Repository de Barberos
+// Implementación concreta del repositorio de barberos usando Mongoose
+// Traduce los errores de Mongoose a AppError y expone averageRating/totalReviews como rating.
 
 import IBarberRepository from '../../../core/domain/repositories/IBarberRepository.js';
 import { Barber, logger, AppError } from '../../../barrel.js';
 
 class BarberRepositoryImpl extends IBarberRepository {
-  /**
-   * Buscar barbero por ID
-   * @param {string} id - ID del barbero
-   * @returns {Promise<Barber|null>}
-   */
+  // Buscar barbero por ID
+  // @param {string} id - ID del barbero
+  // @returns {Promise<Barber|null>}
   async findById(id) {
     try {
       logger.info(`Buscando barbero por ID: ${id}`);
@@ -36,11 +33,9 @@ class BarberRepositoryImpl extends IBarberRepository {
     }
   }
 
-  /**
-   * Buscar barbero por usuario
-   * @param {string} userId - ID del usuario asociado
-   * @returns {Promise<Barber|null>}
-   */
+  // Buscar barbero por usuario
+  // @param {string} userId - ID del usuario asociado
+  // @returns {Promise<Barber|null>}
   async findByUserId(userId) {
     try {
       logger.info(`Buscando barbero por usuario ID: ${userId}`);
@@ -65,11 +60,9 @@ class BarberRepositoryImpl extends IBarberRepository {
     }
   }
 
-  /**
-   * Crear nuevo barbero
-   * @param {Object} barberData - Datos del barbero
-   * @returns {Promise<Barber>}
-   */
+  // Crear nuevo barbero
+  // @param {Object} barberData - Datos del barbero
+  // @returns {Promise<Barber>}
   async create(barberData) {
     try {
       logger.info('Creando nuevo barbero');
@@ -89,12 +82,10 @@ class BarberRepositoryImpl extends IBarberRepository {
     }
   }
 
-  /**
-   * Actualizar barbero existente
-   * @param {string} id - ID del barbero
-   * @param {Object} updateData - Datos a actualizar
-   * @returns {Promise<Barber>}
-   */
+  // Actualizar barbero existente
+  // @param {string} id - ID del barbero
+  // @param {Object} updateData - Datos a actualizar
+  // @returns {Promise<Barber>}
   async update(id, updateData) {
     try {
       logger.info(`Actualizando barbero: ${id}`);
@@ -133,11 +124,9 @@ class BarberRepositoryImpl extends IBarberRepository {
     }
   }
 
-  /**
-   * Eliminar barbero
-   * @param {string} id - ID del barbero
-   * @returns {Promise<boolean>}
-   */
+  // Eliminar barbero
+  // @param {string} id - ID del barbero
+  // @returns {Promise<boolean>}
   async delete(id) {
     try {
       logger.info(`Eliminando barbero: ${id}`);
@@ -160,11 +149,9 @@ class BarberRepositoryImpl extends IBarberRepository {
     }
   }
 
-  /**
-   * Buscar barberos activos
-   * @param {Object} options - Opciones de consulta
-   * @returns {Promise<Barber[]>}
-   */
+  // Buscar barberos activos
+  // @param {Object} options - Opciones de consulta
+  // @returns {Promise<Barber[]>}
   async findActive(options = {}) {
     try {
       const { sort = { createdAt: 1 }, limit } = options;
@@ -199,12 +186,10 @@ class BarberRepositoryImpl extends IBarberRepository {
     }
   }
 
-  /**
-   * Buscar barberos por disponibilidad
-   * @param {Date} date - Fecha y hora
-   * @param {Object} options - Opciones de consulta
-   * @returns {Promise<Barber[]>}
-   */
+  // Buscar barberos por disponibilidad
+  // @param {Date} date - Fecha y hora
+  // @param {Object} options - Opciones de consulta
+  // @returns {Promise<Barber[]>}
   async findAvailable(date, options = {}) {
     try {
       const { sort = { createdAt: 1 } } = options;
@@ -243,13 +228,11 @@ class BarberRepositoryImpl extends IBarberRepository {
     }
   }
 
-  /**
-   * Obtener estadísticas del barbero
-   * @param {string} barberId - ID del barbero
-   * @param {Date} startDate - Fecha de inicio
-   * @param {Date} endDate - Fecha de fin
-   * @returns {Promise<Object>}
-   */
+  // Obtener estadísticas del barbero
+  // @param {string} barberId - ID del barbero
+  // @param {Date} startDate - Fecha de inicio
+  // @param {Date} endDate - Fecha de fin
+  // @returns {Promise<Object>}
   async getBarberStats(barberId, startDate, endDate) {
     try {
       logger.info(`Obteniendo estadísticas del barbero ${barberId} de ${startDate} a ${endDate}`);
@@ -259,7 +242,7 @@ class BarberRepositoryImpl extends IBarberRepository {
       const Sale = (await import('../../../core/domain/entities/Sale.js')).default;
       
       const [appointmentStats, salesStats] = await Promise.all([
-        // Estadísticas de citas
+        // Estadísticas de citas: agrupa por estado y suma ingresos en el rango
         Appointment.aggregate([
           {
             $match: {
@@ -275,7 +258,7 @@ class BarberRepositoryImpl extends IBarberRepository {
             }
           }
         ]),
-        // Estadísticas de ventas
+        // Estadísticas de ventas: totales y promedio del periodo
         Sale.aggregate([
           {
             $match: {
@@ -315,11 +298,9 @@ class BarberRepositoryImpl extends IBarberRepository {
     }
   }
 
-  /**
-   * Listar todos los barberos con paginación y filtros
-   * @param {Object} options - Opciones de consulta
-   * @returns {Promise<{barbers: Barber[], total: number, page: number, totalPages: number}>}
-   */
+  // Listar todos los barberos con paginación y filtros
+  // @param {Object} options - Opciones de consulta
+  // @returns {Promise<{barbers: Barber[], total: number, page: number, totalPages: number}>}
   async findAll(options = {}) {
     try {
       const {
@@ -329,7 +310,7 @@ class BarberRepositoryImpl extends IBarberRepository {
         filters = {}
       } = options;
 
-      logger.info(`Listando barberos - Página: ${page}, Límite: ${limit}`);
+      logger.debug(`Listando barberos - Página: ${page}, Límite: ${limit}`);
 
       const skip = (page - 1) * limit;
       
@@ -372,11 +353,9 @@ class BarberRepositoryImpl extends IBarberRepository {
     }
   }
 
-  /**
-   * Verificar si un barbero existe
-   * @param {string} id - ID del barbero
-   * @returns {Promise<boolean>}
-   */
+  // Verificar si un barbero existe
+  // @param {string} id - ID del barbero
+  // @returns {Promise<boolean>}
   async exists(id) {
     try {
       const count = await Barber.countDocuments({ _id: id });
@@ -387,11 +366,9 @@ class BarberRepositoryImpl extends IBarberRepository {
     }
   }
 
-  /**
-   * Contar barberos activos
-   * @param {Object} filters - Filtros opcionales
-   * @returns {Promise<number>}
-   */
+  // Contar barberos activos
+  // @param {Object} filters - Filtros opcionales
+  // @returns {Promise<number>}
   async count(filters = {}) {
     try {
       logger.info('Contando barberos con filtros:', filters);
@@ -404,12 +381,10 @@ class BarberRepositoryImpl extends IBarberRepository {
     }
   }
 
-  /**
-   * Actualizar horarios de trabajo del barbero
-   * @param {string} id - ID del barbero
-   * @param {Object} schedule - Horarios de trabajo
-   * @returns {Promise<Barber>}
-   */
+  // Actualizar horarios de trabajo del barbero
+  // @param {string} id - ID del barbero
+  // @param {Object} schedule - Horarios de trabajo
+  // @returns {Promise<Barber>}
   async updateSchedule(id, schedule) {
     try {
       logger.info(`Actualizando horarios del barbero: ${id}`);

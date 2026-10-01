@@ -3,6 +3,9 @@ import bcrypt from 'bcryptjs';
 import { logger } from '../../../shared/utils/logger.js';
 import config from '../../../shared/config/index.js';
 
+// Modelo Mongoose de usuarios.
+// Cuenta con roles user/barber/admin, autenticación por contraseña hasheada,
+// bloqueo por intentos fallidos y campos de recuperación de contraseña.
 const userSchema = new mongoose.Schema({
   name: {
     type: String,
@@ -18,9 +21,10 @@ const userSchema = new mongoose.Schema({
     match: [/\S+@\S+\.\S+/, 'Email no válido']
   },
   password: {
+    // Hash bcrypt; select:false evita devolverlo en consultas por defecto.
     type: String,
     required: [true, 'La contraseña es requerida'],
-    minlength: [6, 'La contraseña debe tener al menos 6 caracteres'],
+    minlength: [8, 'La contraseña debe tener al menos 8 caracteres'],
     select: false
   },
   role: {
@@ -56,12 +60,26 @@ const userSchema = new mongoose.Schema({
     }
   },
   resetPasswordToken: String,
-  resetPasswordExpires: Date
+  resetPasswordExpires: Date,
+  tokenVersion: {
+    type: Number,
+    default: 0
+  },
+  failedLoginAttempts: {
+    type: Number,
+    default: 0
+  },
+  lockUntil: {
+    type: Date,
+    default: null
+  }
 }, {
   timestamps: true
 });
 
 // Middleware para validar unicidad del email en save
+// Verifica que no exista otro usuario activo con el mismo email y hashea la
+// contraseña cuando fue modificada (omite el hash si ya empieza con '$2').
 userSchema.pre('save', async function(next) {
   try {
     // Validar email si es nuevo o si el email ha sido modificado
@@ -97,6 +115,8 @@ userSchema.pre('save', async function(next) {
 });
 
 // Middleware para validar unicidad del email en update operations
+// Aplica a findOneAndUpdate/updateOne y solo comprueba cuando se setea email,
+// excluyendo el propio documento por _id.
 userSchema.pre(['findOneAndUpdate', 'updateOne'], async function(next) {
   try {
     const update = this.getUpdate();
@@ -127,8 +147,11 @@ userSchema.pre(['findOneAndUpdate', 'updateOne'], async function(next) {
 
 // Índices
 userSchema.index({ isActive: 1 });
+userSchema.index({ resetPasswordToken: 1 }, { sparse: true });
 
 // Índice único compuesto para email + isActive (solo para usuarios activos)
+// Gracias al partialFilterExpression un email puede reutilizarse tras desactivar
+// la cuenta anterior, pero no puede duplicarse entre activos.
 userSchema.index(
   { email: 1, isActive: 1 }, 
   { 
@@ -138,7 +161,16 @@ userSchema.index(
   }
 );
 
+userSchema.index({ createdAt: -1 });
+
+// Indica si la cuenta está bloqueada temporalmente por intentos fallidos.
+userSchema.methods.isLocked = function() {
+  return this.lockUntil && this.lockUntil > Date.now();
+};
+
 // Método para comparar contraseñas
+// Compara el texto plano con el hash bcrypt del documento; lanza error si el
+// campo password no fue cargado (select:false) o si bcrypt falla.
 userSchema.methods.comparePassword = async function(candidatePassword) {
   try {
     if (!this.password) {

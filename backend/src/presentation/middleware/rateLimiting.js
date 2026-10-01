@@ -1,16 +1,12 @@
-/**
- * 🚦 Rate Limiting Configuration
- * Configuración de límites de tasa personalizados por tipo de endpoint
- * 
- * IMPORTANTE: Previene abuso de API y ataques DoS
- */
+// 🚦 Rate Limiting Configuration
+// Configuración de límites de tasa personalizados por tipo de endpoint
+//
+// IMPORTANTE: Previene abuso de API y ataques DoS
 
 import rateLimit from 'express-rate-limit';
 import { logger } from '../../shared/utils/logger.js';
 
-/**
- * Handler personalizado para cuando se excede el límite
- */
+// Handler personalizado para cuando se excede el límite
 const rateLimitHandler = (req, res) => {
   logger.warn('Rate limit excedido', {
     ip: req.ip,
@@ -27,19 +23,15 @@ const rateLimitHandler = (req, res) => {
   });
 };
 
-/**
- * Skip rate limit para rutas internas o de salud
- */
+// Skip rate limit para rutas internas o de salud
 const skipSuccessfulRequests = (req, res) => {
   // No contar requests exitosos de health check
   return req.path === '/api/health' && res.statusCode < 400;
 };
 
-/**
- * 🔐 AUTH ENDPOINTS (Login, Register, Password Reset)
- * Límite: 5 intentos por 15 minutos
- * Razón: Prevenir ataques de fuerza bruta
- */
+// 🔐 AUTH ENDPOINTS (Login, Register, Password Reset)
+// Límite: 5 intentos por 15 minutos
+// Razón: Prevenir ataques de fuerza bruta
 export const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutos
   max: 5, // 5 requests por ventana
@@ -55,11 +47,9 @@ export const authLimiter = rateLimit({
   }
 });
 
-/**
- * 📊 DATA ENDPOINTS (CRUD operations)
- * Límite: 100 requests por minuto
- * Razón: Balance entre UX y protección
- */
+// 📊 DATA ENDPOINTS (CRUD operations)
+// Límite: 100 requests por minuto
+// Razón: Balance entre UX y protección
 export const apiLimiter = rateLimit({
   windowMs: 1 * 60 * 1000, // 1 minuto
   max: 100, // 100 requests por ventana
@@ -70,11 +60,9 @@ export const apiLimiter = rateLimit({
   skip: skipSuccessfulRequests
 });
 
-/**
- * 🌐 PUBLIC ENDPOINTS (Health, Status, Public Data)
- * Límite: 200 requests por minuto
- * Razón: Endpoints públicos, menos restricción
- */
+// 🌐 PUBLIC ENDPOINTS (Health, Status, Public Data)
+// Límite: 200 requests por minuto
+// Razón: Endpoints públicos, menos restricción
 export const publicLimiter = rateLimit({
   windowMs: 1 * 60 * 1000, // 1 minuto
   max: 200, // 200 requests por ventana
@@ -84,11 +72,9 @@ export const publicLimiter = rateLimit({
   handler: rateLimitHandler
 });
 
-/**
- * 💰 PAYMENT ENDPOINTS (Ventas, Transacciones)
- * Límite: 20 requests por minuto
- * Razón: Operaciones críticas, mayor seguridad
- */
+// 💰 PAYMENT ENDPOINTS (Ventas, Transacciones)
+// Límite: 20 requests por minuto
+// Razón: Operaciones críticas, mayor seguridad
 export const paymentLimiter = rateLimit({
   windowMs: 1 * 60 * 1000, // 1 minuto
   max: 20, // 20 requests por ventana
@@ -103,11 +89,9 @@ export const paymentLimiter = rateLimit({
   }
 });
 
-/**
- * 📤 UPLOAD ENDPOINTS (Imágenes, Archivos)
- * Límite: 10 uploads por hora
- * Razón: Prevenir abuso de almacenamiento
- */
+// 📤 UPLOAD ENDPOINTS (Imágenes, Archivos)
+// Límite: 10 uploads por hora
+// Razón: Prevenir abuso de almacenamiento
 export const uploadLimiter = rateLimit({
   windowMs: 60 * 60 * 1000, // 1 hora
   max: 10, // 10 uploads por ventana
@@ -117,11 +101,9 @@ export const uploadLimiter = rateLimit({
   handler: rateLimitHandler
 });
 
-/**
- * 📧 EMAIL ENDPOINTS (Notificaciones, Recuperación)
- * Límite: 3 emails por hora
- * Razón: Prevenir spam
- */
+// 📧 EMAIL ENDPOINTS (Notificaciones, Recuperación)
+// Límite: 3 emails por hora
+// Razón: Prevenir spam
 export const emailLimiter = rateLimit({
   windowMs: 60 * 60 * 1000, // 1 hora
   max: 3, // 3 emails por ventana
@@ -136,11 +118,9 @@ export const emailLimiter = rateLimit({
   }
 });
 
-/**
- * 📈 REPORT ENDPOINTS (Reportes pesados)
- * Límite: 30 requests por hora
- * Razón: Queries costosas, proteger DB
- */
+// 📈 REPORT ENDPOINTS (Reportes pesados)
+// Límite: 30 requests por hora
+// Razón: Queries costosas, proteger DB
 export const reportLimiter = rateLimit({
   windowMs: 60 * 60 * 1000, // 1 hora
   max: 30, // 30 requests por ventana
@@ -150,11 +130,9 @@ export const reportLimiter = rateLimit({
   handler: rateLimitHandler
 });
 
-/**
- * 🔍 SEARCH ENDPOINTS (Búsquedas)
- * Límite: 50 requests por minuto
- * Razón: Balance entre UX y carga DB
- */
+// 🔍 SEARCH ENDPOINTS (Búsquedas)
+// Límite: 50 requests por minuto
+// Razón: Balance entre UX y carga DB
 export const searchLimiter = rateLimit({
   windowMs: 1 * 60 * 1000, // 1 minuto
   max: 50, // 50 requests por ventana
@@ -164,10 +142,8 @@ export const searchLimiter = rateLimit({
   handler: rateLimitHandler
 });
 
-/**
- * 🚀 Rate limiter dinámico basado en rol de usuario
- * Usuarios premium/admin tienen límites más altos
- */
+// 🚀 Rate limiter dinámico basado en rol de usuario
+// Usuarios premium/admin tienen límites más altos
 export const dynamicLimiter = (options = {}) => {
   return rateLimit({
     windowMs: options.windowMs || 1 * 60 * 1000,
@@ -193,10 +169,8 @@ export const dynamicLimiter = (options = {}) => {
   });
 };
 
-/**
- * Configuración de rate limiting por defecto para toda la app
- * Aplicar en app.js
- */
+// Configuración de rate limiting por defecto para toda la app
+// Aplicar en app.js
 export const globalLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutos
   max: 1000, // 1000 requests por ventana (muy permisivo, safety net)
@@ -210,9 +184,7 @@ export const globalLimiter = rateLimit({
   }
 });
 
-/**
- * Exportar todas las configuraciones
- */
+// Exportar todas las configuraciones
 export const RATE_LIMIT_CONFIG = {
   auth: { windowMs: 15 * 60 * 1000, max: 5 },
   api: { windowMs: 1 * 60 * 1000, max: 100 },

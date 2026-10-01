@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { PageContainer } from '@components/layout/PageContainer';
 import { useAuth } from '@contexts/AuthContext';
-import { appointmentService } from '@services/api';
+import { appointmentService } from '@services/appointmentService';
 import { useNotification } from '@contexts/NotificationContext';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
@@ -23,8 +23,9 @@ import {
   Mail,
   DollarSign
 } from 'lucide-react';
+import { AppointmentDetailSkeleton } from '@components/ui/Skeleton';
 
-// Formatear precio
+// Formatea un valor numérico como precio en pesos colombianos (COP).
 const formatPrice = (price) => {
   return new Intl.NumberFormat('es-CO', {
     style: 'currency',
@@ -34,10 +35,10 @@ const formatPrice = (price) => {
   }).format(price || 0);
 };
 
-/**
- * Componente para ver el detalle completo de una cita
- * Ruta: /appointment/view/:id
- */
+// Componente de solo lectura que muestra el detalle completo de una cita
+// (servicio, fecha, barbero y costo). Ruta: /appointment/view/:id
+// Carga la cita por id y valida el acceso antes de mostrarla.
+// Pueden verla el dueño de la cita, un admin o el barbero asignado.
 const AppointmentDetail = () => {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -48,20 +49,14 @@ const AppointmentDetail = () => {
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
 
+  // Recarga la cita cuando cambian el id de ruta o el usuario autenticado.
   useEffect(() => {
     if (id && user) {
       loadAppointmentData();
     }
   }, [id, user]);
 
-  // Bloquear scroll del body
-  useEffect(() => {
-    document.body.style.overflow = 'hidden';
-    return () => {
-      document.body.style.overflow = 'unset';
-    };
-  }, []);
-
+  // Busca la cita en el listado, comprueba permisos y guarda sus datos.
   const loadAppointmentData = async () => {
     try {
       setLoading(true);
@@ -74,7 +69,7 @@ const AppointmentDetail = () => {
         return;
       }
 
-      // Verificar permisos de acceso
+      // El dueño de la cita, un admin o el barbero asignado pueden verla.
       const hasAccess = 
         appointmentData.user._id === user._id || // Propietario
         user.role === 'admin' || // Admin
@@ -96,6 +91,8 @@ const AppointmentDetail = () => {
     }
   };
 
+  // Actualiza el estado de la cita (confirmar, completar o cancelar);
+  // el motivo de cancelación solo se envía cuando llega como parámetro.
   const handleStatusChange = async (newStatus, reason = '') => {
     if (!appointment) return;
 
@@ -109,6 +106,7 @@ const AppointmentDetail = () => {
 
       await appointmentService.updateAppointment(appointment._id, updateData);
       
+      // Mensajes de éxito según el nuevo estado aplicado.
       const statusMessages = {
         confirmed: 'Cita confirmada exitosamente',
         cancelled: 'Cita cancelada exitosamente',
@@ -117,7 +115,7 @@ const AppointmentDetail = () => {
 
       showSuccess(statusMessages[newStatus] || 'Estado actualizado');
       
-      // Recargar datos
+      // Refresca la cita para reflejar el nuevo estado.
       await loadAppointmentData();
       
     } catch (error) {
@@ -129,10 +127,12 @@ const AppointmentDetail = () => {
     }
   };
 
+  // Navega al formulario de edición de la cita actual.
   const handleEdit = () => {
     navigate(`/appointment/edit/${appointment._id}`);
   };
 
+  // Elimina la cita previa confirmación y vuelve al panel de citas.
   const handleDelete = async () => {
     if (!window.confirm('¿Estás seguro de que quieres eliminar esta cita? Esta acción no se puede deshacer.')) {
       return;
@@ -152,19 +152,20 @@ const AppointmentDetail = () => {
     }
   };
 
+  // Devuelve colores, icono y etiqueta que corresponden a cada estado.
   const getStatusConfig = (status) => {
     const configs = {
       pending: {
-        color: 'text-yellow-300',
-        bg: 'bg-yellow-500/20',
-        border: 'border-yellow-500/40',
+        color: 'text-amber-300',
+        bg: 'bg-amber-500/20',
+        border: 'border-amber-500/40',
         icon: AlertCircle,
         label: 'Pendiente'
       },
       confirmed: {
-        color: 'text-green-300',
-        bg: 'bg-green-500/20',
-        border: 'border-green-500/40',
+        color: 'text-emerald-300',
+        bg: 'bg-emerald-500/20',
+        border: 'border-emerald-500/40',
         icon: CheckCircle,
         label: 'Confirmada'
       },
@@ -186,21 +187,18 @@ const AppointmentDetail = () => {
     return configs[status] || configs.pending;
   };
 
+  // Esqueleto de carga mientras se obtiene la cita.
   if (loading) {
     return (
       <PageContainer>
         <div className="relative z-10 max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 pb-6">
-          <div className="flex items-center justify-center min-h-[60vh]">
-            <div className="text-center">
-              <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mb-4"></div>
-              <p className="text-gray-300">Cargando detalles de la cita...</p>
-            </div>
-          </div>
+          <AppointmentDetailSkeleton />
         </div>
       </PageContainer>
     );
   }
 
+  // Fallback cuando la cita no existe o no está disponible.
   if (!appointment) {
     return (
       <PageContainer>
@@ -216,6 +214,9 @@ const AppointmentDetail = () => {
   const statusConfig = getStatusConfig(appointment.status);
   const StatusIcon = statusConfig.icon;
 
+  // Vista de detalle: encabezado con estado, datos de la cita y del barbero,
+  // información adicional (notas o motivo de cancelación) y acciones por rol:
+  // editar/confirmar mientras siga abierta y eliminar solo para administradores.
   return (
     <PageContainer>
       <div className="relative z-10 max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 pb-6 space-y-8">
@@ -223,7 +224,7 @@ const AppointmentDetail = () => {
         {/* Header */}
         <div className="text-center mb-6">
           <div className="flex items-center justify-center gap-3 mb-4">
-            <div className={`p-3 rounded-xl border shadow-xl shadow-blue-500/20 ${statusConfig.bg} ${statusConfig.border}`}>
+            <div className={`p-3 rounded-xl border shadow-xl shadow-soft ${statusConfig.bg} ${statusConfig.border}`}>
               <StatusIcon className={`w-6 h-6 sm:w-8 sm:h-8 ${statusConfig.color}`} />
             </div>
             <GradientText className="text-xl sm:text-2xl lg:text-3xl font-bold">
@@ -233,7 +234,7 @@ const AppointmentDetail = () => {
         </div>
 
         {/* Contenido principal */}
-        <div className="bg-transparent border border-white/10 rounded-2xl backdrop-blur-sm shadow-2xl shadow-blue-500/20">
+        <div className="bg-transparent border border-white/10 rounded-2xl backdrop-blur-sm shadow-2xl shadow-soft">
           <div className="p-6 lg:p-8">
             
             {/* Estado de la cita */}
@@ -259,7 +260,7 @@ const AppointmentDetail = () => {
                     <Scissors className="w-4 h-4 text-gray-400" />
                     <div>
                       <p className="text-sm text-gray-400">Servicio</p>
-                      <p className="text-white font-medium">{appointment.service?.name}</p>
+                      <p className="text-blue-200 font-medium">{appointment.service?.name}</p>
                     </div>
                   </div>
                   
@@ -267,7 +268,7 @@ const AppointmentDetail = () => {
                     <Calendar className="w-4 h-4 text-gray-400" />
                     <div>
                       <p className="text-sm text-gray-400">Fecha</p>
-                      <p className="text-white font-medium">
+                      <p className="text-blue-200 font-medium">
                         {format(new Date(appointment.date), "EEEE, d 'de' MMMM 'de' yyyy", { locale: es })}
                       </p>
                     </div>
@@ -277,7 +278,7 @@ const AppointmentDetail = () => {
                     <Clock className="w-4 h-4 text-gray-400" />
                     <div>
                       <p className="text-sm text-gray-400">Hora</p>
-                      <p className="text-white font-medium">{appointment.time}</p>
+                      <p className="text-blue-200 font-medium">{appointment.time}</p>
                     </div>
                   </div>
                   
@@ -285,7 +286,7 @@ const AppointmentDetail = () => {
                     <DollarSign className="w-4 h-4 text-gray-400" />
                     <div>
                       <p className="text-sm text-gray-400">Precio</p>
-                      <p className="text-white font-medium">{formatPrice(appointment.service?.price)}</p>
+                      <p className="text-blue-200 font-medium">{formatPrice(appointment.service?.price)}</p>
                     </div>
                   </div>
                 </div>
@@ -293,7 +294,7 @@ const AppointmentDetail = () => {
 
               {/* Información del barbero */}
               <div className="space-y-4">
-                <h3 className="text-lg font-semibold text-purple-300 mb-4 flex items-center gap-2">
+                <h3 className="text-lg font-semibold text-brand-200 mb-4 flex items-center gap-2">
                   <User size={18} />
                   Información del Barbero
                 </h3>
@@ -303,7 +304,7 @@ const AppointmentDetail = () => {
                     <User className="w-4 h-4 text-gray-400" />
                     <div>
                       <p className="text-sm text-gray-400">Nombre</p>
-                      <p className="text-white font-medium">{appointment.barber?.name}</p>
+                      <p className="text-blue-200 font-medium">{appointment.barber?.name}</p>
                     </div>
                   </div>
                   
@@ -312,7 +313,7 @@ const AppointmentDetail = () => {
                       <Phone className="w-4 h-4 text-gray-400" />
                       <div>
                         <p className="text-sm text-gray-400">Teléfono</p>
-                        <p className="text-white font-medium">{appointment.barber.phone}</p>
+                        <p className="text-blue-200 font-medium">{appointment.barber.phone}</p>
                       </div>
                     </div>
                   )}
@@ -322,7 +323,7 @@ const AppointmentDetail = () => {
                       <Mail className="w-4 h-4 text-gray-400" />
                       <div>
                         <p className="text-sm text-gray-400">Email</p>
-                        <p className="text-white font-medium">{appointment.barber.email}</p>
+                        <p className="text-blue-200 font-medium">{appointment.barber.email}</p>
                       </div>
                     </div>
                   )}
@@ -340,7 +341,7 @@ const AppointmentDetail = () => {
                 {appointment.notes && (
                   <div className="mb-4">
                     <p className="text-sm text-gray-400 mb-1">Notas:</p>
-                    <p className="text-white">{appointment.notes}</p>
+                    <p className="text-blue-200">{appointment.notes}</p>
                   </div>
                 )}
                 
@@ -361,7 +362,7 @@ const AppointmentDetail = () => {
                 onClick={() => navigate('/appointment')}
                 variant="secondary"
                 size="md"
-                className="shadow-xl shadow-blue-500/20"
+                className="shadow-xl shadow-soft"
               >
                 <div className="flex items-center justify-center gap-2">
                   <ArrowLeft size={18} />
@@ -378,7 +379,7 @@ const AppointmentDetail = () => {
                       variant="primary"
                       size="md"
                       disabled={actionLoading}
-                      className="shadow-xl shadow-blue-500/20"
+                      className="shadow-xl shadow-soft"
                     >
                       <div className="flex items-center justify-center gap-2">
                         <Edit size={18} />
@@ -393,7 +394,7 @@ const AppointmentDetail = () => {
                       variant="primary"
                       size="md"
                       disabled={actionLoading}
-                      className="shadow-xl shadow-green-500/20 bg-gradient-to-r from-green-600/20 to-green-700/20 hover:from-green-600/30 hover:to-green-700/30"
+                      className="shadow-xl shadow-soft bg-gradient-to-r from-emerald-600/20 to-emerald-700/20 hover:from-emerald-600/30 hover:to-emerald-700/30"
                     >
                       <div className="flex items-center justify-center gap-2">
                         <CheckCircle size={18} />
@@ -411,7 +412,7 @@ const AppointmentDetail = () => {
                   variant="secondary"
                   size="md"
                   disabled={actionLoading}
-                  className="shadow-xl shadow-red-500/20 bg-gradient-to-r from-red-600/20 to-red-700/20 hover:from-red-600/30 hover:to-red-700/30 border-red-500/30"
+                  className="shadow-xl shadow-soft bg-gradient-to-r from-red-600/20 to-red-700/20 hover:from-red-600/30 hover:to-red-700/30 border-red-500/30"
                 >
                   <div className="flex items-center justify-center gap-2">
                     <Trash2 size={18} />

@@ -136,7 +136,7 @@ export const validateToken = asyncHandler(async (req, res) => {
 // @route   POST /api/auth/logout
 // @access  Privado
 export const logout = asyncHandler(async (req, res) => {
-  // En el futuro, aquí podríamos agregar el token a una lista negra
+  await AuthUseCases.invalidateAllTokens(req.user._id);
   res.json({
     success: true,
     message: 'Logout exitoso'
@@ -150,5 +150,8 @@ export const profile = asyncHandler(async (req, res) => {
   const user = await User.findById(req.user.id).select("-password");
   if (!user) throw new AppError("Usuario no encontrado", 404);
 
-  res.json(user);
+  res.json({
+    success: true,
+    data: user
+  });
 });

@@ -2,6 +2,7 @@ import InventoryUseCases from '../../core/application/usecases/InventoryUseCases
 import InventoryLogService from '../../core/application/usecases/InventoryLogUseCases.js';
 import { InventoryLog, Inventory, Sale, AppError, logger } from '../../barrel.js';
 import { asyncHandler } from '../middleware/index.js';
+import { emitInventoryUpdated } from '../../services/websocketService.js';
 
 // @desc    Obtener lista de items del inventario
 // @route   GET /api/inventory
@@ -161,6 +162,8 @@ export const updateInventoryItem = asyncHandler(async (req, res) => {
     item
   );
 
+  emitInventoryUpdated(item);
+
   res.json({ 
     success: true, 
     message: 'Item actualizado exitosamente',
@@ -229,6 +232,8 @@ export const adjustStock = asyncHandler(async (req, res) => {
     reason,
     options
   );
+
+  emitInventoryUpdated(item);
 
   res.json({ 
     success: true, 
@@ -395,21 +400,23 @@ export const debugLogs = asyncHandler(async (req, res) => {
 // @access  Admin
 export const fixInventoryConsistency = asyncHandler(async (req, res) => {
   try {
-    logger.info('🔧 Iniciando corrección de consistencia de inventario');
+    logger.debug('🔧 Iniciando corrección de consistencia de inventario');
     
     // Obtener todos los productos del inventario
     const inventoryItems = await Inventory.find({});
     let fixedCount = 0;
     
+    // Batch query: get sales count per product in one aggregation
+    const salesAggregation = await Sale.aggregate([
+      { $match: { type: 'product', status: 'completed' } },
+      { $group: { _id: '$productId', totalSold: { $sum: '$quantity' } } }
+    ]);
+    const salesMap = new Map(salesAggregation.map(s => [s._id.toString(), s.totalSold]));
+    
     for (const item of inventoryItems) {
       logger.debug(`🔍 Procesando: ${item.name}`);
       
-      // Obtener todas las ventas completadas de este producto
-      const completedSales = await Sale.countDocuments({ 
-        productId: item._id,
-        type: 'product',
-        status: 'completed'
-      });
+      const completedSales = salesMap.get(item._id.toString()) || 0;
       
       // Calcular el stock esperado
       const expectedStock = item.initialStock + (item.entries || 0) - (item.exits || 0) - completedSales;
@@ -420,7 +427,7 @@ export const fixInventoryConsistency = asyncHandler(async (req, res) => {
       const needsSalesCorrection = item.sales !== completedSales;
       
       if (needsStockCorrection || needsRealStockCorrection || needsSalesCorrection) {
-        logger.info(`⚠️ Corrigiendo ${item.name}:`, {
+        logger.debug(`⚠️ Corrigiendo ${item.name}:`, {
           oldStock: item.stock,
           newStock: expectedStock,
           oldRealStock: item.realStock,
@@ -440,7 +447,7 @@ export const fixInventoryConsistency = asyncHandler(async (req, res) => {
       }
     }
     
-    logger.info(`✅ Corrección de consistencia completada: ${fixedCount} productos actualizados`);
+    logger.debug(`✅ Corrección de consistencia completada: ${fixedCount} productos actualizados`);
     
     res.status(200).json({
       success: true,

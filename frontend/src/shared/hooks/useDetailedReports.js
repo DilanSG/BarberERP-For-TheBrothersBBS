@@ -1,10 +1,12 @@
-﻿import { useState, useEffect, useCallback } from 'react';
-import { salesService, appointmentsService } from '../services/api';
+﻿// Hook de reportes detallados (ventas de productos, cortes walk-in, cortes y
+// citas completadas). Mantiene una caché en memoria por clave de filtro
+// (5 minutos) y estados independientes por tipo de reporte.
+import { useState, useEffect, useCallback } from 'react';
+import { salesService } from '../services/salesService';
+import { appointmentsService } from '../services/appointmentsService';
 
 import logger from '../utils/logger';
-/**
- * Hook para manejar reportes detallados de ventas, cortes y citas
- */
+// Hook para manejar reportes detallados de ventas, cortes y citas
 export const useDetailedReports = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -17,18 +19,18 @@ export const useDetailedReports = () => {
   // Cache simple basado en la key del request
   const [cache, setCache] = useState(new Map());
 
+  // Clave de caché por tipo de reporte, barbero y rango
   const generateCacheKey = (type, barberId, startDate, endDate) => {
     return `${type}_${barberId}_${startDate}_${endDate}`;
   };
 
+  // Muestra el error durante 5 segundos y luego lo limpia
   const setErrorWithTimeout = useCallback((errorMessage) => {
     setError(errorMessage);
     setTimeout(() => setError(null), 5000);
   }, []);
 
-  /**
-   * Obtener reporte detallado de ventas de productos
-   */
+   // Obtener reporte detallado de ventas de productos
   const fetchDetailedSales = useCallback(async (barberId, startDate, endDate, useCache = true) => {
     const cacheKey = generateCacheKey('sales', barberId, startDate, endDate);
     
@@ -76,9 +78,7 @@ export const useDetailedReports = () => {
     }
   }, [cache, setErrorWithTimeout]);
 
-  /**
-   * Obtener detalles de cortes walk-in
-   */
+   // Obtener detalles de cortes walk-in
   const fetchWalkInDetails = useCallback(async (barberId, startDate, endDate, useCache = true) => {
     const cacheKey = generateCacheKey('walkins', barberId, startDate, endDate);
     
@@ -125,9 +125,9 @@ export const useDetailedReports = () => {
     }
   }, [cache, setErrorWithTimeout]);
 
-  /**
-   * Obtener reporte detallado de cortes
-   */
+   // Obtener reporte detallado de cortes.
+  // Reutiliza el estado `walkInDetails` (compartido con fetchWalkInDetails),
+  // por eso ambos endpoints no deben usarse a la vez esperando resultados distintos.
   const fetchDetailedCuts = useCallback(async (barberId, startDate, endDate, useCache = true) => {
     const cacheKey = generateCacheKey('detailed-cuts', barberId, startDate, endDate);
     
@@ -174,9 +174,7 @@ export const useDetailedReports = () => {
     }
   }, [cache, setErrorWithTimeout]);
 
-  /**
-   * Obtener detalles de citas completadas
-   */
+   // Obtener detalles de citas completadas
   const fetchCompletedAppointments = useCallback(async (barberId, startDate, endDate, useCache = true) => {
     const cacheKey = generateCacheKey('appointments', barberId, startDate, endDate);
     
@@ -223,9 +221,8 @@ export const useDetailedReports = () => {
     }
   }, [cache, setErrorWithTimeout]);
 
-  /**
-   * Función combinada para obtener todos los reportes de una vez
-   */
+   // Función combinada para obtener todos los reportes de una vez.
+  // Lanza las tres peticiones en paralelo; cada una resuelve a [] si falla.
   const fetchAllReports = useCallback(async (barberId, startDate, endDate, useCache = true) => {
     setLoading(true);
     setError(null);
@@ -248,9 +245,7 @@ export const useDetailedReports = () => {
     }
   }, [fetchDetailedSales, fetchWalkInDetails, fetchCompletedAppointments, setErrorWithTimeout]);
 
-  /**
-   * Limpiar cache específico o todo el cache
-   */
+   // Limpiar cache específico o todo el cache
   const clearCache = useCallback((cacheKey = null) => {
     if (cacheKey) {
       setCache(prev => {
@@ -263,9 +258,7 @@ export const useDetailedReports = () => {
     }
   }, []);
 
-  /**
-   * Reset de todos los estados
-   */
+   // Reset de todos los estados
   const reset = useCallback(() => {
     setDetailedSales([]);
     setWalkInDetails([]);

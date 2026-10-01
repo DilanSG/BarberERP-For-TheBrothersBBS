@@ -1,6 +1,6 @@
+import { usePaymentMethodsContext } from '@contexts/PaymentMethodsContext';
 import { useState, useEffect } from 'react';
 import { 
-  X, 
   DollarSign, 
   Calendar, 
   Tag, 
@@ -8,13 +8,14 @@ import {
   AlertCircle,
   Save,
   FileText,
-  Info
+  Info,
+  Receipt
 } from 'lucide-react';
 import GradientButton from '../ui/GradientButton';
+import Modal from '../ui/Modal';
 
-/**
- * Modal para crear/editar gastos únicos
- */
+// Modal para crear o editar un gasto único (no recurrente).
+// Valida descripción, monto, categoría, método de pago y fecha antes de guardar.
 export const OneTimeExpenseModal = ({
   isOpen,
   onClose,
@@ -24,6 +25,9 @@ export const OneTimeExpenseModal = ({
   onSave,
   loading = false
 }) => {
+  // Métodos de pago del contexto para usarlos como respaldo.
+  const { allPaymentMethods } = usePaymentMethodsContext();
+
   // Fallbacks en caso de que aún no hayan cargado categorías o métodos
   const DEFAULT_EXPENSE_CATEGORIES = [
     { value: 'rent', label: 'Arriendo' },
@@ -33,22 +37,19 @@ export const OneTimeExpenseModal = ({
     { value: 'maintenance', label: 'Mantenimiento' },
     { value: 'other', label: 'Otros' }
   ];
-  const DEFAULT_PAYMENT_METHODS = [
-    { value: 'cash', label: 'Efectivo' },
-    { value: 'transfer', label: 'Transferencia' },
-    { value: 'nequi', label: 'Nequi' },
-    { value: 'daviplata', label: 'Daviplata' },
-    { value: 'card', label: 'Tarjeta' },
-    { value: 'other', label: 'Otro' }
-  ];
-
+  // Categorías recibidas o el catálogo por defecto si aún no cargan.
   const safeExpenseCategories = Array.isArray(expenseCategories) && expenseCategories.length > 0
     ? expenseCategories
     : DEFAULT_EXPENSE_CATEGORIES;
+  // Métodos de pago dinámicos del backend (fallback: solo Efectivo)
+  // Métodos de pago del contexto normalizados a { value, label }.
+  const contextMethods = (allPaymentMethods || []).map((m) => ({ value: m.backendId, label: m.name }));
+  // Métodos recibidos, o los del contexto, o solo Efectivo como último respaldo.
   const safePaymentMethods = Array.isArray(paymentMethods) && paymentMethods.length > 0
     ? paymentMethods
-    : DEFAULT_PAYMENT_METHODS;
+    : (contextMethods.length > 0 ? contextMethods : [{ value: 'cash', label: 'Efectivo' }]);
 
+  // Datos del formulario, precargados con el gasto si se está editando.
   const [formData, setFormData] = useState(() => ({
     description: expense?.description || '',
     amount: expense?.amount || '',
@@ -61,6 +62,7 @@ export const OneTimeExpenseModal = ({
   const [errors, setErrors] = useState({});
 
   // Actualizar formulario cuando cambia el expense
+  // Al cambiar el gasto (o al crear) precarga o resetea el formulario.
   useEffect(() => {
     if (expense) {
       setFormData({
@@ -85,6 +87,7 @@ export const OneTimeExpenseModal = ({
     setErrors({});
   }, [expense]);
 
+  // Actualiza un campo y limpia su error al escribir.
   const updateField = (field, value) => {
     setFormData(prev => ({ ...prev, [field]: value }));
     if (errors[field]) {
@@ -92,6 +95,7 @@ export const OneTimeExpenseModal = ({
     }
   };
 
+  // Valida todos los campos obligatorios del gasto.
   const validateForm = () => {
     const newErrors = {};
 
@@ -119,6 +123,7 @@ export const OneTimeExpenseModal = ({
     return Object.keys(newErrors).length === 0;
   };
 
+  // Envía el gasto marcado como 'one-time' y cierra el modal.
   const handleSubmit = async (e) => {
     e.preventDefault();
     
@@ -136,244 +141,223 @@ export const OneTimeExpenseModal = ({
     }
   };
 
+  // No renderiza si el modal está cerrado.
   if (!isOpen) return null;
 
+  // Vista: formulario de gasto único con validaciones y aviso de edición.
   return (
-    <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-[10001] p-4 sm:p-6 lg:p-8">
-      <div className="relative w-full max-w-sm sm:max-w-md lg:max-w-2xl mx-auto h-[90vh] sm:h-[85vh] lg:h-[80vh] flex flex-col">
-        <div className="relative bg-gray-900/95 backdrop-blur-md border border-white/10 rounded-2xl shadow-2xl shadow-green-500/20 h-full flex flex-col overflow-hidden">
-          
-          {/* Header fijo */}
-          <div className="relative z-10 flex-shrink-0 p-4 sm:p-6 border-b border-white/10">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2 sm:gap-3">
-                <div className="p-1.5 sm:p-2 rounded-lg bg-green-500/20 border border-green-500/30">
-                  <Calendar className="w-4 h-4 sm:w-5 sm:h-5 text-green-400" />
-                </div>
-                <div>
-                  <h3 className="text-base sm:text-lg font-semibold text-white">
-                    {expense ? 'Editar Gasto Único' : 'Nuevo Gasto Único'}
-                  </h3>
-                  <p className="text-xs sm:text-sm text-green-300">
-                    Gasto que ocurre una sola vez en la fecha especificada
-                  </p>
-                </div>
-              </div>
-              <button 
-                onClick={onClose}
-                className="p-1 text-gray-400 hover:text-white transition-colors duration-200"
-              >
-                <X className="w-4 h-4 sm:w-5 sm:h-5" />
-              </button>
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      color="amber"
+      title={expense ? 'Editar Gasto Único' : 'Nuevo Gasto Único'}
+      subtitle="Gasto que ocurre una sola vez en la fecha especificada"
+      icon={Receipt}
+      size="2xl"
+      zIndex="top"
+      footer={
+        <div className="flex flex-col-reverse sm:flex-row gap-3 sm:justify-end">
+          <button
+            type="button"
+            onClick={onClose}
+            className="px-4 py-2.5 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.08] text-gray-300 hover:text-white text-sm font-medium transition-colors"
+          >
+            Cancelar
+          </button>
+          <GradientButton
+            type="submit"
+            form="one-time-expense-form"
+            variant="primary"
+            size="md"
+            disabled={loading}
+            className="shadow-xl shadow-soft"
+          >
+            <div className="flex items-center gap-2">
+              {loading ? (
+                <div className="animate-spin rounded-full h-4 w-4 border-t-2 border-b-2 border-white"></div>
+              ) : (
+                <Save className="w-4 h-4" />
+              )}
+              <span>{expense ? 'Actualizar' : 'Crear'} Gasto</span>
             </div>
+          </GradientButton>
+        </div>
+      }
+    >
+      {/* Aviso de edición */}
+      {expense && (
+        <div className="mb-4 rounded-xl border border-white/[0.08] bg-white/[0.02] p-4">
+          <p className="text-xs text-blue-300 flex items-center gap-2">
+            <Info className="w-3 h-3" />
+            Editando gasto existente - Modifica solo los campos que necesites cambiar
+          </p>
+        </div>
+      )}
+
+      <form id="one-time-expense-form" onSubmit={handleSubmit} className="space-y-6">
+        
+        {/* Descripción */}
+        <div>
+          <label className="block text-sm font-medium text-gray-300 mb-2">
+            <Tag className="w-4 h-4 inline mr-2" />
+            Descripción del Gasto
+          </label>
+          <input
+            type="text"
+            value={formData.description}
+            onChange={(e) => updateField('description', e.target.value)}
+            placeholder="Ej: Compra de productos para la barbería"
+            className={`glassmorphism-input w-full shadow-xl shadow-soft ${
+              errors.description ? 'border-red-500/50' : ''
+            }`}
+          />
+          {errors.description && (
+            <p className="text-red-400 text-xs mt-1 flex items-center gap-1">
+              <AlertCircle className="w-3 h-3" />
+              {errors.description}
+            </p>
+          )}
+        </div>
+
+        {/* Fecha y Monto */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-300 mb-2">
+              <Calendar className="w-4 h-4 inline mr-2" />
+              Fecha del Gasto
+            </label>
+            <input
+              type="date"
+              value={formData.date}
+              onChange={(e) => updateField('date', e.target.value)}
+              className={`glassmorphism-input w-full shadow-xl shadow-soft ${
+                errors.date ? 'border-red-500/50' : ''
+              }`}
+            />
+            {errors.date && (
+              <p className="text-red-400 text-xs mt-1 flex items-center gap-1">
+                <AlertCircle className="w-3 h-3" />
+                {errors.date}
+              </p>
+            )}
+            <p className="text-xs text-gray-400 mt-1">
+              Fecha en que se realizó o realizará el gasto
+            </p>
           </div>
 
-          {/* Aviso de edición */}
-          {expense && (
-            <div className="px-4 sm:px-6 py-2 bg-blue-500/10 border-y border-blue-500/20">
-              <p className="text-xs text-blue-300 flex items-center gap-2">
-                <Info className="w-3 h-3" />
-                Editando gasto existente - Modifica solo los campos que necesites cambiar
+          <div>
+            <label className="block text-sm font-medium text-gray-300 mb-2">
+              <DollarSign className="w-4 h-4 inline mr-2" />
+              Monto
+            </label>
+            <input
+              type="number"
+              min="0"
+              step="1000"
+              value={formData.amount}
+              onChange={(e) => updateField('amount', e.target.value)}
+              placeholder="0"
+              className={`glassmorphism-input w-full shadow-xl shadow-soft ${
+                errors.amount ? 'border-red-500/50' : ''
+              }`}
+            />
+            {errors.amount && (
+              <p className="text-red-400 text-xs mt-1 flex items-center gap-1">
+                <AlertCircle className="w-3 h-3" />
+                {errors.amount}
               </p>
-            </div>
-          )}
-
-          {/* Contenido scrolleable */}
-          <div className="flex-1 overflow-y-auto overflow-x-hidden custom-scrollbar px-4 sm:px-6 pb-4 sm:pb-6">
-            <form onSubmit={handleSubmit} className="space-y-6 pt-4">
-              
-              {/* Descripción */}
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">
-                  <Tag className="w-4 h-4 inline mr-2" />
-                  Descripción del Gasto
-                </label>
-                <input
-                  type="text"
-                  value={formData.description}
-                  onChange={(e) => updateField('description', e.target.value)}
-                  placeholder="Ej: Compra de productos para la barbería"
-                  className={`glassmorphism-input w-full shadow-xl shadow-green-500/20 ${
-                    errors.description ? 'border-red-500/50' : ''
-                  }`}
-                />
-                {errors.description && (
-                  <p className="text-red-400 text-xs mt-1 flex items-center gap-1">
-                    <AlertCircle className="w-3 h-3" />
-                    {errors.description}
-                  </p>
-                )}
-              </div>
-
-              {/* Fecha y Monto */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-2">
-                    <Calendar className="w-4 h-4 inline mr-2" />
-                    Fecha del Gasto
-                  </label>
-                  <input
-                    type="date"
-                    value={formData.date}
-                    onChange={(e) => updateField('date', e.target.value)}
-                    className={`glassmorphism-input w-full shadow-xl shadow-green-500/20 ${
-                      errors.date ? 'border-red-500/50' : ''
-                    }`}
-                  />
-                  {errors.date && (
-                    <p className="text-red-400 text-xs mt-1 flex items-center gap-1">
-                      <AlertCircle className="w-3 h-3" />
-                      {errors.date}
-                    </p>
-                  )}
-                  <p className="text-xs text-gray-400 mt-1">
-                    Fecha en que se realizó o realizará el gasto
-                  </p>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-2">
-                    <DollarSign className="w-4 h-4 inline mr-2" />
-                    Monto
-                  </label>
-                  <input
-                    type="number"
-                    min="0"
-                    step="1000"
-                    value={formData.amount}
-                    onChange={(e) => updateField('amount', e.target.value)}
-                    placeholder="0"
-                    className={`glassmorphism-input w-full shadow-xl shadow-green-500/20 ${
-                      errors.amount ? 'border-red-500/50' : ''
-                    }`}
-                  />
-                  {errors.amount && (
-                    <p className="text-red-400 text-xs mt-1 flex items-center gap-1">
-                      <AlertCircle className="w-3 h-3" />
-                      {errors.amount}
-                    </p>
-                  )}
-                </div>
-              </div>
-
-              {/* Categoría y Método de Pago */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-2">
-                    Categoría
-                  </label>
-                  <select
-                    value={formData.category}
-                    onChange={(e) => updateField('category', e.target.value)}
-                    className={`glassmorphism-select w-full shadow-xl shadow-green-500/20 ${
-                      errors.category ? 'border-red-500/50' : ''
-                    }`}
-                  >
-                    <option value="">Seleccionar categoría</option>
-                    {safeExpenseCategories.map((category) => (
-                      <option key={category.value} value={category.value}>
-                        {category.label}
-                      </option>
-                    ))}
-                    <option value="custom">➕ Crear nueva categoría...</option>
-                  </select>
-                  {errors.category && (
-                    <p className="text-red-400 text-xs mt-1 flex items-center gap-1">
-                      <AlertCircle className="w-3 h-3" />
-                      {errors.category}
-                    </p>
-                  )}
-                  
-                  {/* Campo para categoría personalizada */}
-                  {formData.category === 'custom' && (
-                    <input
-                      type="text"
-                      placeholder="Nombre de la nueva categoría"
-                      className="glassmorphism-input w-full shadow-xl shadow-green-500/20 mt-2"
-                      onChange={(e) => {
-                        const customValue = e.target.value.toLowerCase().replace(/\s+/g, '-');
-                        updateField('category', customValue);
-                      }}
-                      autoFocus
-                    />
-                  )}
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-2">
-                    <CreditCard className="w-4 h-4 inline mr-2" />
-                    Método de Pago
-                  </label>
-                  <select
-                    value={formData.paymentMethod}
-                    onChange={(e) => updateField('paymentMethod', e.target.value)}
-                    className={`glassmorphism-select w-full shadow-xl shadow-green-500/20 ${
-                      errors.paymentMethod ? 'border-red-500/50' : ''
-                    }`}
-                  >
-                    <option value="">Seleccionar método</option>
-                    {safePaymentMethods.map((method) => (
-                      <option key={method.value} value={method.value}>
-                        {method.label}
-                      </option>
-                    ))}
-                  </select>
-                  {errors.paymentMethod && (
-                    <p className="text-red-400 text-xs mt-1 flex items-center gap-1">
-                      <AlertCircle className="w-3 h-3" />
-                      {errors.paymentMethod}
-                    </p>
-                  )}
-                </div>
-              </div>
-
-              {/* Notas */}
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">
-                  <FileText className="w-4 h-4 inline mr-2" />
-                  Notas (opcional)
-                </label>
-                <textarea
-                  value={formData.notes}
-                  onChange={(e) => updateField('notes', e.target.value)}
-                  placeholder="Información adicional sobre el gasto..."
-                  rows={3}
-                  className="glassmorphism-input w-full shadow-xl shadow-green-500/20 resize-none"
-                />
-              </div>
-
-              {/* Buttons */}
-              <div className="flex gap-3 pt-4">
-                <button
-                  type="button"
-                  onClick={onClose}
-                  className="px-6 py-2 bg-gray-600/20 hover:bg-gray-600/30 border border-gray-500/30 rounded-lg text-gray-300 transition-colors"
-                >
-                  Cancelar
-                </button>
-                
-                <GradientButton
-                  type="submit"
-                  variant="primary"
-                  size="md"
-                  disabled={loading}
-                  className="shadow-xl shadow-green-500/20"
-                >
-                  <div className="flex items-center gap-2">
-                    {loading ? (
-                      <div className="animate-spin rounded-full h-4 w-4 border-t-2 border-b-2 border-white"></div>
-                    ) : (
-                      <Save className="w-4 h-4" />
-                    )}
-                    <span>{expense ? 'Actualizar' : 'Crear'} Gasto</span>
-                  </div>
-                </GradientButton>
-              </div>
-            </form>
+            )}
           </div>
         </div>
-      </div>
-    </div>
+
+        {/* Categoría y Método de Pago */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-300 mb-2">
+              Categoría
+            </label>
+            <select
+              value={formData.category}
+              onChange={(e) => updateField('category', e.target.value)}
+              className={`glassmorphism-select w-full shadow-xl shadow-soft ${
+                errors.category ? 'border-red-500/50' : ''
+              }`}
+            >
+              <option value="">Seleccionar categoría</option>
+              {safeExpenseCategories.map((category) => (
+                <option key={category.value} value={category.value}>
+                  {category.label}
+                </option>
+              ))}
+              <option value="custom">Crear nueva categoría...</option>
+            </select>
+            {errors.category && (
+              <p className="text-red-400 text-xs mt-1 flex items-center gap-1">
+                <AlertCircle className="w-3 h-3" />
+                {errors.category}
+              </p>
+            )}
+            
+            {/* Campo para categoría personalizada */}
+            {formData.category === 'custom' && (
+              <input
+                type="text"
+                placeholder="Nombre de la nueva categoría"
+                className="glassmorphism-input w-full shadow-xl shadow-soft mt-2"
+                onChange={(e) => {
+                  // Normaliza la categoría personalizada a slug (minúsculas y guiones).
+                  const customValue = e.target.value.toLowerCase().replace(/\s+/g, '-');
+                  updateField('category', customValue);
+                }}
+                autoFocus
+              />
+            )}
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-300 mb-2">
+              <CreditCard className="w-4 h-4 inline mr-2" />
+              Método de Pago
+            </label>
+            <select
+              value={formData.paymentMethod}
+              onChange={(e) => updateField('paymentMethod', e.target.value)}
+              className={`glassmorphism-select w-full shadow-xl shadow-soft ${
+                errors.paymentMethod ? 'border-red-500/50' : ''
+              }`}
+            >
+              <option value="">Seleccionar método</option>
+              {safePaymentMethods.map((method) => (
+                <option key={method.value} value={method.value}>
+                  {method.label}
+                </option>
+              ))}
+            </select>
+            {errors.paymentMethod && (
+              <p className="text-red-400 text-xs mt-1 flex items-center gap-1">
+                <AlertCircle className="w-3 h-3" />
+                {errors.paymentMethod}
+              </p>
+            )}
+          </div>
+        </div>
+
+        {/* Notas */}
+        <div>
+          <label className="block text-sm font-medium text-gray-300 mb-2">
+            <FileText className="w-4 h-4 inline mr-2" />
+            Notas (opcional)
+          </label>
+          <textarea
+            value={formData.notes}
+            onChange={(e) => updateField('notes', e.target.value)}
+            placeholder="Información adicional sobre el gasto..."
+            rows={3}
+            className="glassmorphism-input w-full shadow-xl shadow-soft resize-none"
+          />
+        </div>
+      </form>
+    </Modal>
   );
 };
 

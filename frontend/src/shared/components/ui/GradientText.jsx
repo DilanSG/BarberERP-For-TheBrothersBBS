@@ -1,14 +1,9 @@
 import React from 'react';
 
-/**
- * Componente reutilizable para texto con gradiente
- * @param {Object} props - Props del componente
- * @param {React.ReactNode} props.children - El texto a mostrar
- * @param {string} props.className - Clases CSS adicionales (opcional)
- * @param {string} props.gradient - Tipo de gradiente predefinido (opcional)
- * @param {string} props.customGradient - Gradiente personalizado completo (opcional)
- * @param {string} props.as - Elemento HTML a renderizar (por defecto 'span')
- */
+// Componente reutilizable para texto con gradiente.
+// Props: children (texto), className (extra), gradient (preset de la tabla de abajo),
+// customGradient (clases from-/via-/to- completas que anulan el preset) y
+// as (etiqueta a renderizar, por defecto 'span').
 const GradientText = ({ 
   children, 
   className = '', 
@@ -18,6 +13,7 @@ const GradientText = ({
   ...props 
 }) => {
   // Gradientes de barbería clásica - rojo, blanco, azul con toques metálicos
+  // (predefinidos; `customGradient` tiene prioridad sobre ellos).
   const gradients = {
     // Gradiente principal - como letrero de barbería clásico
     primary: 'from-red-600 via-white to-blue-600',
@@ -28,11 +24,11 @@ const GradientText = ({
     // Versión patriótica elegante
     patriot: 'from-red-700 via-gray-100 to-blue-700',
     // Clásico con toques dorados
-    classic: 'from-red-800 via-yellow-100 via-white via-blue-100 to-blue-800',
+    classic: 'from-red-800 via-amber-100 via-white via-blue-100 to-blue-800',
     // Variante premium
     premium: 'from-blue-800 via-red-600 via-gray-100 to-blue-800',
     // Efecto barbería vintage
-    vintage: 'from-red-900 via-orange-100 via-white via-blue-100 to-blue-900',
+    vintage: 'from-red-900 via-amber-100 via-white via-blue-100 to-blue-900',
     // Suave y elegante
     elegant: 'from-red-500 via-gray-200 to-blue-500'
   };

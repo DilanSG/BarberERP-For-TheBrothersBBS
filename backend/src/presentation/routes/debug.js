@@ -1,10 +1,12 @@
 import { Router } from 'express';
+import { protect, adminAuth } from '../middleware/auth.js';
 import User from '../../core/domain/entities/User.js';
 import Barber from '../../core/domain/entities/Barber.js';
 
 const router = Router();
 
-router.get('/check', async (req, res) => {
+// Endpoints de debug: requieren autenticación y rol admin
+router.get('/check', protect, adminAuth, async (req, res) => {
   try {
     const users = await User.find({ role: 'barber' });
     const barbers = await Barber.find();

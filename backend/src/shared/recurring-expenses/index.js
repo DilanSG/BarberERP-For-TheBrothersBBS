@@ -1,9 +1,8 @@
-/**
- * Módulo unificado de gastos recurrentes
- * 
- * Exporta todas las utilidades para gastos recurrentes en un solo lugar,
- * reemplazando las implementaciones duplicadas en frontend y backend.
- */
+// Módulo unificado de gastos recurrentes
+//
+// Exporta todas las utilidades para gastos recurrentes en un solo lugar,
+// reemplazando las implementaciones duplicadas en frontend y backend.
+// Mantiene aliases (RecurrenceCalculator) y un helper legacy para compatibilidad.
 
 // Exportar constantes
 export * from './constants.js';
@@ -52,6 +51,7 @@ export class RecurringExpenseHelper {
 }
 
 // Función helper principal para uso directo
+// Valida la configuración y devuelve un objeto con métodos de cálculo ya ligados a ella.
 export const createRecurringExpense = (config) => {
   const validation = validateRecurrenceConfig(config);
   

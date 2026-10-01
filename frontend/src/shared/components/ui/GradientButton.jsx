@@ -1,5 +1,9 @@
 import { useState } from 'react';
 
+// Botón reutilizable con franjas de barber pole animadas (variant 'primary').
+// Props: variant ('primary'|'secondary'|'outline'|'ghost'), size ('sm'..'xl'),
+// loading/loadingText (spinner + bloquea interacción), disabled, `as` (permite
+// renderizar <Link> u otra etiqueta), type y ...props hacia el elemento raíz.
 const GradientButton = ({
   children,
   variant = 'primary',
@@ -14,8 +18,10 @@ const GradientButton = ({
   as: Component = 'button',
   ...props
 }) => {
+  // El hover se controla en JS porque la animación de las franjas se activa/desactiva aquí.
   const [isHovered, setIsHovered] = useState(false);
   
+  // Tamaños: padding y tipografía de cada variante de tamaño.
   const sizes = {
     sm: 'text-sm px-4 py-2',
     md: 'text-base px-6 py-3',

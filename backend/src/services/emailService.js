@@ -2,10 +2,9 @@ import nodemailer from 'nodemailer';
 import sgMail from '@sendgrid/mail';
 import { logger, AppError } from '../barrel.js';
 
-/**
- * Servicio central de gestión de emails
- * Soporta: SendGrid (recomendado para producción) y Nodemailer SMTP (dev/fallback)
- */
+// Servicio central de gestión de emails
+// Soporta: SendGrid (recomendado para producción) y Nodemailer SMTP (dev/fallback)
+// Se exporta como singleton e inicia deshabilitado si no hay credenciales.
 class EmailService {
   constructor() {
     this.transporter = null;
@@ -14,9 +13,7 @@ class EmailService {
     this.initializeProvider();
   }
 
-  /**
-   * Inicializar proveedor de email (SendGrid o SMTP)
-   */
+  // Inicializar proveedor de email (SendGrid o SMTP)
   initializeProvider() {
     try {
       // Prioridad 1: SendGrid (recomendado para producción)
@@ -59,17 +56,14 @@ class EmailService {
     }
   }
 
-  /**
-   * Método getter para verificar si el servicio está configurado
-   * @returns {boolean}
-   */
+  // Método getter para verificar si el servicio está configurado
+  // @returns {boolean}
   getIsConfigured() {
     return this.isConfigured;
   }
 
-  /**
-   * Verificar conexión del proveedor de email
-   */
+  // Verificar conexión del proveedor de email
+  // @returns {Promise<boolean>} true si la conexión es válida
   async verifyConnection() {
     if (!this.isConfigured) {
       throw new AppError('Servicio de email no configurado', 500);
@@ -93,9 +87,9 @@ class EmailService {
     }
   }
 
-  /**
-   * Función base para enviar emails (soporta SendGrid y SMTP)
-   */
+  // Función base para enviar emails (soporta SendGrid y SMTP)
+  // @param {Object} options - { to, subject, html, text?, attachments? }
+  // @returns {Promise<Object>} resultado con success, messageId y message
   async sendEmail({ to, subject, html, text, attachments = [] }) {
     if (!this.isConfigured) {
       logger.warn('Intento de envío de email con servicio deshabilitado');
@@ -178,9 +172,9 @@ class EmailService {
     }
   }
 
-  /**
-   * Convertir HTML básico a texto plano
-   */
+  // Convertir HTML básico a texto plano
+  // @param {string} html - Contenido HTML
+  // @returns {string} Texto sin etiquetas para el fallback de clientes sin HTML
   htmlToText(html) {
     if (!html) return '';
     return html
@@ -192,9 +186,9 @@ class EmailService {
       .trim();
   }
 
-  /**
-   * Template base para emails
-   */
+  // Template base para emails
+  // @param {Object} options - { title, content, footerText? }
+  // @returns {string} HTML completo con estilos inline y diseño responsive
   getBaseTemplate({ title, content, footerText = null }) {
     return `
     <!DOCTYPE html>
@@ -315,9 +309,9 @@ class EmailService {
     </html>`;
   }
 
-  /**
-   * CONFIRMACIÓN DE CITA - Para usuarios
-   */
+  // CONFIRMACIÓN DE CITA - Para usuarios
+  // @param {Object} appointment - Cita confirmada
+  // @param {Object} user - Cliente destinatario
   async sendAppointmentConfirmation(appointment, user) {
     const content = `
       <h2 style="color: #1f2937; margin-bottom: 20px;">Confirmación de Cita</h2>
@@ -381,9 +375,9 @@ class EmailService {
     });
   }
 
-  /**
-   * RECORDATORIO DE CITA - Para usuarios (24h antes)
-   */
+  // RECORDATORIO DE CITA - Para usuarios (24h antes)
+  // @param {Object} appointment - Cita programada
+  // @param {Object} user - Cliente destinatario
   async sendAppointmentReminder(appointment, user) {
     const content = `
       <h2 style="color: #1f2937; margin-bottom: 20px;">Recordatorio de Cita</h2>
@@ -433,9 +427,10 @@ class EmailService {
     });
   }
 
-  /**
-   * NOTIFICACIÓN NUEVA CITA - Para barberos
-   */
+  // NOTIFICACIÓN NUEVA CITA - Para barberos
+  // @param {Object} appointment - Cita creada
+  // @param {Object} barber - Barbero asignado (incluye email)
+  // @param {Object} user - Cliente que agendó
   async sendNewAppointmentNotification(appointment, barber, user) {
     const content = `
       <h2 style="color: #1f2937; margin-bottom: 20px;">Nueva Cita Asignada</h2>
@@ -492,9 +487,9 @@ class EmailService {
     });
   }
 
-  /**
-   * RESUMEN DIARIO - Para barberos
-   */
+  // RESUMEN DIARIO - Para barberos
+  // @param {Object} barber - Barbero destinatario
+  // @param {Array} appointments - Citas del día a listar
   async sendDailySummary(barber, appointments) {
     const today = new Date();
     const appointmentCount = appointments.length;
@@ -557,9 +552,10 @@ class EmailService {
     });
   }
 
-  /**
-   * CANCELACIÓN DE CITA
-   */
+  // CANCELACIÓN DE CITA
+  // @param {Object} appointment - Cita cancelada
+  // @param {Object} user - Cliente destinatario
+  // @param {string} reason - Motivo opcional de la cancelación
   async sendAppointmentCancellation(appointment, user, reason = '') {
     const content = `
       <h2 style="color: #dc2626; margin-bottom: 20px;">Cita Cancelada</h2>
@@ -608,9 +604,8 @@ class EmailService {
     });
   }
 
-  /**
-   * BIENVENIDA - Nuevo usuario registrado
-   */
+  // BIENVENIDA - Nuevo usuario registrado
+  // @param {Object} user - Usuario recién creado
   async sendWelcomeEmail(user) {
     const content = `
       <h2 style="color: #1f2937; margin-bottom: 20px;">Bienvenido a The Brothers Barber Shop</h2>
@@ -671,9 +666,9 @@ class EmailService {
     });
   }
 
-  /**
-   * CONFIRMACIÓN DE LOGIN - Seguridad adicional
-   */
+  // CONFIRMACIÓN DE LOGIN - Seguridad adicional
+  // @param {Object} user - Usuario que inició sesión
+  // @param {Object} loginInfo - { ip, device, location, timestamp } opcional
   async sendLoginNotification(user, loginInfo = {}) {
     const { ip, device, location, timestamp } = loginInfo;
     const loginTime = timestamp ? new Date(timestamp).toLocaleString('es-ES', {
@@ -743,9 +738,9 @@ class EmailService {
     });
   }
 
-  /**
-   * RESET DE CONTRASEÑA - Enviar token
-   */
+  // RESET DE CONTRASEÑA - Enviar token
+  // @param {Object} user - Usuario que solicita el reset
+  // @param {string} resetToken - Token temporal incluido en el enlace
   async sendPasswordResetEmail(user, resetToken) {
     const resetUrl = `${process.env.FRONTEND_URL || 'https://the-bro-barbers.vercel.app'}/auth/reset-password/${resetToken}`;
     const expiresIn = '1 hora';
@@ -791,9 +786,8 @@ class EmailService {
     });
   }
 
-  /**
-   * CONFIRMACIÓN DE CAMBIO DE CONTRASEÑA
-   */
+  // CONFIRMACIÓN DE CAMBIO DE CONTRASEÑA
+  // @param {Object} user - Usuario cuyo password cambió
   async sendPasswordChangedConfirmation(user) {
     const changeTime = new Date().toLocaleString('es-ES', {
       weekday: 'long',
@@ -855,9 +849,9 @@ class EmailService {
     });
   }
 
-  /**
-   * NOTIFICACIÓN DE VENTA - Para clientes
-   */
+  // NOTIFICACIÓN DE VENTA - Para clientes
+  // @param {Object} sale - Venta con items, total y método de pago
+  // @param {Object} user - Cliente destinatario
   async sendSaleConfirmation(sale, user) {
     const saleDate = new Date(sale.createdAt).toLocaleString('es-ES', {
       weekday: 'long',
@@ -939,12 +933,10 @@ class EmailService {
     });
   }
 
-  /**
-   * Enviar email solicitando reseña después de cita completada
-   * @param {Object} appointment - Objeto de cita completada
-   * @param {Object} user - Usuario que recibió el servicio
-   * @param {Object} barber - Barbero que realizó el servicio
-   */
+  // Enviar email solicitando reseña después de cita completada
+  // @param {Object} appointment - Objeto de cita completada
+  // @param {Object} user - Usuario que recibió el servicio
+  // @param {Object} barber - Barbero que realizó el servicio
   async sendReviewRequest(appointment, user, barber) {
     // Usar URL de producción si estamos en producción, sino localhost
     const frontendUrl = process.env.NODE_ENV === 'production' 

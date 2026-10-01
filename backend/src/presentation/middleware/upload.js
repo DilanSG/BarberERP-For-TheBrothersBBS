@@ -9,8 +9,14 @@ import fs from 'fs';
 const tempDir = 'uploads/temp/';
 if (!fs.existsSync(tempDir)) {
   fs.mkdirSync(tempDir, { recursive: true });
-
 }
+
+// Verificar si Cloudinary esta configurado
+const isCloudinaryConfigured = () => {
+  return process.env.CLOUDINARY_CLOUD_NAME && 
+         process.env.CLOUDINARY_API_KEY && 
+         process.env.CLOUDINARY_API_SECRET;
+};
 
 // Configuración de multer para subida temporal
 const storage = multer.diskStorage({
@@ -32,11 +38,11 @@ const fileFilter = (req, file, cb) => {
   }
 };
 
-// Multer para subida temporal
+// Multer para subida temporal (max 3MB para base64 en DB)
 export const upload = multer({
   storage: storage,
   limits: {
-    fileSize: 5 * 1024 * 1024 // 5MB
+    fileSize: 3 * 1024 * 1024 // 3MB (base64 incrementa ~33%)
   },
   fileFilter: fileFilter
 });
@@ -44,30 +50,57 @@ export const upload = multer({
 // Middleware para subir una sola imagen
 export const uploadImage = upload.single('image');
 
-// Middleware para subir imagen a Cloudinary
+// Middleware para subir imagen a Cloudinary (con fallback a base64 en DB)
 export const uploadToCloudinary = async (req, res, next) => {
   try {
     if (!req.file) {
       return next();
     }
 
-    // Subir imagen a Cloudinary
-    const result = await cloudinary.uploader.upload(req.file.path, {
-      folder: 'the_brothers_barbershop',
-      transformation: [
-        { width: 800, height: 800, crop: 'limit' },
-        { quality: 'auto' },
-        { format: 'auto' }
-      ]
-    });
+    // Intentar Cloudinary primero si esta configurado
+    if (isCloudinaryConfigured()) {
+      try {
+        const result = await cloudinary.uploader.upload(req.file.path, {
+          folder: 'the_brothers_barbershop',
+          transformation: [
+            { width: 800, height: 800, crop: 'limit' },
+            { quality: 'auto' },
+            { format: 'auto' }
+          ]
+        });
 
-    // Agregar información de la imagen al request
+        req.image = {
+          public_id: result.public_id,
+          url: result.secure_url,
+          width: result.width,
+          height: result.height,
+          format: result.format,
+          source: 'cloudinary'
+        };
+
+        // Eliminar archivo temporal
+        fs.unlinkSync(req.file.path);
+        return next();
+      } catch (cloudError) {
+        logger.warn('Cloudinary fallo, usando base64 en DB:', cloudError.message);
+        // Continuar con base64
+      }
+    }
+
+    // Fallback: guardar como base64 en la BD
+    // (Cloudinary no configurado o falló; se genera un data URL con el archivo temporal)
+    const fileBuffer = fs.readFileSync(req.file.path);
+    const base64Data = fileBuffer.toString('base64');
+    const mimeType = req.file.mimetype;
+    const dataUrl = `data:${mimeType};base64,${base64Data}`;
+    
     req.image = {
-      public_id: result.public_id,
-      url: result.secure_url,
-      width: result.width,
-      height: result.height,
-      format: result.format
+      public_id: `local_${Date.now()}`,
+      url: dataUrl,
+      width: 800,
+      height: 800,
+      format: mimeType.replace('image/', ''),
+      source: 'base64'
     };
 
     // Eliminar archivo temporal
@@ -75,18 +108,34 @@ export const uploadToCloudinary = async (req, res, next) => {
 
     next();
   } catch (error) {
-    next(new AppError('Error al subir la imagen', 500));
+    logger.error('Error en upload de imagen:', error);
+    // Limpiar archivo temporal si existe
+    if (req.file?.path && fs.existsSync(req.file.path)) {
+      fs.unlinkSync(req.file.path);
+    }
+    next(new AppError('Error al procesar la imagen', 500));
   }
 };
 
-// Middleware para eliminar imagen de Cloudinary
+// Middleware para eliminar imagen (Cloudinary o base64 en DB)
 export const deleteFromCloudinary = async (publicId) => {
   try {
     if (!publicId) return;
-    const result = await cloudinary.uploader.destroy(publicId);
-    return result;
+    
+    // Si es imagen base64 (guardada en DB), no hay nada que eliminar del disco
+    if (publicId.startsWith('local_')) {
+      return { result: 'ok', source: 'base64' };
+    }
+    
+    // Si es Cloudinary
+    if (isCloudinaryConfigured()) {
+      const result = await cloudinary.uploader.destroy(publicId);
+      return result;
+    }
+    
+    return { result: 'skipped' };
   } catch (error) {
-    logger.error('Error eliminando imagen de Cloudinary:', error);
+    logger.error('Error eliminando imagen:', error);
     throw error;
   }
 };

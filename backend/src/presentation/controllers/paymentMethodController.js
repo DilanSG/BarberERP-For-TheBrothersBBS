@@ -30,7 +30,7 @@ export const getPaymentMethods = asyncHandler(async (req, res) => {
  * @access  Admin
  */
 export const createPaymentMethod = asyncHandler(async (req, res) => {
-  const { backendId, name, description, color, emoji, category } = req.body;
+  const { backendId, name, description, color, category } = req.body;
   
   if (!backendId || !name) {
     throw new AppError('BackendId y nombre son requeridos', 400);
@@ -41,7 +41,6 @@ export const createPaymentMethod = asyncHandler(async (req, res) => {
     name,
     description,
     color,
-    emoji,
     category
   });
   

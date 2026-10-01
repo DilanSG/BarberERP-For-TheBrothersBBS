@@ -2,18 +2,21 @@ import { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { PageContainer } from '@components/layout/PageContainer';
 import { useAuth } from '@contexts/AuthContext';
-import { appointmentService, serviceService, barberService } from '@services/api';
+import { appointmentService } from '@services/appointmentService';
+import { serviceService } from '@services/serviceService';
+import { barberService } from '@services/barberService';
 import { useNotification } from '@contexts/NotificationContext';
-import { format, parse } from 'date-fns';
+import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import GradientButton from '@components/ui/GradientButton';
 import GradientText from '@components/ui/GradientText';
-import { Calendar, Clock, User, Scissors, ArrowLeft, Save } from 'lucide-react';
+import { Calendar, Clock, User, Scissors, ArrowLeft, Save, Info } from 'lucide-react';
+import { AppointmentEditSkeleton, Skeleton } from '@components/ui/Skeleton';
 
-/**
- * Componente para editar una cita existente
- * Ruta: /appointment/edit/:id
- */
+// Componente para editar una cita existente (servicio, barbero, fecha y hora).
+// Ruta: /appointment/edit/:id
+// Formulario de edición de una cita: carga la cita, el catálogo de servicios,
+// los barberos y los horarios disponibles para la fecha/barbero elegidos.
 const AppointmentEdit = () => {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -35,6 +38,7 @@ const AppointmentEdit = () => {
   const [selectedTime, setSelectedTime] = useState('');
 
   // Cargar datos iniciales
+  // Carga inicial: cita, servicios y barberos cuando hay id y usuario.
   useEffect(() => {
     if (id && user) {
       loadAppointmentData();
@@ -44,12 +48,15 @@ const AppointmentEdit = () => {
   }, [id, user]);
 
   // Cargar horarios cuando cambian fecha y barbero
+  // Consulta los horarios disponibles cada vez que cambian fecha o barbero.
   useEffect(() => {
     if (selectedDate && selectedBarber && appointment) {
       fetchAvailableTimes();
     }
   }, [selectedDate, selectedBarber, appointment]);
 
+  // Busca la cita por id, valida que el usuario sea el dueño o admin
+  // y precarga el formulario con los valores actuales.
   const loadAppointmentData = async () => {
     try {
       setLoading(true);
@@ -62,7 +69,7 @@ const AppointmentEdit = () => {
         return;
       }
 
-      // Verificar permisos (solo el usuario propietario puede editar)
+      // Solo el cliente dueño de la cita o un admin pueden editarla.
       if (appointmentData.user._id !== user._id && user.role !== 'admin') {
         showError('No tienes permisos para editar esta cita');
         navigate('/appointment');
@@ -71,7 +78,7 @@ const AppointmentEdit = () => {
 
       setAppointment(appointmentData);
       
-      // Establecer valores iniciales del formulario
+      // Valores iniciales del formulario tomados de la cita.
       setSelectedService(appointmentData.service._id);
       setSelectedBarber(appointmentData.barber._id);
       setSelectedDate(format(new Date(appointmentData.date), 'yyyy-MM-dd'));
@@ -86,6 +93,7 @@ const AppointmentEdit = () => {
     }
   };
 
+  // Obtiene el catálogo de servicios disponibles.
   const fetchServices = async () => {
     try {
       const response = await serviceService.getServices();
@@ -96,6 +104,7 @@ const AppointmentEdit = () => {
     }
   };
 
+  // Obtiene la lista de barberos disponibles.
   const fetchBarbers = async () => {
     try {
       const response = await barberService.getBarbers();
@@ -106,6 +115,8 @@ const AppointmentEdit = () => {
     }
   };
 
+  // Pide los horarios libres del barbero en la fecha y asegura que el horario
+  // actual de la cita aparezca entre las opciones.
   const fetchAvailableTimes = async () => {
     try {
       const response = await appointmentService.getAvailableTimes(
@@ -113,7 +124,7 @@ const AppointmentEdit = () => {
         selectedDate
       );
       
-      // Incluir el horario actual de la cita en las opciones disponibles
+      // El horario ya reservado por esta cita debe seguir siendo seleccionable.
       const currentTime = appointment.time;
       const availableOptions = response.data || [];
       
@@ -125,10 +136,12 @@ const AppointmentEdit = () => {
       setAvailableTimes(availableOptions);
     } catch (error) {
       console.error('Error fetching available times:', error);
-      setAvailableTimes([appointment.time]); // Mantener al menos el horario actual
+      setAvailableTimes([appointment.time]); // Ante un error se conserva al menos el horario actual.
     }
   };
 
+  // Valida los campos, envía la actualización de la cita y vuelve al panel
+  // de citas cuando el backend responde correctamente.
   const handleSubmit = async (e) => {
     e.preventDefault();
     
@@ -160,23 +173,21 @@ const AppointmentEdit = () => {
     }
   };
 
+  // Cancela la edición y regresa al panel de citas.
   const handleCancel = () => {
     navigate('/appointment');
   };
 
+  // Fecha mínima permitida en el selector: hoy.
   // Obtener el mínimo de fecha (hoy)
   const today = format(new Date(), 'yyyy-MM-dd');
 
+  // Esqueleto de carga del formulario.
   if (loading) {
     return (
       <PageContainer>
         <div className="relative z-10 max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 pb-6">
-          <div className="flex items-center justify-center min-h-[60vh]">
-            <div className="text-center">
-              <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mb-4"></div>
-              <p className="text-gray-300">Cargando datos de la cita...</p>
-            </div>
-          </div>
+          <AppointmentEditSkeleton />
         </div>
       </PageContainer>
     );
@@ -194,6 +205,8 @@ const AppointmentEdit = () => {
     );
   }
 
+  // Formulario de edición: resumen de la cita actual, selección de servicio,
+  // barbero, fecha y hora, y botones de cancelar/guardar.
   return (
     <PageContainer>
       <div className="relative z-10 max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 pb-6 space-y-8">
@@ -201,7 +214,7 @@ const AppointmentEdit = () => {
         {/* Header */}
         <div className="text-center mb-6">
           <div className="flex items-center justify-center gap-3 mb-4">
-            <div className="p-3 bg-gradient-to-r from-blue-600/20 to-purple-600/20 rounded-xl border border-blue-500/20 shadow-xl shadow-blue-500/20">
+            <div className="p-3 bg-gradient-to-r from-blue-600/20 to-brand-500/20 rounded-xl border border-blue-500/20 shadow-xl shadow-soft">
               <Calendar className="w-6 h-6 sm:w-8 sm:h-8 text-blue-400" />
             </div>
             <GradientText className="text-xl sm:text-2xl lg:text-3xl font-bold">
@@ -211,7 +224,7 @@ const AppointmentEdit = () => {
         </div>
 
         {/* Formulario */}
-        <div className="bg-transparent border border-white/10 rounded-2xl backdrop-blur-sm shadow-2xl shadow-blue-500/20">
+        <div className="bg-transparent border border-white/10 rounded-2xl backdrop-blur-sm shadow-2xl shadow-soft">
           <div className="p-6 lg:p-8">
             
             <form onSubmit={handleSubmit} className="space-y-6">
@@ -225,21 +238,21 @@ const AppointmentEdit = () => {
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
                   <div>
                     <span className="text-gray-400">Servicio:</span>
-                    <p className="text-white font-medium">{appointment.service?.name}</p>
+                    <p className="text-blue-200 font-medium">{appointment.service?.name}</p>
                   </div>
                   <div>
                     <span className="text-gray-400">Barbero:</span>
-                    <p className="text-white font-medium">{appointment.barber?.name}</p>
+                    <p className="text-blue-200 font-medium">{appointment.barber?.name}</p>
                   </div>
                   <div>
                     <span className="text-gray-400">Fecha:</span>
-                    <p className="text-white font-medium">
+                    <p className="text-blue-200 font-medium">
                       {format(new Date(appointment.date), "EEEE, d 'de' MMMM 'de' yyyy", { locale: es })}
                     </p>
                   </div>
                   <div>
                     <span className="text-gray-400">Hora:</span>
-                    <p className="text-white font-medium">{appointment.time}</p>
+                    <p className="text-blue-200 font-medium">{appointment.time}</p>
                   </div>
                 </div>
               </div>
@@ -323,7 +336,7 @@ const AppointmentEdit = () => {
                   ))}
                 </select>
                 {selectedDate && selectedBarber && availableTimes.length === 0 && (
-                  <p className="mt-2 text-sm text-yellow-400">
+                  <p className="mt-2 text-sm text-amber-400">
                     Cargando horarios disponibles...
                   </p>
                 )}
@@ -336,7 +349,7 @@ const AppointmentEdit = () => {
                   onClick={handleCancel}
                   variant="secondary"
                   size="md"
-                  className="shadow-xl shadow-blue-500/20 flex-1"
+                  className="shadow-xl shadow-soft flex-1"
                 >
                   <div className="flex items-center justify-center gap-2">
                     <ArrowLeft size={18} />
@@ -349,12 +362,12 @@ const AppointmentEdit = () => {
                   variant="primary"
                   size="md"
                   disabled={submitting || !selectedService || !selectedBarber || !selectedDate || !selectedTime}
-                  className="shadow-xl shadow-blue-500/20 flex-1"
+                  className="shadow-xl shadow-soft flex-1"
                 >
                   <div className="flex items-center justify-center gap-2">
                     {submitting ? (
                       <>
-                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                        <Skeleton className="h-4 w-4 rounded-full" />
                         <span>Actualizando...</span>
                       </>
                     ) : (

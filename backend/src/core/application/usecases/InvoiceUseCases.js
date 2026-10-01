@@ -3,17 +3,15 @@ import { logger } from '../../../shared/utils/logger.js';
 import { AppError } from '../../../shared/utils/errors.js';
 import { now, formatInColombiaTime } from '../../../shared/utils/dateUtils.js';
 
-/**
- * Casos de uso para gestión de facturas
- */
+// Casos de uso para gestión de facturas
 class InvoiceUseCases {
   
-  /**
-   * Generar factura desde una venta
-   * @param {string} saleId - ID de la venta
-   * @param {Object} options - Opciones adicionales
-   * @returns {Promise<Invoice>}
-   */
+  // Generar factura desde una venta
+  // Acepta el id de una Sale o de una Appointment completada (la convierte a un
+  // objeto compatible con Sale, sin persistirla). Evita duplicados salvo
+  // options.allowDuplicate; genera el consecutivo, arma los items según el tipo
+  // (service/product) y crea la factura con issueDate = fecha original.
+  // Efecto secundario: guarda invoiceId en la Sale (no en la Appointment).
   static async generateInvoiceFromSale(saleId, options = {}) {
     try {
       logger.info(`🔍 Generando factura para ID: ${saleId}`);
@@ -211,11 +209,8 @@ class InvoiceUseCases {
     }
   }
 
-  /**
-   * Obtener factura por ID
-   * @param {string} invoiceId - ID de la factura
-   * @returns {Promise<Invoice>}
-   */
+  // Obtener factura por ID
+  // Popula la venta asociada, el barbero y el usuario que imprimió; 404 si no existe.
   static async getInvoiceById(invoiceId) {
     try {
       logger.info('Buscando factura por ID', { invoiceId, type: typeof invoiceId });
@@ -245,11 +240,8 @@ class InvoiceUseCases {
     }
   }
 
-  /**
-   * Obtener facturas por venta
-   * @param {string} saleId - ID de la venta
-   * @returns {Promise<Invoice[]>}
-   */
+  // Obtener facturas por venta
+  // Retorna todas las facturas de una venta, más recientes primero.
   static async getInvoicesBySale(saleId) {
     try {
       const invoices = await Invoice.find({ saleId })
@@ -265,12 +257,10 @@ class InvoiceUseCases {
     }
   }
 
-  /**
-   * Listar facturas con filtros
-   * @param {Object} filters - Filtros de búsqueda
-   * @param {Object} pagination - Opciones de paginación
-   * @returns {Promise<Object>}
-   */
+  // Listar facturas con filtros
+  // Filtros: status, barberId, rango de createdAt y búsqueda parcial por
+  // invoiceNumber (regex i). Devuelve { invoices, pagination } con orden y
+  // paginación configurables.
   static async listInvoices(filters = {}, pagination = {}) {
     try {
       const { page = 1, limit = 20, sortBy = 'createdAt', sortOrder = 'desc' } = pagination;
@@ -330,11 +320,10 @@ class InvoiceUseCases {
     }
   }
 
-  /**
-   * Formatear factura para impresión
-   * @param {string} invoiceId - ID de la factura
-   * @returns {Promise<Object>}
-   */
+  // Formatear factura para impresión
+  // Devuelve un objeto plano con datos del negocio, fecha formateada en zona
+  // horaria de Colombia, items, totales, método de pago (etiqueta) y flags de
+  // reimpresión (isReprint = printCount > 0).
   static async formatForPrint(invoiceId) {
     try {
       const invoice = await this.getInvoiceById(invoiceId);
@@ -403,12 +392,9 @@ class InvoiceUseCases {
     }
   }
 
-  /**
-   * Marcar factura como impresa
-   * @param {string} invoiceId - ID de la factura
-   * @param {string} userId - ID del usuario que imprimió
-   * @returns {Promise<Invoice>}
-   */
+  // Marcar factura como impresa
+  // Delega en invoice.markAsPrinted (actualiza contador/fechas y pasa pending a
+  // printed); retorna la factura ya persistida.
   static async markAsPrinted(invoiceId, userId) {
     try {
       const invoice = await Invoice.findById(invoiceId);
@@ -435,12 +421,9 @@ class InvoiceUseCases {
     }
   }
 
-  /**
-   * Cancelar factura
-   * @param {string} invoiceId - ID de la factura
-   * @param {string} reason - Razón de cancelación
-   * @returns {Promise<Invoice>}
-   */
+  // Cancelar factura
+  // Rechaza si ya está cancelada (400); delega en invoice.cancel() y retorna
+  // el documento actualizado.
   static async cancelInvoice(invoiceId, reason) {
     try {
       const invoice = await Invoice.findById(invoiceId);
@@ -470,11 +453,9 @@ class InvoiceUseCases {
     }
   }
 
-  /**
-   * Obtener estadísticas de facturas
-   * @param {Object} filters - Filtros para las estadísticas
-   * @returns {Promise<Object>}
-   */
+  // Obtener estadísticas de facturas
+  // Agrega por barbero/fechas: totales de monto/impuestos/descuento y conteos de
+  // impresas (printInfo.printed) y canceladas. Retorna ceros si no hay datos.
   static async getInvoiceStats(filters = {}) {
     try {
       const query = {};
@@ -531,11 +512,9 @@ class InvoiceUseCases {
     }
   }
 
-  /**
-   * Obtener etiqueta de método de pago
-   * @param {string} method - Método de pago
-   * @returns {string}
-   */
+  // Obtener etiqueta de método de pago
+  // Mapea los métodos conocidos a texto legible; si no hay match, retorna el
+  // identificador original.
   static getPaymentMethodLabel(method) {
     const labels = {
       efectivo: 'Efectivo',

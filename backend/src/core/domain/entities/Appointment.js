@@ -1,5 +1,9 @@
 import mongoose from 'mongoose';
 
+// Modelo Mongoose de citas.
+// Relaciona usuario, barbero y servicio con fecha/duración/precio, y gestiona
+// el ciclo de vida (pending → confirmed → completed/cancelled/no_show),
+// incluida la cancelación y el borrado lógico por rol.
 const appointmentSchema = new mongoose.Schema({
   user: {
     type: mongoose.Schema.Types.ObjectId,
@@ -43,6 +47,7 @@ const appointmentSchema = new mongoose.Schema({
     validate: {
       validator: function(value) {
         // Solo validar cuando el status es 'completed'
+        // (para los demás estados se permite null/undefined).
         if (this.status === 'completed' && !value) {
           return false;
         }
@@ -116,6 +121,7 @@ const appointmentSchema = new mongoose.Schema({
 });
 
 // Índices compuestos para mejor performance
+// Cubren los listados por usuario, barbero, estado y el calendario por fecha.
 appointmentSchema.index({ user: 1, date: 1 });
 appointmentSchema.index({ barber: 1, date: 1 });
 appointmentSchema.index({ status: 1, date: 1 });
@@ -127,6 +133,7 @@ appointmentSchema.virtual('isPast').get(function() {
 });
 
 // Virtual para verificar si la cita puede ser cancelada
+// Permite cancelar solo si faltan más de 2 horas para la cita.
 appointmentSchema.virtual('canBeCancelled').get(function() {
   const now = new Date();
   const appointmentTime = new Date(this.date);
@@ -135,11 +142,13 @@ appointmentSchema.virtual('canBeCancelled').get(function() {
 });
 
 // Virtual para verificar si todos los roles han marcado la cita para eliminar
+// La cita se elimina físicamente solo cuando user, barber y admin coinciden.
 appointmentSchema.virtual('shouldBeDeleted').get(function() {
   return this.deletedBy.user && this.deletedBy.barber && this.deletedBy.admin;
 });
 
 // Virtual para verificar si la cita tiene una reseña
+// Resuelve por populate la Review cuyo campo appointment apunte a esta cita.
 appointmentSchema.virtual('review', {
   ref: 'Review',
   localField: '_id',
@@ -148,6 +157,8 @@ appointmentSchema.virtual('review', {
 });
 
 // Middleware para validar que la fecha sea futura (solo para citas nuevas en estado pending)
+// El resto de casos (documentos existentes o estados distintos de 'pending')
+// quedan exentos de esta validación.
 appointmentSchema.pre('save', function(next) {
   // Solo validar fecha futura si es una cita nueva Y está en estado 'pending'
   if (this.isNew && this.status === 'pending' && this.date <= new Date()) {

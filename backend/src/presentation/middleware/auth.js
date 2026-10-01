@@ -1,8 +1,15 @@
 import jwt from 'jsonwebtoken';
 import User from '../../core/domain/entities/User.js';
 import { logger } from '../../shared/utils/logger.js';
+import config from '../../shared/config/index.js';
+
+// Valores fijos de issuer/audience que deben coincidir con los usados al firmar los JWT.
+const JWT_ISSUER = 'the-brothers-barbershop-api';
+const JWT_AUDIENCE = 'the-brothers-barbershop-users';
 
 // Middleware principal de autenticación
+// Valida el header Bearer, verifica el JWT (firma, expiración, issuer, audience),
+// carga el usuario y deja el documento en req.user. Responde 401 si algo falla.
 export const protect = async (req, res, next) => {
   try {
     const authHeader = req.header('Authorization');
@@ -19,7 +26,12 @@ export const protect = async (req, res, next) => {
         message: 'Acceso denegado. Token no válido.'
       });
     }
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+
+    const decoded = jwt.verify(token, config.jwt.secret, {
+      issuer: JWT_ISSUER,
+      audience: JWT_AUDIENCE
+    });
+
     const user = await User.findById(decoded.id).select('-password');
     if (!user) {
       return res.status(401).json({
@@ -33,6 +45,15 @@ export const protect = async (req, res, next) => {
         message: 'Cuenta desactivada. Contacta al administrador.'
       });
     }
+
+    // Verificar tokenVersion - detecta tokens invalidados por logout/password change
+    if (decoded.tokenVersion !== undefined && decoded.tokenVersion !== user.tokenVersion) {
+      return res.status(401).json({
+        success: false,
+        message: 'Token invalidado. Inicia sesión nuevamente.'
+      });
+    }
+
     req.user = user;
     next();
   } catch (error) {
@@ -56,7 +77,7 @@ export const protect = async (req, res, next) => {
   }
 };
 
-// Verificar si es administrador
+// Verificar si es administrador (requiere protect() previo)
 export const adminAuth = (req, res, next) => {
   if (req.user.role !== 'admin') {
     return res.status(403).json({
@@ -67,7 +88,7 @@ export const adminAuth = (req, res, next) => {
   next();
 };
 
-// Verificar si es barbero o admin
+// Verificar si es barbero o admin (requiere protect() previo)
 export const barberAuth = (req, res, next) => {
   if (req.user.role !== 'barber' && req.user.role !== 'admin') {
     return res.status(403).json({
@@ -79,14 +100,14 @@ export const barberAuth = (req, res, next) => {
 };
 
 // Verificar si es el mismo usuario o admin
+// En rutas /profile compara el usuario autenticado con el dueño del barbero;
+// en el resto compara contra el :id de la ruta.
 export const sameUserOrAdmin = async (req, res, next) => {
   try {
-    // Si es admin, permitir acceso directo
     if (req.user.role === 'admin') {
       return next();
     }
 
-    // Si la ruta incluye /profile, buscar el barbero y comparar con el usuario
     if (req.path.includes('/profile')) {
       const Barber = (await import('../../core/domain/entities/Barber.js')).default;
       const barber = await Barber.findById(req.params.id);
@@ -100,7 +121,6 @@ export const sameUserOrAdmin = async (req, res, next) => {
         return next();
       }
     }
-    // Para otras rutas, comparar directamente el ID del usuario
     else if (req.user._id.toString() === req.params.id) {
       return next();
     }

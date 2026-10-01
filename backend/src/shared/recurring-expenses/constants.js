@@ -1,9 +1,7 @@
-/**
- * Constantes compartidas para gastos recurrentes
- * 
- * Centraliza todas las constantes utilizadas en frontend y backend
- * para asegurar consistencia en toda la aplicación.
- */
+// Constantes compartidas para gastos recurrentes
+//
+// Centraliza todas las constantes utilizadas en frontend y backend
+// para asegurar consistencia en toda la aplicación.
 
 // Patrones de frecuencia soportados
 export const FREQUENCY_PATTERNS = {

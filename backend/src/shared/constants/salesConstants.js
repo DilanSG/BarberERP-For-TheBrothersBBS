@@ -1,7 +1,6 @@
-/**
- * Constantes para el backend del sistema de ventas
- * Mantiene compatibilidad con la base de datos
- */
+// Constantes para el backend del sistema de ventas
+// Mantiene compatibilidad con la base de datos
+// Nota: WALKIN y SERVICE apuntan al mismo valor para no romper datos históricos.
 
 export const SALE_TYPES = {
   PRODUCT: 'product',
@@ -24,23 +23,17 @@ export const VALIDATION_MESSAGES = {
   SERVICE_NAME_REQUIRED: 'El nombre del servicio es requerido para servicios walk-in'
 };
 
-/**
- * Obtener tipos válidos para validaciones
- */
+// Obtener tipos válidos para validaciones
 export function getValidSaleTypes() {
   return [SALE_TYPES.PRODUCT, SALE_TYPES.WALKIN];
 }
 
-/**
- * Verificar si un tipo es válido
- */
+// Verificar si un tipo es válido
 export function isValidSaleType(type) {
   return getValidSaleTypes().includes(type);
 }
 
-/**
- * Obtener nombre de display para un tipo
- */
+// Obtener nombre de display para un tipo
 export function getSaleTypeDisplayName(type) {
   const names = {
     [SALE_TYPES.PRODUCT]: 'Producto',

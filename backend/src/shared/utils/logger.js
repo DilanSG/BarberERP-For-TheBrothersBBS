@@ -41,6 +41,9 @@ const colors = {
 winston.addColors(colors);
 
 // Función para serialización segura de objetos circulares
+// @param {Object} obj - Objeto a serializar
+// @param {number} space - Indentación de JSON.stringify
+// @returns {string} JSON sin referencias circulares
 const safeStringify = (obj, space) => {
   const seen = new WeakSet();
   return JSON.stringify(obj, (key, val) => {
@@ -55,10 +58,13 @@ const safeStringify = (obj, space) => {
 };
 
 // Formato para los logs
+const HIDDEN_META_KEYS = new Set(['timestamp', 'level', 'message', 'label', 'service', 'environment', 'splat', 'stack']);
+
 const formats = {
   // Formato para consola con colores y emojis
   console: winston.format.combine(
     winston.format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
+    winston.format.errors({ stack: true }),
     winston.format.colorize({ all: true }),
     winston.format.printf(info => {
       // Mostrar símbolos solo si LOG_EMOJIS !== 'false' y en desarrollo
@@ -75,8 +81,27 @@ const formats = {
 
       const symbol = useSymbols ? (symbolMaps[symbolSet] || symbolMaps.ascii) : symbolMaps.none;
       const label = info.label || 'app';
-      const levelSymbol = symbol[info.level] || '';
-      return `${info.timestamp} [${label}] ${levelSymbol} ${info.message}`;
+
+      // info.level viene con códigos ANSI por colorize(): limpiarlos para el lookup
+      // eslint-disable-next-line no-control-regex -- se eliminan códigos ANSI de color
+      const rawLevel = String(info.level).replace(/\u001b\[[0-9;]*m/g, '');
+      const levelSymbol = useSymbols && symbol[rawLevel]
+        ? symbol[rawLevel]
+        : `[${rawLevel.toUpperCase()}]`;
+
+      // Metadata adicional (status, url, duration, etc.) visible en consola
+      const meta = {};
+      Object.keys(info).forEach((key) => {
+        if (!HIDDEN_META_KEYS.has(key) && info[key] !== undefined) {
+          meta[key] = info[key];
+        }
+      });
+      const metaText = Object.keys(meta).length ? ` ${safeStringify(meta)}` : '';
+
+      // Stack trace en consola (errores)
+      const stackText = info.stack ? `\n${info.stack}` : '';
+
+      return `${info.timestamp} [${label}] ${levelSymbol} ${info.message}${metaText}${stackText}`;
     })
   ),
 
@@ -99,6 +124,7 @@ const formats = {
 };
 
 // Transports configurables
+// Crea los archivos rotativos (combined/error/http) y la consola según el ambiente.
 const createTransports = () => {
   const transports = [];
 
@@ -137,11 +163,11 @@ const createTransports = () => {
     })
   );
 
-  // En desarrollo, añadir transport de consola
+  // En desarrollo, consola con el nivel configurado en LOG_LEVEL (default: info)
   if (appConfig.nodeEnv === 'development') {
     transports.push(
       new winston.transports.Console({
-        level: 'debug',
+        level: loggingConfig.level,
         format: formats.console
       })
     );
@@ -188,44 +214,100 @@ const logger = winston.createLogger({
 });
 
 // Métodos de utilidad
+// Registra una request HTTP; usa error/warn/http según el status code.
+// @param {Object} req - Request de Express
+// @param {Object} res - Response de Express
+// @param {number} responseTime - Duración en ms
 logger.logRequest = (req, res, responseTime) => {
   const meta = {
-    requestId: req.id,
+    requestId: req.requestId || req.id,
     method: req.method,
     url: req.originalUrl,
     status: res.statusCode,
     responseTime: `${responseTime}ms`,
-    userAgent: req.get('user-agent'),
     ip: req.ip,
     user: req.user ? req.user._id : 'anonymous'
   };
 
-  const message = `${req.method} ${req.originalUrl} ${res.statusCode} ${responseTime}ms`;
-  logger.http(message, meta);
+  const message = `${req.method} ${req.originalUrl} → ${res.statusCode} (${responseTime}ms)`;
+
+  if (res.statusCode >= 500) {
+    logger.error(message, meta);
+  } else if (res.statusCode >= 400) {
+    logger.warn(message, meta);
+  } else {
+    logger.http(message, meta);
+  }
 };
 
-logger.logError = (error, req = null) => {
+// Registra un error: 5xx con stack y nivel error; 4xx con nivel warn.
+// @param {Error} error - Error a loguear
+// @param {Object} req - Request opcional para añadir contexto
+// @param {number} statusCode - Status HTTP opcional
+logger.logError = (error, req = null, statusCode = null) => {
+  const code = statusCode || error.statusCode || 500;
+
   const meta = {
+    statusCode: code,
     name: error.name,
-    stack: error.stack,
-    ...((req && {
-      requestId: req.id,
+    ...(code >= 500 && error.stack && { stack: error.stack }),
+    ...(error.details && { details: error.details }),
+    ...(req && {
+      requestId: req.requestId || req.id,
       method: req.method,
       url: req.originalUrl,
-      user: req.user ? req.user._id : 'anonymous',
-      ip: req.ip
-    }))
+      ip: req.ip,
+      user: req.user ? req.user._id : 'anonymous'
+    })
   };
 
-  logger.error(error.message, meta);
+  const message = `${code} ${error.name || 'Error'}: ${error.message}`;
+
+  if (code >= 500) {
+    logger.error(message, meta);
+  } else {
+    logger.warn(message, meta);
+  }
 };
 
-logger.startupLog = () => {
-  logger.info('=================================');
-  logger.info('Servidor iniciado');
-  logger.info(`Ambiente: ${config.app.nodeEnv}`);
-  logger.info(`Puerto: ${config.app.port}`);
-  logger.info('=================================');
+// Banner de arranque con el resumen de lo inicializado
+// Imprime una caja con el estado de los servicios principales (omite valores vacíos).
+// @param {Object} info - Datos de arranque (entorno, puertos, servicios)
+logger.logStartup = ({
+  nodeEnv,
+  port,
+  host,
+  apiBase,
+  docsUrl,
+  database,
+  email,
+  websocket,
+  cronJobs,
+  monitoring
+} = {}) => {
+  const rows = [
+    ['Entorno', nodeEnv],
+    ['Puerto', port],
+    ['Host', host],
+    ['API', apiBase],
+    ['Docs', docsUrl],
+    ['Base de datos', database],
+    ['Email', email],
+    ['WebSocket', websocket],
+    ['Cron jobs', cronJobs],
+    ['Monitoreo', monitoring],
+    ['Node', `${process.version} · pid ${process.pid}`]
+  ].filter(([, value]) => value !== undefined && value !== null && value !== '');
+
+  const keyWidth = Math.max(14, ...rows.map(([key]) => `${key}`.length));
+  const width = Math.max(...rows.map(([, value]) => 2 + keyWidth + 1 + `${value}`.length));
+  const line = '─'.repeat(width);
+
+  const content = rows
+    .map(([key, value]) => `  ${`${key}`.padEnd(keyWidth)} ${value}`)
+    .join('\n');
+
+  logger.info(`\n┌${line}┐\n  The Brothers Barber Shop API — iniciada\n${content}\n└${line}┘`);
 };
 
 // Stream para Morgan
@@ -234,46 +316,24 @@ logger.stream = {
 };
 
 // Funciones auxiliares para logging
+// Middleware que asigna un requestId y loguea al finalizar la respuesta.
 export const requestLogger = (req, res, next) => {
   const start = Date.now();
-  const requestId = Math.random().toString(36).substring(7);
-  
+
   // Agregar requestId al request para tracking
-  req.requestId = requestId;
+  req.requestId = req.requestId || Math.random().toString(36).substring(7);
 
   res.on('finish', () => {
-    const duration = Date.now() - start;
-    const logData = {
-      method: req.method,
-      url: req.originalUrl,
-      status: res.statusCode,
-      duration: `${duration}ms`,
-      ip: req.ip,
-      userAgent: req.get('User-Agent'),
-      userId: req.user ? req.user._id : 'anonymous'
-    };
-
-    if (res.statusCode >= 400) {
-      logger.error('HTTP Request Error', logData);
-    } else {
-      logger.info('HTTP Request', logData);
-    }
+    logger.logRequest(req, res, Date.now() - start);
   });
 
   next();
 };
 
 // Middleware de logging de errores
+// Loguea el error con su contexto y lo reenvía al siguiente middleware.
 export const errorLogger = (error, req, res, next) => {
-  logger.error('Unhandled Error', {
-    message: error.message,
-    stack: error.stack,
-    url: req.originalUrl,
-    method: req.method,
-    ip: req.ip,
-    userId: req.user ? req.user._id : 'anonymous'
-  });
-
+  logger.logError(error, req);
   next(error);
 };
 

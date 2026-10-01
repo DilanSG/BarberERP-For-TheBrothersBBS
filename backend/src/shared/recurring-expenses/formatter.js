@@ -1,9 +1,7 @@
-/**
- * Formateadores para gastos recurrentes
- * 
- * Proporciona utilidades de formato y presentación para
- * gastos recurrentes en frontend y backend.
- */
+// Formateadores para gastos recurrentes
+//
+// Proporciona utilidades de formato y presentación para
+// gastos recurrentes en frontend y backend.
 
 import { 
   FREQUENCY_PATTERNS, 
@@ -11,13 +9,11 @@ import {
   MONTH_LABELS 
 } from './constants.js';
 
-/**
- * Formatea una frecuencia para mostrar al usuario
- * @param {string} pattern - Patrón de frecuencia
- * @param {number} interval - Intervalo
- * @param {Object} config - Configuración específica del patrón
- * @returns {string} - Descripción legible de la frecuencia
- */
+// Formatea una frecuencia para mostrar al usuario
+// @param {string} pattern - Patrón de frecuencia
+// @param {number} interval - Intervalo
+// @param {Object} config - Configuración específica del patrón
+// @returns {string} - Descripción legible de la frecuencia
 export const formatFrequency = (pattern, interval = 1, config = {}) => {
   if (!pattern) return 'Sin configurar';
 
@@ -28,37 +24,38 @@ export const formatFrequency = (pattern, interval = 1, config = {}) => {
       if (interval === 1) return 'Diario';
       return `Cada ${interval} días`;
 
-    case FREQUENCY_PATTERNS.WEEKLY:
+    case FREQUENCY_PATTERNS.WEEKLY: {
       const weekDaysText = formatWeekDays(config.weekDays);
       if (interval === 1) {
         return weekDaysText ? `Semanal (${weekDaysText})` : 'Semanal';
       }
       return `Cada ${interval} semanas${weekDaysText ? ` (${weekDaysText})` : ''}`;
+    }
 
-    case FREQUENCY_PATTERNS.MONTHLY:
+    case FREQUENCY_PATTERNS.MONTHLY: {
       const monthDaysText = formatMonthDays(config.monthDays);
       if (interval === 1) {
         return monthDaysText ? `Mensual (día ${monthDaysText})` : 'Mensual';
       }
       return `Cada ${interval} meses${monthDaysText ? ` (día ${monthDaysText})` : ''}`;
+    }
 
-    case FREQUENCY_PATTERNS.YEARLY:
+    case FREQUENCY_PATTERNS.YEARLY: {
       const yearText = formatYearConfig(config.yearConfig);
       if (interval === 1) {
         return yearText ? `Anual (${yearText})` : 'Anual';
       }
       return `Cada ${interval} años${yearText ? ` (${yearText})` : ''}`;
+    }
 
     default:
       return `${pattern}${intervalText}`;
   }
 };
 
-/**
- * Formatea días de la semana
- * @param {number[]} weekDays - Array de días (0=Domingo, 6=Sábado)
- * @returns {string} - Días formateados
- */
+// Formatea días de la semana
+// @param {number[]} weekDays - Array de días (0=Domingo, 6=Sábado)
+// @returns {string} - Días formateados
 export const formatWeekDays = (weekDays) => {
   if (!weekDays || weekDays.length === 0) return '';
   
@@ -76,11 +73,9 @@ export const formatWeekDays = (weekDays) => {
   return `${dayNames.slice(0, -1).join(', ')} y ${dayNames[dayNames.length - 1]}`;
 };
 
-/**
- * Formatea días del mes
- * @param {number[]} monthDays - Array de días del mes (1-31)
- * @returns {string} - Días formateados
- */
+// Formatea días del mes
+// @param {number[]} monthDays - Array de días del mes (1-31)
+// @returns {string} - Días formateados
 export const formatMonthDays = (monthDays) => {
   if (!monthDays || monthDays.length === 0) return '';
   
@@ -92,11 +87,9 @@ export const formatMonthDays = (monthDays) => {
   return `${sortedDays.slice(0, -1).join(', ')} y ${sortedDays[sortedDays.length - 1]}`;
 };
 
-/**
- * Formatea configuración anual
- * @param {Object} yearConfig - { month: number, day: number }
- * @returns {string} - Configuración formateada
- */
+// Formatea configuración anual
+// @param {Object} yearConfig - { month: number, day: number }
+// @returns {string} - Configuración formateada
 export const formatYearConfig = (yearConfig) => {
   if (!yearConfig || !yearConfig.month || !yearConfig.day) return '';
   
@@ -104,13 +97,11 @@ export const formatYearConfig = (yearConfig) => {
   return `${yearConfig.day} de ${monthName}`;
 };
 
-/**
- * Formatea un monto monetario
- * @param {number} amount - Monto a formatear
- * @param {string} currency - Símbolo de moneda (por defecto '$')
- * @param {number} decimals - Número de decimales (por defecto 2)
- * @returns {string} - Monto formateado
- */
+// Formatea un monto monetario
+// @param {number} amount - Monto a formatear
+// @param {string} currency - Símbolo de moneda (por defecto '$')
+// @param {number} decimals - Número de decimales (por defecto 2)
+// @returns {string} - Monto formateado
 export const formatAmount = (amount, currency = '$', decimals = 2) => {
   if (amount === null || amount === undefined || isNaN(amount)) {
     return `${currency}0.00`;
@@ -123,12 +114,10 @@ export const formatAmount = (amount, currency = '$', decimals = 2) => {
   })}`;
 };
 
-/**
- * Formatea una fecha para mostrar al usuario
- * @param {string|Date} date - Fecha a formatear
- * @param {string} format - Formato ('short', 'long', 'iso')
- * @returns {string} - Fecha formateada
- */
+// Formatea una fecha para mostrar al usuario
+// @param {string|Date} date - Fecha a formatear
+// @param {string} format - Formato ('short', 'long', 'iso')
+// @returns {string} - Fecha formateada
 export const formatDate = (date, format = 'short') => {
   if (!date) return '';
   
@@ -161,13 +150,11 @@ export const formatDate = (date, format = 'short') => {
   }
 };
 
-/**
- * Formatea un rango de fechas
- * @param {string|Date} startDate - Fecha de inicio
- * @param {string|Date} endDate - Fecha de fin
- * @param {string} format - Formato de fecha
- * @returns {string} - Rango formateado
- */
+// Formatea un rango de fechas
+// @param {string|Date} startDate - Fecha de inicio
+// @param {string|Date} endDate - Fecha de fin
+// @param {string} format - Formato de fecha
+// @returns {string} - Rango formateado
 export const formatDateRange = (startDate, endDate, format = 'short') => {
   const formattedStart = formatDate(startDate, format);
   
@@ -179,12 +166,10 @@ export const formatDateRange = (startDate, endDate, format = 'short') => {
   return `${formattedStart} - ${formattedEnd}`;
 };
 
-/**
- * Formatea el estado de un gasto recurrente
- * @param {boolean} isActive - Si está activo
- * @param {string|Date} endDate - Fecha de fin
- * @returns {string} - Estado formateado
- */
+// Formatea el estado de un gasto recurrente
+// @param {boolean} isActive - Si está activo
+// @param {string|Date} endDate - Fecha de fin
+// @returns {string} - Estado formateado
 export const formatStatus = (isActive, endDate) => {
   if (!isActive) return 'Inactivo';
   
@@ -199,11 +184,9 @@ export const formatStatus = (isActive, endDate) => {
   return 'Activo';
 };
 
-/**
- * Genera un resumen completo de un gasto recurrente
- * @param {Object} expense - Gasto recurrente
- * @returns {Object} - Resumen formateado
- */
+// Genera un resumen completo de un gasto recurrente
+// @param {Object} expense - Gasto recurrente
+// @returns {Object} - Resumen formateado
 export const formatExpenseSummary = (expense) => {
   if (!expense) {
     return {

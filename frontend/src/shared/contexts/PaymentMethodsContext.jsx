@@ -1,197 +1,186 @@
-import { createContext, useContext, useState, useEffect } from 'react';
-import { CreditCard } from 'lucide-react';
-import { PAYMENT_METHODS } from '../config/paymentMethods';
+// Contexto de métodos de pago: carga los métodos dinámicos del backend y los
+// normaliza al shape de la UI (color de la paleta, icono por categoría).
+// Efectivo es el único método de sistema; el resto es CRUD (admin) con
+// actualización optimista + refresh.
+import { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import { CreditCard, Banknote, Smartphone } from 'lucide-react';
+import { paymentMethodsApi } from '../services/paymentMethodsApi';
+import { useAuth } from './AuthContext';
+import { PAYMENT_METHOD_PALETTE, getPaymentMethodPalette } from '@utils/formatters';
 
 const PaymentMethodsContext = createContext();
 
-export const PaymentMethodsProvider = ({ children }) => {
-  // Estado para métodos de pago dinámicos (agregados por el usuario)
-  const [dynamicPaymentMethods, setDynamicPaymentMethods] = useState([]);
-  // Estado para métodos estáticos ocultos (eliminados por el usuario)
-  const [hiddenStaticMethods, setHiddenStaticMethods] = useState([]);
+// Métodos de pago (reforma):
+// - Efectivo (`cash`) es el ÚNICO método predeterminado del sistema.
+// - Todos los demás son dinámicos: los crea el administrador y puede editarlos
+// o eliminarlos. Sin emojis; el color es una de las 15 opciones de la paleta.
 
-  // Cargar métodos dinámicos y ocultos desde localStorage al inicializar
-  useEffect(() => {
-    // Cargar métodos dinámicos
-    const savedMethods = localStorage.getItem('dynamicPaymentMethods');
-    if (savedMethods) {
-      try {
-        const parsed = JSON.parse(savedMethods);
-        // Restaurar iconos perdidos en la serialización
-        const methodsWithIcons = parsed.map(method => ({
-          ...method,
-          icon: CreditCard // Restaurar icono por defecto
-        }));
-        setDynamicPaymentMethods(methodsWithIcons);
-      } catch (error) {
-        console.error('❌ Error al cargar métodos dinámicos:', error);
-        setDynamicPaymentMethods([]); // Asegurar que se inicialice como array vacío
-      }
-    } else {
-      // Si no hay datos guardados, inicializar como array vacío
-      setDynamicPaymentMethods([]);
-    }
+// Icono por defecto según la categoría del método
+const ICON_BY_CATEGORY = {
+  cash: Banknote,
+  digital: Smartphone,
+  card: CreditCard,
+  transfer: Smartphone,
+  other: CreditCard,
+};
 
-    // Cargar métodos estáticos ocultos
-    const hiddenMethods = localStorage.getItem('hiddenStaticMethods');
-    if (hiddenMethods) {
-      try {
-        const parsed = JSON.parse(hiddenMethods);
-        setHiddenStaticMethods(parsed);
-      } catch (error) {
-        console.error('❌ Error al cargar métodos ocultos:', error);
-      }
-    }
-  }, []);
+// Fallback mínimo si el backend no responde: solo efectivo
+export const DEFAULT_CASH_METHOD = {
+  id: 'cash',
+  backendId: 'cash',
+  name: 'Efectivo',
+  description: 'Pago en efectivo',
+  color: 'emerald',
+  colorHex: PAYMENT_METHOD_PALETTE.emerald.hex,
+  category: 'cash',
+  isSystem: true,
+  icon: Banknote,
+};
 
-  // Guardar métodos dinámicos en localStorage cuando cambien
-  useEffect(() => {
-    // Siempre guardar, incluso si la lista está vacía
-    const methodsToSave = dynamicPaymentMethods.map(({ icon, ...method }) => method);
-    localStorage.setItem('dynamicPaymentMethods', JSON.stringify(methodsToSave));
-  }, [dynamicPaymentMethods]);
-
-  // Guardar métodos ocultos en localStorage cuando cambien
-  useEffect(() => {
-    if (hiddenStaticMethods.length >= 0) {
-      localStorage.setItem('hiddenStaticMethods', JSON.stringify(hiddenStaticMethods));
-    }
-  }, [hiddenStaticMethods]);
-
-  // Combinar métodos estáticos (excluyendo ocultos) con dinámicos
-  const visibleStaticMethods = PAYMENT_METHODS.filter(method => 
-    !hiddenStaticMethods.includes(method.backendId)
+// Paleta (nombre ↔ hex) para normalizar lo que llega del backend
+const hexToColorName = (hex) => {
+  if (!hex) return 'gray';
+  const found = Object.entries(PAYMENT_METHOD_PALETTE).find(
+    ([, p]) => p.hex.toLowerCase() === String(hex).toLowerCase()
   );
-  const allPaymentMethods = [...visibleStaticMethods, ...dynamicPaymentMethods];
+  return found ? found[0] : 'gray';
+};
 
-  // Función para agregar un nuevo método de pago
+// Convierte un nombre de color de la paleta a su hex; si ya es hex lo respeta
+const colorNameToHex = (color) => {
+  if (!color) return PAYMENT_METHOD_PALETTE.gray.hex;
+  if (/^#[0-9a-fA-F]{6}$/.test(color)) return color;
+  const palette = getPaymentMethodPalette(color);
+  return palette.hex;
+};
+
+// Normaliza un método del backend al shape del frontend
+const normalizeApiMethod = (method) => {
+  const color = hexToColorName(method.color);
+  return {
+    id: method.backendId,
+    backendId: method.backendId,
+    name: method.name,
+    description: method.description || '',
+    color,
+    colorHex: method.color || PAYMENT_METHOD_PALETTE[color].hex,
+    category: method.category,
+    isSystem: Boolean(method.isSystem),
+    icon: ICON_BY_CATEGORY[method.category] || CreditCard,
+  };
+};
+
+// Provider de métodos de pago: expone la lista, el CRUD y helpers de consulta.
+// Valor: { allPaymentMethods, addPaymentMethod, updatePaymentMethod,
+// removePaymentMethod, getPaymentMethodByBackendId, refreshPaymentMethods,
+// isStaticMethod }.
+export const PaymentMethodsProvider = ({ children }) => {
+  const { user } = useAuth();
+  const [apiMethods, setApiMethods] = useState(null);
+
+  // Cargar métodos desde el backend (fuente de verdad)
+  const refresh = useCallback(async () => {
+    if (!user) {
+      setApiMethods(null);
+      return;
+    }
+    try {
+      const response = await paymentMethodsApi.getAll();
+      const methods = Array.isArray(response?.data) ? response.data : [];
+      setApiMethods(methods.map(normalizeApiMethod));
+    } catch (error) {
+      console.warn('No se pudieron cargar los métodos de pago del backend:', error?.message);
+      setApiMethods(null);
+    }
+  }, [user]);
+
+  useEffect(() => {
+    refresh();
+  }, [refresh]);
+
+  // Fuente: backend si está disponible; si no, solo Efectivo
+  const allPaymentMethods = apiMethods && apiMethods.length > 0 ? apiMethods : [DEFAULT_CASH_METHOD];
+
+  // Efectivo es el único método protegido (no eliminable)
+  const isStaticMethod = (backendId) =>
+    backendId === 'cash' || backendId === 'efectivo' ||
+    Boolean(allPaymentMethods.find(m => m.backendId === backendId)?.isSystem);
+
+  // Crear método dinámico (optimista + backend)
   const addPaymentMethod = (newMethod) => {
-    console.log('🆕 Agregando método de pago al contexto global:', newMethod);
-    // Asegurar que tiene un icono válido
-    const methodWithIcon = {
+    const color = newMethod.color || 'gray';
+    const optimistic = {
       ...newMethod,
-      icon: CreditCard // Forzar icono válido
+      id: newMethod.backendId,
+      color,
+      colorHex: colorNameToHex(color),
+      isSystem: false,
+      icon: newMethod.icon || ICON_BY_CATEGORY[newMethod.category] || CreditCard,
     };
-    setDynamicPaymentMethods(prev => [...prev, methodWithIcon]);
+    setApiMethods(prev => [...(prev || []), optimistic].filter(Boolean));
+
+    paymentMethodsApi.create({
+      name: newMethod.name,
+      backendId: newMethod.backendId,
+      description: newMethod.description,
+      color: colorNameToHex(color),
+      category: newMethod.category || 'digital',
+    }).then(refresh).catch((error) => {
+      console.error('Error creando método de pago:', error);
+      refresh();
+    });
+    return true;
   };
 
-  // Función para actualizar un método de pago existente
+  // Actualizar método (efectivo incluido; nunca cambia el backendId)
   const updatePaymentMethod = (originalBackendId, updatedMethod) => {
-    console.log('✏️ Actualizando método de pago en contexto global:', { originalBackendId, updatedMethod });
-    
-    // Verificar si es un método estático (no se puede editar)
-    const isStaticMethod = PAYMENT_METHODS.some(m => m.backendId === originalBackendId);
-    if (isStaticMethod) {
-      console.warn('⚠️ No se pueden editar métodos de pago estáticos');
-      return false;
-    }
+    setApiMethods(prev => (prev || []).map(method =>
+      method.backendId === originalBackendId
+        ? {
+            ...method,
+            ...updatedMethod,
+            color: updatedMethod.color || method.color,
+            colorHex: colorNameToHex(updatedMethod.color || method.color),
+            icon: method.icon,
+          }
+        : method
+    ));
 
-    // Actualizar en métodos dinámicos
-    setDynamicPaymentMethods(prev => 
-      prev.map(method => 
-        method.backendId === originalBackendId ? updatedMethod : method
-      )
-    );
+    paymentMethodsApi.update(originalBackendId, {
+      name: updatedMethod.name,
+      description: updatedMethod.description,
+      color: colorNameToHex(updatedMethod.color),
+      category: updatedMethod.category,
+    }).then(refresh).catch((error) => {
+      console.error('Error actualizando método de pago:', error);
+      refresh();
+    });
     return true;
   };
 
-  // Función para eliminar un método de pago
+  // Eliminar método dinámico (efectivo protegido)
   const removePaymentMethod = (backendId) => {
-    console.log('🗑️ Eliminando método de pago del contexto global:', backendId);
-    
-    // Solo proteger el efectivo como método esencial
-    if (backendId === 'cash') {
-      console.warn('⚠️ No se puede eliminar el efectivo - método de pago esencial');
-      return false;
-    }
+    if (isStaticMethod(backendId)) return false;
 
-    // Verificar si es un método estático
-    const isStaticMethod = PAYMENT_METHODS.some(m => m.backendId === backendId);
-    
-    if (isStaticMethod) {
-      // Para métodos estáticos, agregarlos a la lista de ocultos
-      console.log('🙈 Ocultando método de pago estático:', backendId);
-      const updatedHidden = hiddenStaticMethods.includes(backendId) 
-        ? hiddenStaticMethods 
-        : [...hiddenStaticMethods, backendId];
-      setHiddenStaticMethods(updatedHidden);
-      
-      // Guardar inmediatamente en localStorage
-      localStorage.setItem('hiddenStaticMethods', JSON.stringify(updatedHidden));
-      console.log('🙈 Lista de ocultos actualizada inmediatamente:', updatedHidden);
-    } else {
-      // Para métodos dinámicos, eliminar completamente
-      console.log('🗑️ Eliminando método de pago dinámico:', backendId);
-      const updatedMethods = dynamicPaymentMethods.filter(method => method.backendId !== backendId);
-      setDynamicPaymentMethods(updatedMethods);
-      
-      // Guardar inmediatamente en localStorage
-      const methodsToSave = updatedMethods.map(({ icon, ...method }) => method);
-      localStorage.setItem('dynamicPaymentMethods', JSON.stringify(methodsToSave));
-      console.log('💾 Lista actualizada guardada inmediatamente:', methodsToSave);
-    }
-    
-    console.log('✅ Método eliminado/ocultado exitosamente:', backendId);
+    setApiMethods(prev => (prev || []).filter(method => method.backendId !== backendId));
+    paymentMethodsApi.delete(backendId).then(refresh).catch((error) => {
+      console.error('Error eliminando método de pago:', error);
+      refresh();
+    });
     return true;
   };
 
-  // Función para obtener un método de pago por backendId
-  const getPaymentMethodByBackendId = (backendId) => {
-    return allPaymentMethods.find(method => method.backendId === backendId);
-  };
-
-  // Función para restaurar un método estático oculto
-  const restorePaymentMethod = (backendId) => {
-    console.log('♻️ Restaurando método de pago estático:', backendId);
-    setHiddenStaticMethods(prev => prev.filter(id => id !== backendId));
-    console.log('✅ Método restaurado exitosamente:', backendId);
-    return true;
-  };
-
-  // Función para limpiar todos los métodos dinámicos (para testing)
-  const clearDynamicMethods = () => {
-    setDynamicPaymentMethods([]);
-    localStorage.removeItem('dynamicPaymentMethods');
-    console.log('🧹 Métodos de pago dinámicos limpiados');
-  };
-
-  // Función para restaurar todos los métodos estáticos ocultos
-  const restoreAllHiddenMethods = () => {
-    setHiddenStaticMethods([]);
-    localStorage.removeItem('hiddenStaticMethods');
-    console.log('♻️ Todos los métodos estáticos restaurados');
-  };
-
-  // Función para depuración - limpiar todo el localStorage de métodos de pago
-  const clearAllPaymentMethodsData = () => {
-    setDynamicPaymentMethods([]);
-    setHiddenStaticMethods([]);
-    localStorage.removeItem('dynamicPaymentMethods');
-    localStorage.removeItem('hiddenStaticMethods');
-    console.log('🧹 Todos los datos de métodos de pago limpiados (dinámicos y ocultos)');
-  };
+  const getPaymentMethodByBackendId = (backendId) =>
+    allPaymentMethods.find(method => method.backendId === backendId);
 
   const value = {
-    // Datos
-    staticPaymentMethods: PAYMENT_METHODS,
-    dynamicPaymentMethods,
     allPaymentMethods,
-    hiddenStaticMethods,
-    
-    // Funciones
     addPaymentMethod,
     updatePaymentMethod,
     removePaymentMethod,
-    restorePaymentMethod,
     getPaymentMethodByBackendId,
-    clearDynamicMethods,
-    restoreAllHiddenMethods,
-    clearAllPaymentMethodsData,
-    
-    // Utilidades
-    isStaticMethod: (backendId) => PAYMENT_METHODS.some(m => m.backendId === backendId),
-    isDynamicMethod: (backendId) => dynamicPaymentMethods.some(m => m.backendId === backendId),
-    isHiddenMethod: (backendId) => hiddenStaticMethods.includes(backendId)
+    refreshPaymentMethods: refresh,
+    isStaticMethod,
   };
 
   return (
@@ -201,7 +190,7 @@ export const PaymentMethodsProvider = ({ children }) => {
   );
 };
 
-// Hook personalizado para usar el contexto
+// Hook de acceso al contexto; lanza error si se usa fuera del provider
 export const usePaymentMethodsContext = () => {
   const context = useContext(PaymentMethodsContext);
   if (!context) {

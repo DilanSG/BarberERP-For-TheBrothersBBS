@@ -6,6 +6,7 @@ import { logger } from '../utils/logger.js';
 // Configurar Cloudinary
 export { cloudinary };
 
+// Aplica las credenciales de Cloudinary leídas del entorno.
 export const cloudinaryConfig = () => {
   cloudinary.config({
     cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
@@ -15,6 +16,7 @@ export const cloudinaryConfig = () => {
 };
 
 // Configurar almacenamiento para multer
+// Carpeta remota, formatos permitidos y límite de 500x500 manteniendo proporción.
 const storage = new CloudinaryStorage({
   cloudinary: cloudinary,
   params: {
@@ -41,6 +43,8 @@ const upload = multer({
 });
 
 // Función para eliminar imagen de Cloudinary
+// @param {string} publicId - Identificador público del recurso
+// @returns {Promise<Object>} Resultado de la destrucción
 export const deleteImage = async (publicId) => {
   try {
     const result = await cloudinary.uploader.destroy(publicId);
@@ -52,6 +56,9 @@ export const deleteImage = async (publicId) => {
 };
 
 // Función para subir imagen a Cloudinary
+// @param {string} filePath - Ruta local del archivo
+// @param {string} folder - Carpeta destino en Cloudinary
+// @returns {Promise<Object>} Resultado de la subida
 export const uploadImageToCloudinary = async (filePath, folder = 'the_brothers_barbershop') => {
   try {
     const result = await cloudinary.uploader.upload(filePath, {

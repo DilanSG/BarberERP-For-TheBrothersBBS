@@ -1,21 +1,35 @@
 import { asyncHandler } from '../middleware/index.js';
 import { Socio, User, logger, AppError } from '../../barrel.js';
 
+// Helper to compute badges without Mongoose instance methods
+function computeSocioBadges(socio) {
+  const badges = [
+    { text: 'Admin', color: 'blue', bgColor: 'bg-blue-400/20', textColor: 'text-blue-400', borderColor: 'border-blue-400/30' }
+  ];
+  if (socio.tipoSocio === 'fundador') {
+    badges.push({ text: 'FS', color: 'gold', bgColor: 'bg-yellow-400/20', textColor: 'text-yellow-400', borderColor: 'border-yellow-400/30', description: 'Socio Fundador' });
+  } else {
+    badges.push({ text: 'S', color: 'gold', bgColor: 'bg-yellow-400/20', textColor: 'text-yellow-400', borderColor: 'border-yellow-400/30', description: 'Socio' });
+  }
+  return badges;
+}
+
 // @desc    Obtener todos los socios activos
 // @route   GET /api/socios
 // @access  Privado
 export const getSocios = asyncHandler(async (req, res) => {
-  logger.info(`Usuario ${req.user.id} obteniendo lista de socios`);
+  logger.debug(`Usuario ${req.user.id} obteniendo lista de socios`);
   
   const socios = await Socio.find({ isActive: true })
     .populate('userId', 'name email role')
     .select('-creadoPor -modificadoPor')
-    .sort({ tipoSocio: -1, createdAt: 1 }); // Fundadores primero
+    .sort({ tipoSocio: -1, createdAt: 1 })
+    .lean();
 
-  // Agregar badges a cada socio
+  // Compute badges without Mongoose instance methods
   const sociosWithBadges = socios.map(socio => ({
-    ...socio.toObject(),
-    badges: socio.getBadges()
+    ...socio,
+    badges: computeSocioBadges(socio)
   }));
 
   const totalPorcentaje = await Socio.getTotalPorcentajeAsignado();
@@ -41,7 +55,7 @@ export const getDistribucion = asyncHandler(async (req, res) => {
     throw new AppError('Debe proporcionar una ganancia total válida', 400);
   }
 
-  logger.info(`Calculando distribución para ganancia total: ${gananciaTotal}`);
+  logger.debug(`Calculando distribución para ganancia total: ${gananciaTotal}`);
   
   const distribucion = await Socio.calcularDistribucion(parseFloat(gananciaTotal));
 
@@ -328,7 +342,7 @@ export const getEstadisticas = asyncHandler(async (req, res) => {
     totalSocios,
     totalPorcentaje,
     porcentajeDisponible: 100 - totalPorcentaje,
-    hayFundador: await Socio.exists({ isFounder: true, isActive: true }),
+    hayFundador: !!(await Socio.exists({ tipoSocio: 'fundador', isActive: true })),
     fechaCreacion: null
   };
 
@@ -352,17 +366,15 @@ export const getCurrentUser = asyncHandler(async (req, res) => {
   const userId = req.user.id;
   
   try {
-    // Obtener usuario básico
-    const user = await User.findById(userId).select('name email role');
-    if (!user) {
-      throw new AppError('Usuario no encontrado', 404);
-    }
+    // Use req.user from auth middleware (already fetched)
+    const user = req.user;
 
     // Verificar si el usuario es socio
     const socio = await Socio.findOne({ 
       userId: userId, 
       isActive: true 
-    }).select('tipoSocio porcentaje isFounder');
+    }).select('tipoSocio porcentaje')
+      .lean();
 
     const userData = {
       id: user._id,
@@ -373,12 +385,12 @@ export const getCurrentUser = asyncHandler(async (req, res) => {
       // Información de socio (si aplica)
       isSocio: !!socio,
       tipoSocio: socio?.tipoSocio || null,
-      isFounder: socio?.isFounder || false,
+      isFounder: socio?.tipoSocio === 'fundador',
       porcentaje: socio?.porcentaje || 0,
-      badges: socio ? socio.getBadges() : []
+      badges: socio ? computeSocioBadges(socio) : []
     };
 
-    logger.info(`Usuario ${userId} obtuvo su información actual: ${socio ? 'Es socio' : 'No es socio'}`);
+    logger.debug(`Usuario ${userId} obtuvo su información actual: ${socio ? 'Es socio' : 'No es socio'}`);
 
     res.status(200).json({
       success: true,

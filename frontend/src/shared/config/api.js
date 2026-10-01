@@ -1,7 +1,5 @@
-/**
- * Configuración dinámica de API para todos los entornos
- * Detecta automáticamente desarrollo, producción y red local
- */
+// Configuración dinámica de API para todos los entornos
+// Detecta automáticamente desarrollo, producción y red local
 
 // Función para detectar la configuración de API apropiada
 const getApiConfig = () => {
@@ -35,7 +33,7 @@ export const config = {
   debugMode: import.meta.env.VITE_DEBUG === 'true',
   logLevel: import.meta.env.VITE_LOG_LEVEL || 'warn',
   
-  // Información de la configuración actual
+  // Información de la configuración actual (para diagnóstico/logs)
   getConnectionInfo: () => ({
     currentHost: window.location.hostname,
     currentPort: window.location.port,

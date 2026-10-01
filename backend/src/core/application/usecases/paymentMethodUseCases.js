@@ -1,90 +1,26 @@
 import { PaymentMethod, Sale, Expense, Appointment, AppError, CommonErrors, logger } from '../../../barrel.js';
 
-/**
- * Use case: Inicializar métodos de pago del sistema
- */
+// Use case: Inicializar métodos de pago del sistema
+// Crea (idempotente con upsert) el método efectivo como único método de sistema.
 export class InitializePaymentMethods {
+  // Crea cash/efectivo si no existe usando $setOnInsert y retorna el conteo
+  // de métodos de sistema. No sobrescribe métodos ya creados.
   static async execute() {
     try {
       logger.info('🔄 Inicializando métodos de pago del sistema...');
       
+      // Único método predeterminado del sistema: efectivo.
+      // El resto de métodos son dinámicos y los crea el administrador.
       const systemMethods = [
         {
           backendId: 'cash',
           name: 'Efectivo',
           description: 'Pago en efectivo',
           color: '#10b981',
-          emoji: '💵',
           category: 'cash',
           isSystem: true,
           displayOrder: 1,
           aliases: ['efectivo']
-        },
-        {
-          backendId: 'tarjeta',
-          name: 'Tarjeta',
-          description: 'Tarjeta débito/crédito',
-          color: '#3b82f6',
-          emoji: '💳',
-          category: 'card',
-          isSystem: true,
-          displayOrder: 2,
-          aliases: ['debit', 'credit', 'card']
-        },
-        {
-          backendId: 'nequi',
-          name: 'Nequi',
-          description: 'Pago por Nequi',
-          color: '#8b5cf6',
-          emoji: '📱',
-          category: 'digital',
-          isSystem: true,
-          displayOrder: 3,
-          aliases: []
-        },
-        {
-          backendId: 'daviplata',
-          name: 'Daviplata',
-          description: 'Pago por Daviplata',
-          color: '#ef4444',
-          emoji: '📱',
-          category: 'digital',
-          isSystem: true,
-          displayOrder: 4,
-          aliases: []
-        },
-        {
-          backendId: 'bancolombia',
-          name: 'Bancolombia',
-          description: 'Transferencia Bancolombia',
-          color: '#f59e0b',
-          emoji: '🏛️',
-          category: 'transfer',
-          isSystem: true,
-          displayOrder: 5,
-          aliases: ['transfer']
-        },
-        {
-          backendId: 'nu',
-          name: 'Nu',
-          description: 'Tarjeta Nu',
-          color: '#8b5cf6',
-          emoji: '💳',
-          category: 'card',
-          isSystem: true,
-          displayOrder: 6,
-          aliases: []
-        },
-        {
-          backendId: 'digital',
-          name: 'Pago Digital',
-          description: 'Otros métodos digitales',
-          color: '#06b6d4',
-          emoji: '💻',
-          category: 'digital',
-          isSystem: true,
-          displayOrder: 7,
-          aliases: []
         }
       ];
 
@@ -107,17 +43,16 @@ export class InitializePaymentMethods {
   }
 }
 
-/**
- * Use case: Obtener todos los métodos de pago activos
- */
+// Use case: Obtener todos los métodos de pago activos
+// Devuelve solo los campos necesarios para la UI (formato frontend).
 export class GetPaymentMethods {
   static async execute() {
     try {
-      logger.info('🔍 Obteniendo métodos de pago activos...');
+      logger.debug('Obteniendo métodos de pago activos...');
       
       const methods = await PaymentMethod.getActiveOrderedMethods();
       
-      logger.info(`✅ Métodos de pago obtenidos: ${methods.length}`);
+      logger.debug(`Métodos de pago obtenidos: ${methods.length}`);
       
       return methods.map(method => ({
         _id: method._id,
@@ -125,7 +60,6 @@ export class GetPaymentMethods {
         name: method.name,
         description: method.description,
         color: method.color,
-        emoji: method.emoji,
         category: method.category,
         isSystem: method.isSystem
       }));
@@ -136,11 +70,10 @@ export class GetPaymentMethods {
   }
 }
 
-/**
- * Use case: Crear un nuevo método de pago
- */
+// Use case: Crear un nuevo método de pago
+// No permite ids duplicados (también captura el índice único de Mongo 11000).
 export class CreatePaymentMethod {
-  static async execute({ backendId, name, description, color, emoji, category }) {
+  static async execute({ backendId, name, description, color, category }) {
     try {
       logger.info(`🆕 Creando método de pago: ${backendId}`);
       
@@ -155,7 +88,6 @@ export class CreatePaymentMethod {
         name,
         description,
         color: color || '#6b7280',
-        emoji: emoji || '💳',
         category: category || 'digital',
         isSystem: false,
         displayOrder: 100
@@ -175,9 +107,9 @@ export class CreatePaymentMethod {
   }
 }
 
-/**
- * Use case: Actualizar un método de pago
- */
+// Use case: Actualizar un método de pago
+// El backendId nunca se modifica: se descarta del payload y se aplican el resto
+// de campos de forma segura (incluido efectivo, que sí puede editarse).
 export class UpdatePaymentMethod {
   static async execute(backendId, updateData) {
     try {
@@ -188,12 +120,9 @@ export class UpdatePaymentMethod {
         throw new AppError('Método de pago no encontrado', 404);
       }
       
-      // No permitir actualizar métodos del sistema
-      if (method.isSystem && !updateData.allowSystemUpdate) {
-        throw new AppError('No se pueden modificar métodos de pago del sistema', 403);
-      }
-      
-      Object.assign(method, updateData);
+      // El backendId nunca se modifica; el resto de campos sí (incluido efectivo)
+      const { backendId: _ignored, allowSystemUpdate: _ignored2, ...safeUpdate } = updateData;
+      Object.assign(method, safeUpdate);
       await method.save();
       
       logger.info(`✅ Método de pago actualizado: ${method.backendId}`);
@@ -205,9 +134,9 @@ export class UpdatePaymentMethod {
   }
 }
 
-/**
- * Use case: Eliminar/desactivar un método de pago
- */
+// Use case: Eliminar/desactivar un método de pago
+// Efectivo es intocable; si el método está referenciado en ventas/gastos/citas
+// y no viene forceDelete=true, rechaza la eliminación con el conteo de uso.
 export class DeletePaymentMethod {
   static async execute(backendId, forceDelete = false) {
     try {
@@ -218,19 +147,9 @@ export class DeletePaymentMethod {
         throw new AppError('Método de pago no encontrado', 404);
       }
       
-      // Verificar si es método del sistema
-      if (method.isSystem) {
-        if (method.backendId === 'cash') {
-          throw new AppError('No se puede eliminar el efectivo - método esencial', 403);
-        }
-        
-        if (!forceDelete) {
-          // Solo desactivar métodos del sistema
-          method.isActive = false;
-          await method.save();
-          logger.info(`🙈 Método de pago del sistema desactivado: ${backendId}`);
-          return { deactivated: true };
-        }
+      // El efectivo es el único método esencial: nunca se elimina
+      if (method.backendId === 'cash') {
+        throw new AppError('No se puede eliminar el efectivo - método esencial', 403);
       }
       
       // Verificar si está en uso
@@ -249,12 +168,10 @@ export class DeletePaymentMethod {
         );
       }
       
-      if (forceDelete || !method.isSystem) {
-        await PaymentMethod.deleteOne({ backendId });
-        logger.info(`🗑️ Método de pago eliminado permanentemente: ${backendId}`);
-        return { deleted: true };
-      }
-      
+      await PaymentMethod.deleteOne({ backendId });
+      logger.info(`🗑️ Método de pago eliminado permanentemente: ${backendId}`);
+      return { deleted: true };
+
     } catch (error) {
       logger.error('❌ Error eliminando método de pago:', error);
       throw error instanceof AppError ? error : new AppError('Error eliminando método de pago', 500);
@@ -262,9 +179,10 @@ export class DeletePaymentMethod {
   }
 }
 
-/**
- * Use case: Normalizar métodos de pago existentes en la BD
- */
+// Use case: Normalizar métodos de pago existentes en la BD
+// Recolecta los valores distintos de paymentMethod en ventas, gastos y citas,
+// mapea cada uno a un backendId canónico y actualiza masivamente; los valores
+// null/undefined/null-string se convierten a 'cash'. Retorna conteo normalizado.
 export class NormalizeExistingPaymentMethods {
   static async execute() {
     try {
@@ -336,9 +254,9 @@ export class NormalizeExistingPaymentMethods {
   }
 }
 
-/**
- * Use case: Validar método de pago
- */
+// Use case: Validar método de pago
+// Retorna false para valores vacíos/nulos; si no, comprueba que exista un
+// método activo con ese backendId o alias. Nunca lanza: ante error retorna false.
 export class ValidatePaymentMethod {
   static async execute(paymentMethod) {
     try {

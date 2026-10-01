@@ -1,8 +1,11 @@
-﻿import { createContext, useContext, useState, useCallback } from 'react';
+﻿// Contexto ligero de inventario: avisa a los componentes cuando se registra una
+// venta para que recarguen stock (patrón trigger + timestamp, sin fetch aquí).
+import { createContext, useContext, useState, useCallback } from 'react';
 
 import logger from '../utils/logger';
 const InventoryContext = createContext();
 
+// Hook de consumo; lanza error si se usa fuera de InventoryProvider
 export const useInventoryRefresh = () => {
   const context = useContext(InventoryContext);
   if (!context) {
@@ -11,6 +14,9 @@ export const useInventoryRefresh = () => {
   return context;
 };
 
+// Provider de inventario.
+// Valor: { refreshTrigger (contador), lastSaleTime (timestamp), notifySale,
+// needsRefresh(componentLastRefresh), markRefreshed() }.
 export const InventoryProvider = ({ children }) => {
   const [refreshTrigger, setRefreshTrigger] = useState(0);
   const [lastSaleTime, setLastSaleTime] = useState(null);
@@ -23,7 +29,7 @@ export const InventoryProvider = ({ children }) => {
     logger.debug('🔄 InventoryContext: Notificando venta, trigger:', refreshTrigger + 1);
   }, [refreshTrigger]);
 
-  // Función para obtener el estado de si necesita recargar
+  // Devuelve true si hubo una venta después del último refresco del componente
   const needsRefresh = useCallback((componentLastRefresh) => {
     if (!lastSaleTime || !componentLastRefresh) return false;
     return lastSaleTime > componentLastRefresh;

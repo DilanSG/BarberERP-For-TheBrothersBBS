@@ -1,6 +1,9 @@
 import { Service, Barber, AppError, logger } from '../../../barrel.js';
 
+// Casos de uso del catálogo de servicios ofrecidos.
+// Cubre CRUD, asignación/remoción de servicios a barberos y estadísticas de uso.
 class ServiceOfferedUseCases {
+  // Lista servicios activos con filtros adicionales; ordena por categoría y nombre.
   static async getAllServices(filters = {}) {
     try {
       const services = await Service.find({ ...filters, isActive: true })
@@ -14,6 +17,7 @@ class ServiceOfferedUseCases {
     }
   }
 
+  // Obtiene un servicio por id; lanza 404 si no existe.
   static async getServiceById(serviceId) {
     try {
       const service = await Service.findById(serviceId);
@@ -27,6 +31,7 @@ class ServiceOfferedUseCases {
     }
   }
 
+  // Crea un servicio validando que el nombre no esté en uso.
   static async createService(serviceData) {
     try {
       // Verificar si ya existe un servicio con el mismo nombre
@@ -45,6 +50,8 @@ class ServiceOfferedUseCases {
     }
   }
 
+  // Actualiza un servicio existente. Si cambia el nombre verifica que no lo
+  // tenga otro servicio; corre validaciones del schema (runValidators).
   static async updateService(serviceId, updateData) {
     try {
       // Verificar que el servicio existe
@@ -73,10 +80,13 @@ class ServiceOfferedUseCases {
     }
   }
 
+  // Baja lógica de un servicio.
+  // Bloquea si hay citas futuras pending/confirmed; si no, lo marca isActive:false,
+  // registra deactivatedAt y lo retira del arreglo services de todos los barberos.
   static async deleteService(serviceId) {
     try {
       // Verificar si el servicio está siendo usado en citas futuras
-      const Appointment = (await import('`../models/Appointment.js')).default;
+      const Appointment = (await import('../../domain/entities/Appointment.js')).default;
       const futureAppointments = await Appointment.countDocuments({
         service: serviceId,
         date: { $gt: new Date() },
@@ -120,6 +130,7 @@ class ServiceOfferedUseCases {
     }
   }
 
+  // Asigna un servicio activo a un barbero si aún no lo tiene.
   static async assignServiceToBarber(barberId, serviceId) {
     try {
       // Verificar que el servicio existe y está activo
@@ -151,10 +162,13 @@ class ServiceOfferedUseCases {
     }
   }
 
+  // Quita un servicio de un barbero.
+  // Bloquea si existen citas futuras de ese barbero para ese servicio; si no,
+  // lo remueve del arreglo con $pull.
   static async removeServiceFromBarber(barberId, serviceId) {
     try {
       // Verificar citas futuras para este servicio y barbero
-      const Appointment = (await import('`../models/Appointment.js')).default;
+      const Appointment = (await import('../../domain/entities/Appointment.js')).default;
       const futureAppointments = await Appointment.countDocuments({
         barber: barberId,
         service: serviceId,
@@ -188,6 +202,7 @@ class ServiceOfferedUseCases {
     }
   }
 
+  // Devuelve los servicios asignados a un barbero (documentos populados).
   static async getServicesByBarber(barberId) {
     try {
       const barber = await Barber.findById(barberId)
@@ -204,6 +219,10 @@ class ServiceOfferedUseCases {
     }
   }
 
+  // Estadísticas de uso por servicio.
+  // Agregación: $lookup con appointments, cuenta citas y suma precios por
+  // servicio, y agrupa por isActive para totales (conteo, precio promedio y
+  // revenue total) por estado. Retorna { byStatus, total }.
   static async getServiceStats() {
     try {
       const stats = await Service.aggregate([
@@ -261,6 +280,8 @@ class ServiceOfferedUseCases {
     }
   }
 
+  // Servicios activos marcados para mostrarse en la página principal
+  // (showInHome), ordenados por fecha de creación descendente.
   static async getServicesForHome() {
     try {
       const services = await Service.find({ 

@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import { format } from 'date-fns';
 import { 
   Plus, 
   DollarSign, 
@@ -6,6 +7,8 @@ import {
   TrendingDown,
   Calendar, 
   CreditCard,
+  Receipt,
+  Layers,
   PieChart,
   BarChart3,
   Settings,
@@ -14,8 +17,9 @@ import {
   X
 } from 'lucide-react';
 import { PageContainer } from '@components/layout/PageContainer';
-import GradientText from '@components/ui/GradientText';
 import GradientButton from '@components/ui/GradientButton';
+import { Reveal, StaggerGrid } from '@components/motion/Reveal';
+import { ReportsSkeleton } from '@components/ui/Skeleton';
 import { FinancialDashboard } from '@components/financial/FinancialDashboard';
 import CashBreakdownModal from '@components/modals/CashBreakdownModal';
 import DigitalPaymentsBreakdownModal from '@components/modals/DigitalPaymentsBreakdownModal';
@@ -37,23 +41,18 @@ import AppointmentsBreakdownModal from '@components/modals/AppointmentsBreakdown
 import useFinancialReports from '@hooks/useFinancialReports';
 import { useRecurringExpenses } from '../../features/expenses/hooks/useRecurringExpenses';
 import { calculator as RecurringExpenseCalculator } from '@shared/recurring-expenses';
-import { format, differenceInCalendarMonths } from 'date-fns';
 import { getCategoryLabel, getPaymentMethodLabel } from '@utils/categoryTranslations';
 
+// Opciones de frecuencia para gastos recurrentes
 const frequencies = [
   { value: 'daily', label: 'Diario' },
   { value: 'weekly', label: 'Semanal' },
   { value: 'monthly', label: 'Mensual' }
 ];
 
-/**
- * Calcula los gastos diarios correctos considerando gastos recurrentes y únicos
- * @param {Array} expenses - Array de gastos únicos del backend
- * @param {Array} recurringExpenses - Array de gastos recurrentes locales  
- * @param {string} startDate - Fecha de inicio
- * @param {string} endDate - Fecha de fin
- * @returns {Object} - { dailyRate, monthlyProjection }
- */
+// Calcula los gastos diarios correctos considerando gastos recurrentes y únicos.
+// Devuelve { dailyRate, monthlyProjection }: el diario reparte los gastos únicos
+// entre los días del período y suma la porción diaria de los recurrentes (/30).
 const calculateCorrectDailyExpenses = (expenses, recurringExpenses, startDate, endDate) => {
   // Calcular total de gastos únicos del período
   const oneTimeExpenses = expenses || [];
@@ -96,10 +95,9 @@ const calculateCorrectDailyExpenses = (expenses, recurringExpenses, startDate, e
   };
 };
 
-/**
- * Página de reportes financieros completa
- * Sistema integral de análisis financiero y gestión de gastos
- */
+// Página de reportes financieros completa.
+// Sistema integral de análisis financiero y gestión de gastos: dashboard,
+// listado/gestión de gastos y análisis con gráficos, todo filtrable por período.
 const Reports = () => {
   // Estados principales
   const [activeTab, setActiveTab] = useState('dashboard');
@@ -125,6 +123,7 @@ const Reports = () => {
   const [showProductsSoldModal, setShowProductsSoldModal] = useState(false);
   const [showServicesBreakdownModal, setShowServicesBreakdownModal] = useState(false);
   const [showAppointmentsModal, setShowAppointmentsModal] = useState(false);
+
   
   // Estados para modal de eliminación
   const [showDeleteExpenseModal, setShowDeleteExpenseModal] = useState(false);
@@ -132,6 +131,7 @@ const Reports = () => {
   const [deleteLoading, setDeleteLoading] = useState(false);
 
   // Hooks principales
+  // useFinancialReports centraliza datos, rango de fechas, cálculos y formatCurrency
   const {
     data: financialData,
     loading: isLoading,
@@ -263,6 +263,7 @@ const Reports = () => {
   }, [refreshData]);
 
   // Handler para clicks en cards del dashboard
+  // Mapea cada card con su modal de desglose correspondiente
   const handleCardClick = (cardId, cardData) => {
     switch (cardId) {
       case 'ingresos':
@@ -294,201 +295,50 @@ const Reports = () => {
         setShowProductsSoldModal(true);
         break;
       case 'one-time':
-        setActiveModal('oneTime');
+        setShowOneTimeExpensesModal(true);
         break;
       case 'recurring':
-        setActiveModal('recurring');
+        setShowRecurringExpensesModal(true);
         break;
       default:
         break;
     }
   };
 
-  // Funciones para calcular métricas de gastos usando datos del backend
-  const getOneTimeExpensesStats = () => {
-    const expenses = financialData?.expenses || [];
-    const oneTimeExpenses = expenses.filter(expense => expense.type === 'one-time');
-    const total = oneTimeExpenses.reduce((sum, expense) => sum + expense.amount, 0);
-    return {
-      count: oneTimeExpenses.length,
-      total
-    };
-  };
+  // ── Métricas de gastos: leen el cálculo canónico del hook (fuente única) ──
+  // Así las cards de Gastos siempre reconcilian: únicos + recurrentes = total.
+  const getOneTimeExpensesStats = () => ({
+    count: financialData?.summary?.oneTimeExpensesCount ?? 0,
+    total: financialData?.summary?.oneTimeExpensesTotal ?? 0,
+  });
 
-  const getRecurringExpensesStats = () => {
-    // ✅ GASTOS RECURRENTES EXISTEN INDEPENDIENTEMENTE DE LAS VENTAS
-    // Solo verificamos si hay gastos recurrentes definidos
-    
-    // ✅ FORZAR CÁLCULO LOCAL SIEMPRE - No usar backend porque envía valores diarios
-    if (!sanitizedRecurringExpenses || sanitizedRecurringExpenses.length === 0) {
-      // Sin gastos recurrentes, el total es 0
-      return { 
-        count: 0, 
-        total: 0, 
-        inferred: false,
-        message: 'Sin gastos recurrentes definidos'
-      };
-    }
-    
-    const activeRecurringExpenses = sanitizedRecurringExpenses.filter(exp => (exp._isActive !== undefined
-      ? exp._isActive
-      : (exp.recurrence?.isActive ?? exp.recurringConfig?.isActive ?? exp.isActive ?? true)));
+  const getRecurringExpensesStats = () => ({
+    count: financialData?.summary?.recurringExpensesCount ?? 0,
+    total: financialData?.summary?.recurringExpensesTotal ?? 0,
+    monthlyTotal: financialData?.summary?.recurringExpensesMonthly ?? 0,
+    calculation: financialData?.summary?.recurringCalculation || 'none',
+    inferred: false,
+  });
 
-    // ✅ USAR LA MISMA LÓGICA QUE EL MODAL: siempre cálculo mensual
-    const monthlyTotal = activeRecurringExpenses.reduce((sum, exp) => {
-      try {
-        // Usar SIEMPRE el cálculo mensual como en el modal
-        return sum + RecurringExpenseCalculator.calculateMonthlyAmount(exp);
-      } catch (e) {
-        console.warn('Error calculando recurrente', exp.description, e.message);
-        return sum;
-      }
-    }, 0);
-
-    // ✅ APLICAR LÓGICA CORRECTA SEGÚN TIPO DE FILTRO
-    const isGeneralFilter = dateRange?.preset === 'all' || dateRange?.preset === 'allData' || !dateRange?.preset;
-    let daysWithData = financialData?.summary?.daysWithData || 0;
-    
-    // Para filtros específicos (día, semana), calcular la porción correspondiente
-    if (!isGeneralFilter) {
-      // ✅ FILTRO ESPECÍFICO: Calcular porción del período filtrado
-      const start = new Date(dateRange.startDate);
-      const end = new Date(dateRange.endDate);
-      const daysInPeriod = Math.ceil((end - start) / (1000 * 60 * 60 * 24)) + 1;
-      
-      // Calcular porción diaria y multiplicar por días del período
-      const dailyPortion = monthlyTotal / 30; // 30 días promedio por mes
-      const periodTotal = dailyPortion * daysInPeriod;
-      
-      return {
-        count: activeRecurringExpenses.length,
-        total: periodTotal,
-        inferred: false,
-        calculation: `period-${daysInPeriod}days`,
-        breakdown: {
-          monthlyAmount: monthlyTotal,
-          dailyPortion: dailyPortion,
-          daysInPeriod: daysInPeriod
-        }
-      };
-    }
-    
-    // ✅ LÓGICA CORRECTA: Calcular meses desde la fecha más antigua con datos
-    let monthsWithData = 1; // Mínimo 1 mes por defecto
-    
-    if (daysWithData > 30) {
-      // Intentar obtener fecha más antigua del backend
-      const oldestDate = financialData?.summary?.oldestDataDate || financialData?.oldestDataDate;
-      
-      if (oldestDate) {
-        // Calcular meses desde la fecha más antigua hasta hoy
-        const startDate = new Date(oldestDate);
-        const today = new Date();
-        
-        // ✅ CÁLCULO CORREGIDO Y PRECISO con date-fns
-        const monthsDiff = differenceInCalendarMonths(today, startDate);
-        monthsWithData = Math.max(1, monthsDiff + 1); // +1 para incluir mes actual
-      } else {
-        // Respaldo: estimar meses basándose en daysWithData distribuidos
-        monthsWithData = Math.max(1, Math.ceil(daysWithData / 15)); // Asumir ~15 días promedio por mes con datos
-      }
-    }
-    
-    if (daysWithData > 30) {
-      // 📊 FILTRO GENERAL: Multiplicar por cantidad de meses transcurridos
-      let monthsToUse = monthsWithData; // Por defecto usar monthsWithData
-      
-      // Si tenemos oldestDate, recalcular monthsDiff para usar el valor correcto
-      const oldestDate = financialData?.summary?.oldestDataDate || financialData?.oldestDataDate;
-      if (oldestDate) {
-        const startDate = new Date(oldestDate);
-        const today = new Date();
-        const monthsDiff = differenceInCalendarMonths(today, startDate);
-        monthsToUse = Math.max(1, monthsDiff); // ✅ USAR monthsDiff sin el +1
-      }
-      
-      const totalForPeriod = monthlyTotal * monthsToUse;
-      
-      return {
-        count: activeRecurringExpenses.length,
-        total: totalForPeriod,
-        inferred: false,
-        calculation: `general-${monthsToUse}months`,
-        breakdown: {
-          monthlyAmount: monthlyTotal,
-          monthsUsed: monthsToUse,
-          daysWithData
-        }
-      };
-    } else {
-      // 📅 FILTRO ESPECÍFICO: Usar valor mensual directo
-      
-      return {
-        count: activeRecurringExpenses.length,
-        total: monthlyTotal,
-        inferred: false,
-        calculation: 'monthly-specific'
-      };
-    }
-  };
-
-  // ✅ NUEVA FUNCIÓN: Para la card de gastos (suma exacta mensual sin multiplicación)
-  const getRecurringExpensesMonthlyStats = () => {
-    // ✅ GASTOS RECURRENTES EXISTEN INDEPENDIENTEMENTE DE LAS VENTAS
-    
-    if (!sanitizedRecurringExpenses || sanitizedRecurringExpenses.length === 0) {
-      return { 
-        count: 0, 
-        total: 0, 
-        inferred: false,
-        message: 'Sin gastos recurrentes definidos'
-      };
-    }
-    
-    const activeRecurringExpenses = sanitizedRecurringExpenses.filter(exp => (exp._isActive !== undefined
-      ? exp._isActive
-      : (exp.recurrence?.isActive ?? exp.recurringConfig?.isActive ?? exp.isActive ?? true)));
-
-    // ✅ SUMA EXACTA: Solo montos mensuales SIN multiplicación
-    const total = activeRecurringExpenses.reduce((sum, exp) => {
-      try {
-        return sum + RecurringExpenseCalculator.calculateMonthlyAmount(exp);
-      } catch (e) {
-        console.warn('Error calculando recurrente', exp.description, e.message);
-        return sum;
-      }
-    }, 0);
-
-    return {
-      count: activeRecurringExpenses.length,
-      total: total, // Suma exacta mensual
-      inferred: false,
-      calculation: 'monthly-sum-exact'
-    };
-  };
+  const getRecurringExpensesMonthlyStats = () => ({
+    count: financialData?.summary?.recurringExpensesCount ?? 0,
+    total: financialData?.summary?.recurringExpensesMonthly ?? 0,
+    inferred: false,
+  });
 
   const getTotalExpensesStats = () => {
-    // Aplicar la lógica correcta:
-    // 1. Gastos one-time del período filtrado
-    // 2. Gastos recurrentes SIEMPRE (independientemente de las ventas)
-    
-    const oneTimeStats = getOneTimeExpensesStats();
-    const hasRevenue = (financialData?.summary?.totalRevenue || 0) > 0;
-    
-    // ✅ SIEMPRE incluir gastos recurrentes - existen independientemente de las ventas
-    const recurringStats = getRecurringExpensesStats();
-    const recurringTotal = recurringStats.total;
-    const recurringCount = recurringStats.count;
-    
+    const oneTime = getOneTimeExpensesStats();
+    const recurring = getRecurringExpensesStats();
     return {
-      count: oneTimeStats.count + recurringCount,
-      total: oneTimeStats.total + recurringTotal,
+      count: oneTime.count + recurring.count,
+      total: financialData?.summary?.totalExpenses ?? (oneTime.total + recurring.total),
       breakdown: {
-        oneTime: oneTimeStats.total,
-        recurring: recurringTotal,
-        hasRevenue,
-        message: 'Gastos normales + recurrentes (siempre incluidos)'
-      }
+        oneTime: oneTime.total,
+        recurring: recurring.total,
+        recurringMonthly: recurring.monthlyTotal,
+        hasRevenue: (financialData?.summary?.totalRevenue || 0) > 0,
+        message: 'Gastos normales + recurrentes del período',
+      },
     };
   };
 
@@ -579,6 +429,7 @@ const Reports = () => {
     })).sort((a,b) => b.value - a.value);
   }, [financialData]); // ✅ Removida dependencia de safePaymentMethods
 
+  // Datos para el gráfico de ingresos por tipo (cortes, productos y citas)
   const revenueTypeChartData = useMemo(() => {
     const summary = financialData?.summary || {};
     const data = [
@@ -623,6 +474,7 @@ const Reports = () => {
     });
   }, [financialData]);
 
+  // Totales de la semana actual (total y promedio diario) para la cabecera del gráfico
   const weeklyTotals = useMemo(() => {
     const total = weeklyRevenueData.reduce((s, d) => s + d.value, 0);
     const avg = weeklyRevenueData.length > 0 ? total / weeklyRevenueData.length : 0;
@@ -630,7 +482,8 @@ const Reports = () => {
   }, [weeklyRevenueData]);
 
   // Componente interno simple para gráfico de barras vertical
-  const VerticalBarChart = ({ data, currency = false, height = 180, barColorClass = 'from-blue-500 to-indigo-500' }) => {
+  // Calcula la altura proporcional de cada barra y habilita scroll si hay muchas
+  const VerticalBarChart = ({ data, currency = false, height = 180, barColorClass = 'from-blue-500 to-blue-500' }) => {
     if (!data || data.length === 0) {
       return <div className="text-center text-gray-500 text-sm py-8">Sin datos</div>;
     }
@@ -641,41 +494,18 @@ const Reports = () => {
     const containerClass = needsScroll 
       ? "flex items-end justify-start gap-6 px-3" // Aumenté gap y padding
       : "flex items-end justify-between px-4";
-    const itemWidth = needsScroll ? "80px" : "auto"; // Aumenté ancho para texto
+    const itemWidth = needsScroll ? "64px" : "auto";
     const itemClass = needsScroll 
       ? "flex flex-col items-center group" 
       : "flex flex-col items-center group flex-1";
     
-    // Estilos para scrollbar personalizada
-    const scrollbarStyle = {
-      scrollbarWidth: 'thin',
-      scrollbarColor: '#4B5563 transparent',
-      '&::-webkit-scrollbar': {
-        height: '6px',
-      },
-      '&::-webkit-scrollbar-track': {
-        background: 'rgba(31, 41, 55, 0.3)',
-        borderRadius: '3px',
-      },
-      '&::-webkit-scrollbar-thumb': {
-        background: 'rgba(75, 85, 99, 0.6)',
-        borderRadius: '3px',
-      },
-      '&::-webkit-scrollbar-thumb:hover': {
-        background: 'rgba(107, 114, 128, 0.8)',
-      }
-    };
-    
     return (
-      <div 
-        className="w-full overflow-x-auto"
-        style={scrollbarStyle}
-      >
+      <div className="w-full overflow-x-auto custom-scrollbar">
         <div 
           className={containerClass}
           style={{ 
             height: `${height}px`, 
-            minWidth: needsScroll ? `${data.length * 86}px` : '100%' // Aumenté espaciado
+            minWidth: needsScroll ? `${data.length * 64}px` : '100%'
           }}
         >
           {data.map(d => {
@@ -690,7 +520,7 @@ const Reports = () => {
                   <div 
                     className={`bg-gradient-to-t ${barColorClass} transition-all duration-500 rounded-t-sm border border-white/20 relative group-hover:scale-105 shadow-lg`} 
                     style={{ 
-                      width: needsScroll ? '40px' : '50%', // Barras un poco más anchas
+                      width: needsScroll ? '32px' : '50%',
                       height: `${pct}%`,
                       minHeight: '4px'
                     }}
@@ -700,7 +530,7 @@ const Reports = () => {
                     </div>
                   </div>
                 </div>
-                <div className="mt-3 text-center px-1" style={{ width: needsScroll ? '78px' : 'auto', minHeight: '42px' }}> {/* Altura mínima fija para texto */}
+                <div className="mt-3 text-center px-1" style={{ width: needsScroll ? '64px' : 'auto', minHeight: '42px' }}> {/* Altura mínima fija para texto */}
                   <div style={{ minHeight: '28px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                     <span 
                       className="block text-[10px] sm:text-xs text-gray-300 font-medium leading-tight break-words hyphens-auto" 
@@ -714,7 +544,7 @@ const Reports = () => {
                       {d.label}
                     </span>
                   </div>
-                  <span className="block text-[9px] text-gray-500 mt-1">
+                  <span className="block text-[10px] sm:text-xs text-gray-500 mt-1">
                     {currency ? formatCurrency(d.value) : d.value.toLocaleString('es-CO')}
                   </span>
                 </div>
@@ -751,6 +581,7 @@ const Reports = () => {
   ];
 
   // Handlers para gastos
+  // Guarda (crea o actualiza) un gasto; hoy solo maneja gastos recurrentes
   const handleSaveExpense = async (expenseData) => {
     try {
       if (editingExpense) {
@@ -777,6 +608,7 @@ const Reports = () => {
     }
   };
 
+  // Abre el modal de edición adecuado según el tipo de gasto
   const handleEditExpense = (expense) => {
     setEditingExpense(expense);
     // Determinar qué modal abrir basado en el tipo de gasto
@@ -787,13 +619,13 @@ const Reports = () => {
     }
   };
 
-  // Función para manejar la creación de gastos
+  // Inicia la creación de un gasto abriendo el selector de tipo
   const handleCreateExpense = () => {
     setEditingExpense(null);
     setShowExpenseTypeSelector(true);
   };
 
-  // Función para manejar selección de tipo de gasto
+  // Abre el modal correspondiente según el tipo elegido (recurrente o único)
   const handleExpenseTypeSelect = (type) => {
     setShowExpenseTypeSelector(false);
     if (type === 'recurring') {
@@ -804,6 +636,7 @@ const Reports = () => {
   };
 
   // Función para cerrar todos los modales de gastos
+  // Cierra selector y formularios, y limpia el gasto en edición
   const closeExpenseModals = () => {
     setShowExpenseTypeSelector(false);
     setShowOneTimeExpenseModal(false);
@@ -811,6 +644,7 @@ const Reports = () => {
     setEditingExpense(null);
   };
 
+  // Busca el gasto (único o recurrente) y abre el modal de confirmación de borrado
   const handleDeleteExpense = async (expenseId) => {
     // Buscar el gasto en ambas listas para poder mostrarlo en el modal
     const oneTimeExpenses = financialData?.expenses || [];
@@ -823,6 +657,7 @@ const Reports = () => {
     }
   };
 
+  // Confirma la eliminación del gasto y refresca los datos financieros
   const handleConfirmDeleteExpense = async (expenseId) => {
     setDeleteLoading(true);
     try {
@@ -837,12 +672,14 @@ const Reports = () => {
     }
   };
 
+  // Cierra el modal de eliminación y limpia el estado asociado
   const handleCloseDeleteModal = () => {
     setShowDeleteExpenseModal(false);
     setExpenseToDelete(null);
     setDeleteLoading(false);
   };
 
+  // Activa/desactiva un gasto recurrente (sin borrar su configuración)
   const handleToggleRecurring = async (expenseId, isActive) => {
     try {
       await toggleRecurringStatus(expenseId, isActive);
@@ -851,6 +688,7 @@ const Reports = () => {
     }
   };
 
+  // Refresca a la vez los reportes financieros y los gastos automáticos
   const handleRefreshAll = async () => {
     try {
       await Promise.all([
@@ -863,6 +701,7 @@ const Reports = () => {
   };
 
   // Renderizar contenido por tab
+  // dashboard = resumen financiero; expenses = gestión de gastos; analysis = gráficos y KPIs
   const renderTabContent = () => {
     switch (activeTab) {
       case 'dashboard':
@@ -888,19 +727,19 @@ const Reports = () => {
             {/* Métricas rápidas */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-6 lg:gap-8">
               <div 
-                className="group relative bg-white/5 border border-white/10 rounded-xl p-4 sm:p-6 backdrop-blur-sm shadow-xl shadow-blue-500/20 overflow-hidden cursor-pointer hover:bg-white/10 transition-all duration-300"
+                className="group relative bg-white/[0.03] border border-white/[0.12] rounded-2xl p-5 sm:p-6 backdrop-blur-sm shadow-soft overflow-hidden cursor-pointer hover:bg-white/[0.06] hover:border-white/20 hover:-translate-y-0.5 transition-all duration-300"
                 onClick={() => setShowRevenueBreakdownModal(true)}
               >
                 <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/[2.5%] to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-1000 ease-out rounded-xl"></div>
                 
                 <div className="relative">
                   <div className="flex items-center gap-3 mb-3">
-                    <div className="p-2 bg-gradient-to-r from-green-600/20 to-blue-600/20 rounded-lg border border-green-500/20">
-                      <BarChart3 className="w-5 h-5 text-green-400" />
+                    <div className="p-2 bg-gradient-to-r from-emerald-600/20 to-blue-600/20 rounded-lg border border-emerald-500/20">
+                      <BarChart3 className="w-5 h-5 text-emerald-400" />
                     </div>
                     <h3 className="text-sm font-semibold text-gray-300">Desglose de Ingresos</h3>
                   </div>
-                  <p className="text-xl font-bold text-green-400">
+                  <p className="text-2xl sm:text-3xl font-bold text-emerald-400">
                     {formatCurrency(safeBasicMetrics?.totalRevenue || 0)}
                   </p>
                   <p className="text-xs text-gray-400 mt-1">Click para ver detalles</p>
@@ -908,19 +747,19 @@ const Reports = () => {
               </div>
 
               <div 
-                className="group relative bg-white/5 border border-white/10 rounded-xl p-4 sm:p-6 backdrop-blur-sm shadow-xl shadow-blue-500/20 overflow-hidden cursor-pointer hover:scale-105 transition-all duration-300"
+                className="group relative bg-white/[0.03] border border-white/[0.12] rounded-2xl p-5 sm:p-6 backdrop-blur-sm shadow-soft overflow-hidden cursor-pointer hover:scale-[1.02] hover:border-white/20 transition-all duration-300"
                 onClick={() => handleCardClick('gastos')}
               >
                 <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/[2.5%] to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-1000 ease-out rounded-xl"></div>
                 
                 <div className="relative">
                   <div className="flex items-center gap-3 mb-3">
-                    <div className="p-2 bg-gradient-to-r from-red-600/20 to-orange-600/20 rounded-lg border border-red-500/20">
+                    <div className="p-2 bg-gradient-to-r from-red-600/20 to-amber-600/20 rounded-lg border border-red-500/20">
                       <TrendingUp className="w-5 h-5 text-red-400" />
                     </div>
                     <h3 className="text-sm font-semibold text-gray-300">Gastos del Período</h3>
                   </div>
-                  <p className="text-xl font-bold text-red-400">
+                  <p className="text-2xl sm:text-3xl font-bold text-red-400">
                     {formatCurrency(getTotalExpensesStats().total)}
                   </p>
                   <p className="text-xs text-gray-400 mt-1">
@@ -936,19 +775,19 @@ const Reports = () => {
               </div>
 
               <div 
-                className="group relative bg-white/5 border border-white/10 rounded-xl p-4 sm:p-6 backdrop-blur-sm shadow-xl shadow-blue-500/20 overflow-hidden cursor-pointer hover:scale-105 transition-all duration-300"
+                className="group relative bg-white/[0.03] border border-white/[0.12] rounded-2xl p-5 sm:p-6 backdrop-blur-sm shadow-soft overflow-hidden cursor-pointer hover:scale-[1.02] hover:border-white/20 transition-all duration-300"
                 onClick={() => handleCardClick('tipos')}
               >
                 <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/[2.5%] to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-1000 ease-out rounded-xl"></div>
                 
                 <div className="relative">
                   <div className="flex items-center gap-3 mb-3">
-                    <div className="p-2 bg-gradient-to-r from-purple-600/20 to-blue-600/20 rounded-lg border border-purple-500/20">
-                      <TrendingUp className="w-5 h-5 text-purple-400" />
+                    <div className="p-2 bg-gradient-to-r from-brand-500/20 to-blue-600/20 rounded-lg border border-brand-400/20">
+                      <TrendingUp className="w-5 h-5 text-brand-300" />
                     </div>
                     <h3 className="text-sm font-semibold text-gray-300">Tipos de Ingresos</h3>
                   </div>
-                  <p className="text-xl font-bold text-purple-400">
+                  <p className="text-2xl sm:text-3xl font-bold text-brand-300">
                     {formatCurrency(safeBasicMetrics?.totalRevenue || 0)}
                   </p>
                   <p className="text-xs text-gray-400 mt-1">Ver desglose por fuente</p>
@@ -966,19 +805,19 @@ const Reports = () => {
               
               {/* Total de Gastos del Período */}
               <div 
-                className="group relative bg-white/5 border border-white/10 rounded-xl p-4 sm:p-6 backdrop-blur-sm shadow-xl shadow-blue-500/20 overflow-hidden cursor-pointer hover:bg-white/10 transition-all duration-300"
+                className="group relative bg-white/[0.03] border border-white/[0.12] rounded-2xl p-5 sm:p-6 backdrop-blur-sm shadow-soft overflow-hidden cursor-pointer hover:bg-white/[0.06] hover:border-white/20 hover:-translate-y-0.5 transition-all duration-300"
                 onClick={() => setShowExpensesBreakdownModal(true)}
               >
                 <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/[2.5%] to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-1000 ease-out rounded-xl"></div>
                 
                 <div className="relative">
                   <div className="flex items-center gap-3 mb-3">
-                    <div className="p-2 bg-gradient-to-r from-red-600/20 to-orange-600/20 rounded-lg border border-red-500/20">
+                    <div className="p-2 bg-gradient-to-r from-red-600/20 to-amber-600/20 rounded-lg border border-red-500/20">
                       <TrendingDown className="w-5 h-5 text-red-400" />
                     </div>
                     <h3 className="text-sm font-semibold text-gray-300">Total Gastos</h3>
                   </div>
-                  <p className="text-xl font-bold text-red-400">
+                  <p className="text-2xl sm:text-3xl font-bold text-red-400">
                     {formatCurrency(getTotalExpensesStats().total)}
                   </p>
                   <p className="text-xs text-gray-400 mt-1">
@@ -995,19 +834,19 @@ const Reports = () => {
 
               {/* Gastos Únicos */}
               <div 
-                className="group relative bg-white/5 border border-white/10 rounded-xl p-4 sm:p-6 backdrop-blur-sm shadow-xl shadow-green-500/20 overflow-hidden cursor-pointer hover:bg-white/10 transition-all duration-300"
+                className="group relative bg-white/[0.03] border border-white/[0.12] rounded-2xl p-5 sm:p-6 backdrop-blur-sm shadow-xl shadow-soft overflow-hidden cursor-pointer hover:bg-white/[0.06] hover:border-white/20 hover:-translate-y-0.5 transition-all duration-300"
                 onClick={() => setShowOneTimeExpensesModal(true)}
               >
                 <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/[2.5%] to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-1000 ease-out rounded-xl"></div>
                 
                 <div className="relative">
                   <div className="flex items-center gap-3 mb-3">
-                    <div className="p-2 bg-gradient-to-r from-green-600/20 to-blue-600/20 rounded-lg border border-green-500/20">
-                      <Calendar className="w-5 h-5 text-green-400" />
+                    <div className="p-2 bg-gradient-to-r from-emerald-600/20 to-blue-600/20 rounded-lg border border-emerald-500/20">
+                      <Calendar className="w-5 h-5 text-emerald-400" />
                     </div>
                     <h3 className="text-sm font-semibold text-gray-300">Gastos Únicos</h3>
                   </div>
-                  <p className="text-xl font-bold text-green-400">
+                  <p className="text-2xl sm:text-3xl font-bold text-emerald-400">
                     {formatCurrency(getOneTimeExpensesStats().total)}
                   </p>
                   <p className="text-xs text-gray-400 mt-1">
@@ -1018,44 +857,33 @@ const Reports = () => {
 
               {/* Gastos Recurrentes */}
               <div 
-                className="group relative bg-white/5 border border-white/10 rounded-xl p-4 sm:p-6 backdrop-blur-sm shadow-xl shadow-purple-500/20 overflow-hidden cursor-pointer hover:bg-white/10 transition-all duration-300"
+                className="group relative bg-white/[0.03] border border-white/[0.12] rounded-2xl p-5 sm:p-6 backdrop-blur-sm shadow-xl shadow-soft overflow-hidden cursor-pointer hover:bg-white/[0.06] hover:border-white/20 hover:-translate-y-0.5 transition-all duration-300"
                 onClick={() => setShowRecurringExpensesModal(true)}
               >
                 <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/[2.5%] to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-1000 ease-out rounded-xl"></div>
                 
                 <div className="relative">
                   <div className="flex items-center gap-3 mb-3">
-                    <div className="p-2 bg-gradient-to-r from-purple-600/20 to-pink-600/20 rounded-lg border border-purple-500/20">
-                      <Repeat className="w-5 h-5 text-purple-400" />
+                    <div className="p-2 bg-gradient-to-r from-brand-500/20 to-red-600/20 rounded-lg border border-brand-400/20">
+                      <Repeat className="w-5 h-5 text-brand-300" />
                     </div>
                     <h3 className="text-sm font-semibold text-gray-300">Gastos Recurrentes</h3>
                   </div>
-                  {(() => { const stats = getRecurringExpensesMonthlyStats(); return (
+                  {(() => { const stats = getRecurringExpensesStats(); return (
                     <>
-                      <p className="text-xl font-bold text-purple-400">
+                      <p className="text-2xl sm:text-3xl font-bold text-brand-300">
                         {formatCurrency(stats.total)}
                       </p>
-                      <p className="text-xs text-gray-400 mt-1 flex items-center gap-1">
-                        {(() => {
-                          const hasRevenue = (financialData?.summary?.totalRevenue || 0) > 0;
-                          if (!hasRevenue) {
-                            return (
-                              <>
-                                <span className="text-orange-400">Pausados (sin ventas)</span>
-                                <span className="px-2 py-0.5 rounded-full bg-orange-500/20 border border-orange-500/30 text-[10px] text-orange-300">$0</span>
-                              </>
-                            );
-                          }
-                          return (
-                            <>
-                              {stats.count} activo{stats.count !== 1 ? 's' : ''}
-                              {stats.inferred && (
-                                <span className="px-2 py-0.5 rounded-full bg-purple-500/20 border border-purple-500/30 text-[10px] text-purple-300" title="Monto inferido a partir de la diferencia entre gastos totales y únicos">inferido</span>
-                              )}
-                              <span className="px-2 py-0.5 rounded-full bg-green-500/20 border border-green-500/30 text-[10px] text-green-300">Con ventas</span>
-                            </>
-                          );
-                        })()}
+                      <p className="text-xs text-gray-400 mt-1 flex flex-wrap items-center gap-1.5">
+                        <span className="px-2 py-0.5 rounded-full bg-brand-400/20 border border-brand-400/30 text-[10px] text-brand-200">
+                          {formatCurrency(stats.monthlyTotal)}/mes
+                        </span>
+                        <span>{stats.count} activo{stats.count !== 1 ? 's' : ''}</span>
+                        {String(stats.calculation || '').startsWith('general') && (
+                          <span className="px-2 py-0.5 rounded-full bg-blue-500/20 border border-blue-500/30 text-[10px] text-blue-300">
+                            prorrateado del período
+                          </span>
+                        )}
                       </p>
                     </>
                   ); })()}
@@ -1064,7 +892,7 @@ const Reports = () => {
 
               {/* Nuevo Gasto */}
               <div 
-                className="group relative bg-white/5 border border-white/10 rounded-xl p-4 sm:p-6 backdrop-blur-sm shadow-xl shadow-orange-500/20 overflow-hidden cursor-pointer hover:scale-105 transition-all duration-300"
+                className="group relative bg-white/[0.03] border border-white/[0.12] rounded-2xl p-5 sm:p-6 backdrop-blur-sm shadow-xl shadow-amber-500/20 overflow-hidden cursor-pointer hover:scale-[1.02] hover:border-white/20 transition-all duration-300"
                 onClick={() => {
                   handleCreateExpense();
                 }}
@@ -1073,12 +901,12 @@ const Reports = () => {
                 
                 <div className="relative">
                   <div className="flex items-center gap-3 mb-3">
-                    <div className="p-2 bg-gradient-to-r from-orange-600/20 to-yellow-600/20 rounded-lg border border-orange-500/20">
-                      <Plus className="w-5 h-5 text-orange-400" />
+                    <div className="p-2 bg-gradient-to-r from-amber-600/20 to-amber-700/20 rounded-lg border border-amber-500/20">
+                      <Plus className="w-5 h-5 text-amber-400" />
                     </div>
                     <h3 className="text-sm font-semibold text-gray-300">Nuevo Gasto</h3>
                   </div>
-                  <p className="text-xl font-bold text-orange-400">
+                  <p className="text-2xl sm:text-3xl font-bold text-amber-400">
                     Crear
                   </p>
                   <p className="text-xs text-gray-400 mt-1">Click para agregar</p>
@@ -1088,10 +916,18 @@ const Reports = () => {
 
             {/* Lista de gastos recientes - estilo simplificado */}
             <div className="space-y-6">
-              <div className="flex items-center justify-between">
-                <h3 className="text-lg font-semibold bg-gradient-to-r from-orange-400 via-red-400 to-orange-500 bg-clip-text text-transparent">Gastos Recientes</h3>
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 rounded-xl bg-amber-500/10 border border-amber-500/20">
+                    <Receipt className="w-4 h-4 sm:w-5 sm:h-5 text-amber-400" />
+                  </div>
+                  <div>
+                    <h3 className="text-sm sm:text-base font-semibold text-white">Gastos Recientes</h3>
+                    <p className="text-[11px] sm:text-xs text-gray-500">Últimos movimientos del período</p>
+                  </div>
+                </div>
                 {(financialData?.expenses?.length || 0) > 0 && (
-                  <span className="text-sm text-gray-400">
+                  <span className="text-xs sm:text-sm text-gray-400">
                     {financialData?.expenses?.length || 0} gasto{(financialData?.expenses?.length || 0) !== 1 ? 's' : ''} registrado{(financialData?.expenses?.length || 0) !== 1 ? 's' : ''}
                   </span>
                 )}
@@ -1103,7 +939,7 @@ const Reports = () => {
                     <div key={i} className="animate-pulse bg-white/5 border border-white/10 rounded-xl p-4 h-16"></div>
                   ))
                 ) : (financialData?.expenses?.length || 0) === 0 ? (
-                  <div className="group relative bg-white/5 border border-white/10 rounded-xl p-6 backdrop-blur-sm shadow-xl shadow-blue-500/20 overflow-hidden text-center">
+                  <div className="group relative bg-white/[0.03] border border-white/[0.12] rounded-2xl p-5 sm:p-6 backdrop-blur-sm shadow-soft overflow-hidden text-center">
                     <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/[2.5%] to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-1000 ease-out rounded-xl"></div>
                     
                     <div className="relative">
@@ -1116,31 +952,31 @@ const Reports = () => {
                   (financialData?.expenses || []).slice(0, 10).map((expense) => (
                     <div
                       key={expense._id}
-                      className="group relative bg-white/5 border border-white/10 rounded-xl p-4 backdrop-blur-sm shadow-xl shadow-blue-500/20 hover:bg-white/8 transition-all duration-300 overflow-hidden"
+                      className="group relative bg-white/[0.03] border border-white/[0.12] rounded-2xl p-4 sm:p-5 hover:bg-white/[0.06] hover:border-white/20 transition-all duration-300 overflow-hidden"
                     >
-                      <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/[2.5%] to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-1000 ease-out rounded-xl"></div>
-                      
-                      <div className="relative flex items-center justify-between">
+                      <div className="relative flex items-center justify-between gap-4">
                         <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-3 mb-1">
-                            <h4 className="font-semibold text-white text-sm truncate">{expense.description}</h4>
-                            <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-red-500/20 text-red-300 border border-red-500/30 flex-shrink-0">
-                              {getCategoryLabel(expense.category)} {/* ✅ Usar función de traducción */}
+                          <div className="flex items-center gap-2.5 mb-1.5">
+                            <h4 className="font-medium text-white text-sm truncate">{expense.description}</h4>
+                            <span className="px-2 py-0.5 rounded-md text-[11px] font-medium bg-white/[0.06] text-gray-300 border border-white/[0.08] flex-shrink-0">
+                              {getCategoryLabel(expense.category)}
                             </span>
                           </div>
-                          
-                          <div className="flex items-center gap-4 text-xs text-gray-400">
-                            <span className="text-gray-300">
+
+                          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-gray-500">
+                            <span className="inline-flex items-center gap-1.5">
+                              <Calendar className="w-3.5 h-3.5" />
                               {formatDate(expense.date)}
                             </span>
-                            <span>
-                              {getPaymentMethodLabel(expense.paymentMethod)} {/* ✅ Usar función de traducción */}
+                            <span className="inline-flex items-center gap-1.5">
+                              <CreditCard className="w-3.5 h-3.5" />
+                              {getPaymentMethodLabel(expense.paymentMethod)}
                             </span>
                           </div>
                         </div>
 
-                        <div className="text-right ml-4">
-                          <span className="font-bold text-red-400 text-base">
+                        <div className="text-right flex-shrink-0">
+                          <span className="font-semibold text-red-400 text-sm sm:text-base tabular-nums">
                             {formatCurrency(expense.amount)}
                           </span>
                         </div>
@@ -1167,31 +1003,31 @@ const Reports = () => {
         return (
           <div className="space-y-8">
             {/* KPIs Principales Simplificados */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <div className="bg-white/5 border border-white/10 rounded-xl p-4 backdrop-blur-sm">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
+              <div className="bg-white/[0.03] border border-white/[0.12] rounded-2xl p-4 sm:p-5 backdrop-blur-sm">
                 <div className="flex items-center justify-between mb-2">
-                  <span className="text-xs text-gray-400">Margen Bruto</span>
-                  <TrendingUp className="w-4 h-4 text-green-400" />
+                  <span className="text-xs font-medium text-gray-400">Margen Bruto</span>
+                  <span className="p-1.5 rounded-lg bg-emerald-500/10 border border-emerald-500/20"><TrendingUp className="w-3.5 h-3.5 text-emerald-400" /></span>
                 </div>
-                <p className="text-lg font-semibold text-green-400">
+                <p className="text-xl sm:text-2xl font-bold text-emerald-400">
                   {safeBasicMetrics.totalRevenue > 0 ? (((safeBasicMetrics.totalRevenue - safeBasicMetrics.totalExpenses) / safeBasicMetrics.totalRevenue) * 100).toFixed(1) + '%' : '0%'}
                 </p>
                 <p className="text-[10px] text-gray-500 mt-1">{safeBasicMetrics.totalRevenue > safeBasicMetrics.totalExpenses ? 'Rentable' : 'En pérdidas'}</p>
               </div>
-              <div className="bg-white/5 border border-white/10 rounded-xl p-4 backdrop-blur-sm">
+              <div className="bg-white/[0.03] border border-white/[0.12] rounded-2xl p-4 sm:p-5 backdrop-blur-sm">
                 <div className="flex items-center justify-between mb-2">
-                  <span className="text-xs text-gray-400">Ratio Gastos</span>
-                  <BarChart3 className="w-4 h-4 text-purple-400" />
+                  <span className="text-xs font-medium text-gray-400">Ratio Gastos</span>
+                  <span className="p-1.5 rounded-lg bg-brand-500/10 border border-brand-500/20"><BarChart3 className="w-3.5 h-3.5 text-brand-300" /></span>
                 </div>
-                <p className="text-lg font-semibold text-purple-400">{safeBasicMetrics.totalRevenue > 0 ? ((safeBasicMetrics.totalExpenses / safeBasicMetrics.totalRevenue) * 100).toFixed(1) + '%' : '0%'}</p>
+                <p className="text-xl sm:text-2xl font-bold text-brand-300">{safeBasicMetrics.totalRevenue > 0 ? ((safeBasicMetrics.totalExpenses / safeBasicMetrics.totalRevenue) * 100).toFixed(1) + '%' : '0%'}</p>
                 <p className="text-[10px] text-gray-500 mt-1">% sobre ingresos</p>
               </div>
-              <div className="bg-white/5 border border-white/10 rounded-xl p-4 backdrop-blur-sm">
+              <div className="bg-white/[0.03] border border-white/[0.12] rounded-2xl p-4 sm:p-5 backdrop-blur-sm">
                 <div className="flex items-center justify-between mb-2">
-                  <span className="text-xs text-gray-400">Gasto Diario</span>
-                  <Calendar className="w-4 h-4 text-red-400" />
+                  <span className="text-xs font-medium text-gray-400">Gasto Diario</span>
+                  <span className="p-1.5 rounded-lg bg-red-500/10 border border-red-500/20"><Calendar className="w-3.5 h-3.5 text-red-400" /></span>
                 </div>
-                <p className="text-lg font-semibold text-red-400">
+                <p className="text-xl sm:text-2xl font-bold text-red-400">
                   {(() => {
                     // ✅ CÁLCULO CORRECTO: Considerar gastos recurrentes por su frecuencia real
                     const calculation = calculateCorrectDailyExpenses(
@@ -1205,12 +1041,12 @@ const Reports = () => {
                 </p>
                 <p className="text-[10px] text-gray-500 mt-1">Promedio periodo</p>
               </div>
-              <div className="bg-white/5 border border-white/10 rounded-xl p-4 backdrop-blur-sm">
+              <div className="bg-white/[0.03] border border-white/[0.12] rounded-2xl p-4 sm:p-5 backdrop-blur-sm">
                 <div className="flex items-center justify-between mb-2">
-                  <span className="text-xs text-gray-400">Gasto Top</span>
-                  <PieChart className="w-4 h-4 text-yellow-400" />
+                  <span className="text-xs font-medium text-gray-400">Gasto Top</span>
+                  <span className="p-1.5 rounded-lg bg-amber-500/10 border border-amber-500/20"><PieChart className="w-3.5 h-3.5 text-amber-400" /></span>
                 </div>
-                <p className="text-sm font-semibold text-yellow-400 truncate" title={categoryChartData[0]?.label || 'N/A'}>{categoryChartData[0]?.label || 'N/A'}</p>
+                <p className="text-base sm:text-lg font-bold text-amber-400 truncate" title={categoryChartData[0]?.label || 'N/A'}>{categoryChartData[0]?.label || 'N/A'}</p>
                 <p className="text-[10px] text-gray-500 mt-1">Principal categoría</p>
               </div>
             </div>
@@ -1218,52 +1054,64 @@ const Reports = () => {
             {/* Gráficos de Barras */}
             <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
               {/* Categorías de gastos (vertical) */}
-              <div className="group relative bg-white/5 border border-white/10 rounded-xl p-6 backdrop-blur-sm shadow-xl shadow-blue-500/20 overflow-hidden">
+              <div className="group relative bg-white/[0.03] border border-white/[0.12] rounded-2xl p-5 sm:p-6 backdrop-blur-sm shadow-soft overflow-hidden">
                 <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/[2.5%] to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-1000 ease-out rounded-xl"></div>
                 
                 <div className="relative">
                   <div className="flex items-center justify-between mb-4">
-                    <h3 className="text-sm font-semibold bg-gradient-to-r from-red-400 via-orange-400 to-red-500 bg-clip-text text-transparent">Gastos por Categoría</h3>
+                    <div className="flex items-center gap-2">
+                      <span className="p-1.5 rounded-lg bg-red-500/10 border border-red-500/20"><PieChart className="w-3.5 h-3.5 text-red-400" /></span>
+                      <h3 className="text-sm font-semibold text-white">Gastos por Categoría</h3>
+                    </div>
                     <span className="text-[10px] text-gray-500">Top 10</span>
                   </div>
-                  <VerticalBarChart data={categoryChartData} currency barColorClass="from-red-500 to-orange-500" />
+                  <VerticalBarChart data={categoryChartData} currency barColorClass="from-red-500 to-amber-500" />
                 </div>
               </div>
               
               {/* Métodos de pago (ingresos) */}
-              <div className="group relative bg-white/5 border border-white/10 rounded-xl p-6 backdrop-blur-sm shadow-xl shadow-blue-500/20 overflow-hidden">
+              <div className="group relative bg-white/[0.03] border border-white/[0.12] rounded-2xl p-5 sm:p-6 backdrop-blur-sm shadow-soft overflow-hidden">
                 <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/[2.5%] to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-1000 ease-out rounded-xl"></div>
                 
                 <div className="relative">
                   <div className="flex items-center justify-between mb-4">
-                    <h3 className="text-sm font-semibold bg-gradient-to-r from-blue-400 via-indigo-400 to-blue-500 bg-clip-text text-transparent">Ingresos por Método de Pago</h3>
+                    <div className="flex items-center gap-2">
+                      <span className="p-1.5 rounded-lg bg-blue-500/10 border border-blue-500/20"><CreditCard className="w-3.5 h-3.5 text-blue-400" /></span>
+                      <h3 className="text-sm font-semibold text-white">Ingresos por Método de Pago</h3>
+                    </div>
                     <span className="text-[10px] text-gray-500">Total</span>
                   </div>
-                  <VerticalBarChart data={paymentMethodChartData} currency barColorClass="from-blue-500 to-indigo-500" />
+                  <VerticalBarChart data={paymentMethodChartData} currency barColorClass="from-blue-500 to-blue-500" />
                 </div>
               </div>
             </div>
 
             {/* Semana actual y tipos de ingreso */}
             <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
-              <div className="xl:col-span-2 group relative bg-white/5 border border-white/10 rounded-xl p-6 backdrop-blur-sm shadow-xl shadow-blue-500/20 overflow-hidden">
+              <div className="xl:col-span-2 group relative bg-white/[0.03] border border-white/[0.12] rounded-2xl p-5 sm:p-6 backdrop-blur-sm shadow-soft overflow-hidden">
                 <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/[2.5%] to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-1000 ease-out rounded-xl"></div>
                 
                 <div className="relative">
-                  <div className="flex items-center justify-between mb-4">
-                    <h3 className="text-sm font-semibold bg-gradient-to-r from-emerald-400 via-teal-400 to-emerald-500 bg-clip-text text-transparent">Ventas Semana Actual (Lun-Dom)</h3>
-                    <div className="text-[10px] text-gray-500">Total {formatCurrency(weeklyTotals.total)} | Prom {formatCurrency(weeklyTotals.avg)}</div>
+                  <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className="p-1.5 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex-shrink-0"><Calendar className="w-3.5 h-3.5 text-emerald-400" /></span>
+                      <h3 className="text-sm font-semibold text-white">Ventas Semana Actual (Lun-Dom)</h3>
+                    </div>
+                    <div className="text-[10px] sm:text-xs text-gray-500">Total {formatCurrency(weeklyTotals.total)} | Prom {formatCurrency(weeklyTotals.avg)}</div>
                   </div>
-                  <VerticalBarChart data={weeklyRevenueData} currency barColorClass="from-emerald-500 to-teal-500" />
+                  <VerticalBarChart data={weeklyRevenueData} currency barColorClass="from-emerald-500 to-emerald-500" />
                 </div>
               </div>
               
-              <div className="group relative bg-white/5 border border-white/10 rounded-xl p-6 backdrop-blur-sm shadow-xl shadow-blue-500/20 overflow-hidden flex flex-col">
+              <div className="group relative bg-white/[0.03] border border-white/[0.12] rounded-2xl p-5 sm:p-6 backdrop-blur-sm shadow-soft overflow-hidden flex flex-col">
                 <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/[2.5%] to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-1000 ease-out rounded-xl"></div>
                 
                 <div className="relative flex-1">
-                  <h3 className="text-sm font-semibold bg-gradient-to-r from-fuchsia-400 via-pink-400 to-fuchsia-500 bg-clip-text text-transparent mb-4">Ingresos por Tipo</h3>
-                  <MiniVerticalBarChart data={revenueTypeChartData} barColorClass="from-fuchsia-500 to-pink-500" />
+                  <div className="flex items-center gap-2 mb-4">
+                    <span className="p-1.5 rounded-lg bg-brand-500/10 border border-brand-500/20"><Layers className="w-3.5 h-3.5 text-brand-300" /></span>
+                    <h3 className="text-sm font-semibold text-white">Ingresos por Tipo</h3>
+                  </div>
+                  <MiniVerticalBarChart data={revenueTypeChartData} barColorClass="from-brand-400 to-red-500" />
                   <div className="mt-4 space-y-1 text-[11px] text-gray-400">
                     {revenueTypeChartData.map(r => (
                       <div key={r.key} className="flex justify-between">
@@ -1278,16 +1126,16 @@ const Reports = () => {
 
             {/* Recomendaciones rápidas */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className="bg-green-500/10 border border-green-500/20 rounded-lg p-4 text-xs">
-                <p className="text-green-300 font-medium mb-1">Margen</p>
+              <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-lg p-4 text-xs">
+                <p className="text-emerald-300 font-medium mb-1">Margen</p>
                 <p className="text-gray-300">{safeBasicMetrics.totalRevenue > 0 ? (((safeBasicMetrics.totalRevenue - safeBasicMetrics.totalExpenses) / safeBasicMetrics.totalRevenue) * 100).toFixed(1) : '0'}% actual. {safeBasicMetrics.totalRevenue > safeBasicMetrics.totalExpenses ? 'Mantén control de gastos.' : 'Ajustar gastos o aumentar ingresos.'}</p>
               </div>
               <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg p-4 text-xs">
                 <p className="text-blue-300 font-medium mb-1">Concentración</p>
                 <p className="text-gray-300">Top método pago: {paymentMethodChartData[0]?.label || 'N/A'} ({paymentMethodChartData[0]?.value ? ((paymentMethodChartData[0].value / (financialData?.summary?.totalRevenue || 1)) * 100).toFixed(1) : 0}%)</p>
               </div>
-              <div className="bg-yellow-500/10 border border-yellow-500/20 rounded-lg p-4 text-xs">
-                <p className="text-yellow-300 font-medium mb-1">Proyección</p>
+              <div className="bg-amber-500/10 border border-amber-500/20 rounded-lg p-4 text-xs">
+                <p className="text-amber-300 font-medium mb-1">Proyección</p>
                 <p className="text-gray-300">Gasto mensual estimado: {(() => {
                   // ✅ CÁLCULO CORRECTO: Proyección mensual basada en frecuencias reales
                   const calculation = calculateCorrectDailyExpenses(
@@ -1308,59 +1156,85 @@ const Reports = () => {
     }
   };
 
+  // Etiqueta legible del período activo para el subtítulo de la página
+  const periodLabel = (() => {
+    const r = dateRange;
+    const fmt = (d) => new Date(d).toLocaleDateString('es-CO');
+    if (!r?.startDate) return 'Todos los registros';
+    if (r.preset === 'all' || r.preset === 'allData') {
+      return `Todos los registros · ${fmt(r.startDate)} - ${fmt(r.endDate || r.startDate)}`;
+    }
+    if (r.preset === 'year') {
+      return `Último año · ${fmt(r.startDate)} - ${fmt(r.endDate || r.startDate)}`;
+    }
+    return `${fmt(r.startDate)} - ${fmt(r.endDate || r.startDate)}`;
+  })();
+
   return (
     <PageContainer>
-      <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-6 space-y-8">
-        {/* Filtros de fecha - Arriba y compactos */}
-        <SimpleDateFilter
-          dateRange={uiDateRange}
-          onPresetChange={handleLegacyPreset}
-          onCustomDateChange={(start, end) => handleLegacyCustomRange({ startDate: start, endDate: end })}
-          loading={financialLoading}
-        />
+      <div className="relative z-10 w-full pb-6 space-y-8">
+        {/* ── Top bar: título + filtros ── */}
+        <div className="flex flex-col lg:flex-row lg:items-center gap-4">
+          {/* Título */}
+          <div className="flex items-center gap-3 flex-shrink-0">
+            <div className="p-2.5 rounded-xl bg-brand-500/10 border border-brand-500/20">
+              <BarChart3 className="w-5 h-5 sm:w-6 sm:h-6 text-brand-300" />
+            </div>
+            <div>
+              <h1 className="text-lg sm:text-xl lg:text-2xl font-bold text-white">Control Financiero</h1>
+              <p className="text-xs sm:text-sm text-gray-400 hidden sm:block">
+                {periodLabel} · Resumen, gastos y análisis
+              </p>
+            </div>
+          </div>
 
-        {/* Navegación por tabs compacta como ProfileEdit */}
-        <div className="flex justify-center mb-8">
-          <div className="bg-white/5 border border-white/10 rounded-xl backdrop-blur-sm shadow-xl shadow-blue-500/20 p-1 flex flex-col sm:flex-row gap-1 w-full max-w-xs sm:max-w-md">
-            {tabs.map(({ id, label, icon: Icon }) => (
-              <button
-                key={id}
-                type="button"
-                onClick={() => setActiveTab(id)}
-                className={`group relative px-3 py-2.5 rounded-xl border cursor-pointer transition-all duration-300 hover:scale-105 overflow-hidden backdrop-blur-sm flex-1 flex items-center justify-center gap-1.5 ${
-                  activeTab === id
-                    ? 'border-blue-500/50 bg-blue-500/10 shadow-xl shadow-blue-500/20'
-                    : 'border-white/20 bg-white/5 hover:border-white/40 hover:bg-white/10'
-                }`}
-              >
-                <Icon size={14} className={`transition-all duration-300 ${
-                  activeTab === id ? 'text-blue-300' : 'text-white'
-                }`} />
-                <span className={`font-medium text-xs sm:text-xs whitespace-nowrap ${
-                  activeTab === id ? 'text-blue-300' : 'text-white'
-                }`}>{label}</span>
-              </button>
-            ))}
+          {/* Filtros de fecha (a la derecha, fluidos) */}
+          <div className="flex-1 min-w-0">
+            <SimpleDateFilter
+              className="w-full lg:max-w-3xl lg:ml-auto"
+              fluid
+              dateRange={uiDateRange}
+              onPresetChange={handleLegacyPreset}
+              onCustomDateChange={(start, end) => handleLegacyCustomRange({ startDate: start, endDate: end })}
+              loading={financialLoading}
+            />
           </div>
         </div>
 
-        {/* Botones de acción globales */}
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
-          <div className="flex items-center gap-3">
-            {(financialError || expensesError) && (
-              <div className="px-4 py-2 bg-red-500/20 border border-red-500/30 rounded-lg text-red-300 text-sm">
-                {financialError || expensesError}
-              </div>
-            )}
-          </div>
-          
-          <div className="flex gap-3">
-            {/* Botones de acción removidos según solicitud */}
-          </div>
+        {/* Tabs alineados a la izquierda */}
+        <div className="flex flex-wrap gap-1 p-1 rounded-xl bg-white/5 border border-white/10 backdrop-blur-sm shadow-soft w-full sm:w-fit">
+          {tabs.map(({ id, label, icon: Icon }) => (
+            <button
+              key={id}
+              type="button"
+              onClick={() => setActiveTab(id)}
+              className={`group relative px-3.5 py-2.5 rounded-lg border cursor-pointer transition-all duration-300 overflow-hidden flex items-center justify-center gap-1.5 ${
+                activeTab === id
+                  ? 'border-blue-500/50 bg-blue-500/10 shadow-soft'
+                  : 'border-transparent hover:border-white/20 hover:bg-white/5'
+              }`}
+            >
+              <Icon size={14} className={`transition-all duration-300 ${
+                activeTab === id ? 'text-blue-300' : 'text-gray-300'
+              }`} />
+              <span className={`font-medium text-xs whitespace-nowrap ${
+                activeTab === id ? 'text-blue-300' : 'text-gray-200'
+              }`}>{label}</span>
+            </button>
+          ))}
         </div>
+
+        {/* Errores */}
+        {/* Muestra el primer error disponible (reportes financieros o gastos) */}
+        {(financialError || expensesError) && (
+          <div className="px-4 py-2 bg-red-500/10 border border-red-500/25 rounded-xl text-red-300 text-sm">
+            {financialError || expensesError}
+          </div>
+        )}
 
         {/* Contenido de la tab activa */}
-        {renderTabContent()}
+        {/* Skeleton en la primera carga; después renderiza el tab seleccionado */}
+        {financialLoading && !financialData?.summary ? <ReportsSkeleton /> : renderTabContent()}
 
         {/* Modales de gastos */}
         <ExpenseTypeSelector
@@ -1535,6 +1409,7 @@ const Reports = () => {
 export default Reports;
 
 // Utilidad local para formatear fechas si no viene de otro hook
+// Devuelve la fecha en formato yyyy-MM-dd o cadena vacía si es inválida
 const formatDate = (d) => {
   if (!d) return '';
   try {

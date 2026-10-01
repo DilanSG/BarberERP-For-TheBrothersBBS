@@ -3,85 +3,62 @@ import { logger } from '../utils/logger.js';
 
 // Lista de dominios permitidos
 const allowedOrigins = [
-  // Desarrollo local
-  'http://localhost:5173',          
+  'http://localhost:5173',
   'http://localhost:5174',
   'http://localhost:3000',
-  
-  // Producción - Vercel (sin slash final)
   'https://the-bro-barbers.vercel.app',
-  
-  // GitHub Pages (backup)
   'https://dilansg.github.io',
-  
-  // Variable de entorno personalizada
   process.env.FRONTEND_URL,
   process.env.ALLOWED_ORIGINS?.split(',')
 ].flat().filter(Boolean);
 
-// Función para verificar si es una IP local válida en puerto 5173/5174
+// Cache de resultados de IPs locales para evitar regex en cada request
+const localIPCache = new Set();
+
+// Verifica si un origin corresponde a una IP privada de desarrollo con puerto de Vite.
+// Guarda en caché los que ya validó para evitar repetir las regex en cada request.
 const isValidLocalIP = (origin) => {
   if (!origin) return false;
-  
-  logger.debug('🔍 Verificando IP local:', origin);
-  
-  // Patrón más simple y robusto para IPs locales con puertos 5173/5174
+
+  if (localIPCache.has(origin)) return true;
+
   const patterns = [
-    /^http:\/\/10\.\d{1,3}\.\d{1,3}\.\d{1,3}:(5173|5174)$/,           // 10.x.x.x
-    /^http:\/\/172\.(1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3}:(5173|5174)$/, // 172.16-31.x.x
-    /^http:\/\/192\.168\.\d{1,3}\.\d{1,3}:(5173|5174)$/,             // 192.168.x.x
-    /^http:\/\/127\.\d{1,3}\.\d{1,3}\.\d{1,3}:(5173|5174)$/          // 127.x.x.x
+    /^http:\/\/10\.\d{1,3}\.\d{1,3}\.\d{1,3}:(5173|5174)$/,
+    /^http:\/\/172\.(1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3}:(5173|5174)$/,
+    /^http:\/\/192\.168\.\d{1,3}\.\d{1,3}:(5173|5174)$/,
+    /^http:\/\/127\.\d{1,3}\.\d{1,3}\.\d{1,3}:(5173|5174)$/
   ];
-  
-  const isValid = patterns.some(pattern => pattern.test(origin));
-  logger.debug(`🎯 IP ${origin} es válida:`, isValid);
-  
-  return isValid;
+
+  if (patterns.some(p => p.test(origin))) {
+    localIPCache.add(origin);
+    return true;
+  }
+
+  return false;
 };
 
-// Configuración de CORS
+// Opciones de CORS: permite el listado de origins y las IPs locales de desarrollo;
+// las peticiones sin origin (mobile/postman) también se aceptan.
 export const corsOptions = {
   origin: function (origin, callback) {
-    logger.debug('🌐 CORS: Verificando origen:', origin);
-    
-    // Permitir requests sin origin (como mobile apps, postman o desarrollo local)
-    if (!origin) {
-      logger.debug('✅ CORS: Permitiendo request sin origin');
-      callback(null, true);
-      return;
+    // Sin origin = permitido (mobile, postman, server-to-server)
+    if (!origin) return callback(null, true);
+
+    if (allowedOrigins.includes(origin) || isValidLocalIP(origin)) {
+      return callback(null, true);
     }
-    
-    // Verificar orígenes explícitamente permitidos
-    if (allowedOrigins.includes(origin)) {
-      logger.debug('✅ CORS: Origen en lista permitida:', origin);
-      callback(null, true);
-      return;
-    }
-    
-    // Verificar IPs locales dinámicamente
-    if (isValidLocalIP(origin)) {
-      logger.debug('✅ CORS: Permitiendo acceso desde IP local válida:', origin);
-      callback(null, true);
-      return;
-    }
-    
-    // Debug para orígenes rechazados
-    logger.warn('❌ CORS: Origen no permitido:', origin);
-    logger.debug('📝 CORS: Orígenes permitidos:', allowedOrigins);
+
+    logger.warn(`CORS bloqueado: ${origin}`);
     callback(new Error('No permitido por CORS'));
   },
-  credentials: true, // Permitir cookies y autenticación
-  optionsSuccessStatus: 200, // Para navegadores legacy
-  exposedHeaders: ['Authorization'], // Exponer headers personalizados
+  credentials: true,
+  optionsSuccessStatus: 200,
+  exposedHeaders: ['Authorization'],
 };
 
-// Middleware de CORS
 export const corsMiddleware = cors(corsOptions);
 
-// Función para configurar CORS dinámicamente
 export const configureCors = (app) => {
   app.use(corsMiddleware);
-
-  // Manejar preflight requests
   app.options('*', corsMiddleware);
 };

@@ -1,10 +1,10 @@
-﻿import { useEffect, useState, useCallback } from 'react';
+﻿// Hooks de PWA: registra el Service Worker, gestiona instalación/actualizaciones,
+// estado online/offline, caché offline, compartir y utilidades del navegador.
+import { useEffect, useState, useCallback } from 'react';
 
 import logger from '../utils/logger';
-/**
- * Hook para gestión completa de PWA
- * Maneja Service Worker, instalación, actualizaciones y estado offline
- */
+// Hook para gestión completa de PWA
+// Maneja Service Worker, instalación, actualizaciones y estado offline
 export const usePWA = () => {
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [isInstallable, setIsInstallable] = useState(false);
@@ -22,6 +22,8 @@ export const usePWA = () => {
     }
   }, []);
 
+  // Registra /sw.js con scope '/', detecta nuevas versiones y recarga la página
+  // cuando el Service Worker nuevo toma el control (controllerchange).
   const registerServiceWorker = async () => {
     try {
       setSWStatus('registering');
@@ -63,7 +65,8 @@ export const usePWA = () => {
     }
   };
 
-  // Manejar actualizaciones de SW
+  // Activa la versión nueva: pide al worker en espera que haga SKIP_WAITING.
+  // La recarga final la dispara el listener de controllerchange.
   const updateServiceWorker = useCallback(() => {
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.getRegistration().then(registration => {
@@ -149,7 +152,8 @@ export const usePWA = () => {
     };
   }, []);
 
-  // Obtener información del caché
+  // Pide al Service Worker (MessageChannel) el listado/tamaño de la caché offline.
+  // Devuelve null si no hay SW activo.
   const getCacheInfo = useCallback(async () => {
     if ('serviceWorker' in navigator) {
       const registration = await navigator.serviceWorker.getRegistration();
@@ -173,7 +177,7 @@ export const usePWA = () => {
     return null;
   }, []);
 
-  // Limpiar caché
+  // Pide al Service Worker que vacíe la caché offline (devuelve éxito/false)
   const clearCache = useCallback(async () => {
     if ('serviceWorker' in navigator) {
       const registration = await navigator.serviceWorker.getRegistration();
@@ -198,7 +202,7 @@ export const usePWA = () => {
     return false;
   }, []);
 
-  // Verificar si hay contenido cacheado para una URL
+  // Verificar si hay contenido cacheado para una URL (caché 'tbb-v1.0.0' del SW)
   const isCached = useCallback(async (url) => {
     if ('caches' in window) {
       const cache = await caches.open('tbb-v1.0.0');
@@ -311,9 +315,7 @@ export const usePWA = () => {
   };
 };
 
-/**
- * Hook especializado para notificaciones push (futuro)
- */
+// Hook especializado para notificaciones push (futuro)
 export const usePushNotifications = () => {
   const [isSupported, setIsSupported] = useState(false);
   const [permission, setPermission] = useState('default');

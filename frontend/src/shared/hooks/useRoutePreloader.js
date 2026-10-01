@@ -1,18 +1,19 @@
-﻿import { useEffect, useCallback } from 'react';
+﻿// Hooks de precarga y performance de navegación: importa en segundo plano los
+// chunks de las rutas probables según el rol y la ruta actual, y expone helpers
+// de navegación optimizada.
+import { useEffect, useCallback } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 
 import logger from '../utils/logger';
-/**
- * Hook para precargar rutas frecuentes de forma inteligente
- * Mejora la performance cargando componentes antes de navegar
- */
+// Hook para precargar rutas frecuentes de forma inteligente
+// Mejora la performance cargando componentes antes de navegar
 export const useRoutePreloader = () => {
   const location = useLocation();
   const navigate = useNavigate();
   const { user } = useAuth();
 
-  // Mapeo de rutas frecuentes por rol
+  // Mapeo de rutas frecuentes por rol (usadas por la precarga en background)
   const getFrequentRoutes = useCallback(() => {
     const commonRoutes = ['/barbers', '/appointment'];
     
@@ -43,14 +44,16 @@ export const useRoutePreloader = () => {
     }
   }, [user]);
 
-  // Función para precargar un componente dinámicamente
+  // Importa dinámicamente el chunk de una ruta sin navegar (code-splitting).
+  // Usa requestIdleCallback (o setTimeout 100ms) para no competir con la carga
+  // inicial; los errores de import se ignoran (la ruta se cargará al navegar).
   const preloadRoute = useCallback(async (route) => {
     try {
       // Map de rutas a imports dinámicos
       const routeImports = {
 
         '/barbers': () => import('../../pages/PublicBarbers'),
-        '/appointment': () => import('../../pages/Appointment'),
+        '/appointment': () => import('../../features/appointments/AppointmentRouter'),
         '/profile': () => import('../../pages/Profile'),
         '/admin/barbers': () => import('../../features/admin/AdminBarbers'),
         '/admin/services': () => import('../../features/admin/AdminServices'),
@@ -95,7 +98,7 @@ export const useRoutePreloader = () => {
       '/profile': ['/profile-edit', '/appointment'] // Perfil -> editar o citas
     };
 
-    // Precargar rutas predichas
+    // Precargar rutas predichas (a los 2s, sin interferir con la carga inicial)
     const predictedRoutes = predictions[currentPath] || [];
     predictedRoutes.forEach(route => {
       setTimeout(() => preloadRoute(route), 2000); // Delay de 2s para no interferir con carga inicial
@@ -112,7 +115,8 @@ export const useRoutePreloader = () => {
     }, 5000); // Delay de 5s para rutas frecuentes
   }, [location.pathname, preloadRoute, getFrequentRoutes]);
 
-  // Precargar en hover (para enlaces importantes)
+  // Precargar en hover (para enlaces importantes).
+  // Devuelve props listas para esparcir en un elemento: { onMouseEnter }.
   const preloadOnHover = useCallback((route) => {
     return {
       onMouseEnter: () => {
@@ -138,9 +142,7 @@ export const useRoutePreloader = () => {
   };
 };
 
-/**
- * Hook para medir performance de navegación
- */
+// Hook para medir performance de navegación
 export const useNavigationPerformance = () => {
   const location = useLocation();
 
@@ -166,9 +168,8 @@ export const useNavigationPerformance = () => {
   }, [location.pathname]);
 };
 
-/**
- * Hook para navegación optimizada con preloading
- */
+// Hook para navegación optimizada con preloading.
+// Devuelve navigate (precarga el chunk y navega a los 50ms) y navigateImmediate.
 export const useOptimizedNavigation = () => {
   const navigate = useNavigate();
   const { preloadRoute } = useRoutePreloader();

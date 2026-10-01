@@ -1,16 +1,14 @@
-/**
- * Servicio de Generación de Facturas
- * Genera facturas en formato HTML para visualización en navegador
- */
+// Servicio de Generación de Facturas
+// Genera facturas en formato HTML para visualización en navegador
 
 import { getBusinessInfo } from '../../config/printer.config.js';
 import { logger } from '../shared/utils/logger.js';
 
-/**
- * Generar HTML de factura para mostrar en navegador
- * @param {Object} invoiceData - Datos de la factura
- * @returns {string} HTML de la factura
- */
+// Generar HTML de factura para mostrar en navegador
+// Valida que la factura tenga número y construye el documento con estilos inline
+// e información de negocio/cliente/barbero obtenida del printer.config.
+// @param {Object} invoiceData - Datos de la factura
+// @returns {string} HTML de la factura
 export const generateInvoiceHTML = (invoiceData) => {
   try {
     logger.info('🔵 INICIO generateInvoiceHTML', { 
@@ -617,12 +615,12 @@ export const generateInvoiceHTML = (invoiceData) => {
   }
 };
 
-/**
- * Generar datos formateados para la factura
- * @param {Object} invoice - Documento de factura de la DB
- * @param {Object} sale - Venta asociada
- * @returns {Object} Datos formateados
- */
+// Generar datos formateados para la factura
+// Combina servicios y productos de la venta en una lista de items homogénea
+// y calcula subtotal, descuento, IVA (0 por ahora) y total.
+// @param {Object} invoice - Documento de factura de la DB
+// @param {Object} sale - Venta asociada
+// @returns {Object} Datos formateados
 export const formatInvoiceData = (invoice, sale) => {
   const items = [];
   

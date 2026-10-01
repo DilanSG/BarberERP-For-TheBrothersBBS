@@ -1,4 +1,5 @@
 ﻿import { asyncHandler } from '../middleware/index.js';
+import { deleteFromCloudinary } from '../middleware/upload.js';
 import { AppError, User, Barber, Appointment, logger } from '../../barrel.js';
 import { now } from '../../shared/utils/dateUtils.js';
 import BarberUseCases from '../../core/application/usecases/BarberUseCases.js';
@@ -549,15 +550,14 @@ export const updateMainBarberStatus = asyncHandler(async (req, res) => {
 
   // 🧹 LIMPIAR CACHÉ DE BARBEROS de forma específica y rápida
   try {
-    // Importar el módulo de caché de forma dinámica
-    const { memoryCache } = await import('../utils/cache.js');
-    
+    // Importar el servicio de caché de forma dinámica
+    const cacheService = (await import('../../core/application/usecases/CacheUseCases.js')).default;
+
     // Limpiar específicamente las entradas de barberos
-    const cacheKeys = memoryCache.keys();
-    const barberKeys = cacheKeys.filter(key => key.includes('barbers'));
-    
+    const barberKeys = cacheService.keys().filter(key => key.includes('barbers'));
+
     barberKeys.forEach(key => {
-      memoryCache.del(key);
+      cacheService.del(key);
     });
     
     logger.info('Caché de barberos limpiado', { keysCleared: barberKeys.length });

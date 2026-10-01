@@ -3,10 +3,8 @@ import { logger } from '../shared/utils/logger.js';
 import { AppError } from '../shared/utils/errors.js';
 import { formatInColombiaTime } from '../shared/utils/dateUtils.js';
 
-/**
- * Servicio de impresión térmica
- * Compatible con impresoras ESC/POS (Epson TM-T20II y similares)
- */
+// Servicio de impresión térmica
+// Compatible con impresoras ESC/POS (Epson TM-T20II y similares)
 class PrinterService {
   constructor() {
     this.printer = null;
@@ -14,11 +12,9 @@ class PrinterService {
     this.config = null;
   }
 
-  /**
-   * Conectar a la impresora
-   * @param {Object} config - Configuración de la impresora
-   * @returns {Promise<boolean>}
-   */
+  // Conectar a la impresora
+  // @param {Object} config - Configuración de la impresora
+  // @returns {Promise<boolean>}
   async connectPrinter(config) {
     try {
       // Configuración por defecto para Epson TM-T20II
@@ -77,10 +73,9 @@ class PrinterService {
     }
   }
 
-  /**
-   * Probar conexión con la impresora
-   * @returns {Promise<boolean>}
-   */
+  // Probar conexión con la impresora
+  // Nota: solo limpia el buffer local; no hace una verificación de red real.
+  // @returns {Promise<boolean>}
   async testConnection() {
     try {
       if (!this.printer) {
@@ -96,11 +91,11 @@ class PrinterService {
     }
   }
 
-  /**
-   * Imprimir factura
-   * @param {Object} invoiceData - Datos formateados de la factura
-   * @returns {Promise<boolean>}
-   */
+  // Imprimir factura
+  // Espera datos ya formateados (business, invoice, barber, client, items, totals, payment)
+  // y emite los comandos ESC/POS en el orden: encabezado, items, totales, pago, pie.
+  // @param {Object} invoiceData - Datos formateados de la factura
+  // @returns {Promise<boolean>}
   async printInvoice(invoiceData) {
     try {
       if (!this.isConnected || !this.printer) {
@@ -267,10 +262,8 @@ class PrinterService {
     }
   }
 
-  /**
-   * Imprimir test
-   * @returns {Promise<boolean>}
-   */
+  // Imprimir test
+  // @returns {Promise<boolean>}
   async printTest() {
     try {
       if (!this.isConnected || !this.printer) {
@@ -323,10 +316,8 @@ class PrinterService {
     }
   }
 
-  /**
-   * Abrir cajón de dinero
-   * @returns {Promise<boolean>}
-   */
+  // Abrir cajón de dinero
+  // @returns {Promise<boolean>}
   async openCashDrawer() {
     try {
       if (!this.isConnected || !this.printer) {
@@ -345,9 +336,7 @@ class PrinterService {
     }
   }
 
-  /**
-   * Desconectar impresora
-   */
+  // Desconectar impresora
   async disconnectPrinter() {
     try {
       if (this.printer) {
@@ -366,10 +355,8 @@ class PrinterService {
     }
   }
 
-  /**
-   * Obtener estado de la impresora
-   * @returns {Object}
-   */
+  // Obtener estado de la impresora
+  // @returns {Object}
   getStatus() {
     return {
       connected: this.isConnected,
@@ -380,11 +367,9 @@ class PrinterService {
     };
   }
 
-  /**
-   * Formatear cantidad como dinero (pesos colombianos)
-   * @param {number} amount - Monto
-   * @returns {string}
-   */
+  // Formatear cantidad como dinero (pesos colombianos)
+  // @param {number} amount - Monto
+  // @returns {string}
   formatMoney(amount) {
     return `$${amount.toLocaleString('es-CO', {
       minimumFractionDigits: 0,

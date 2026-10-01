@@ -5,15 +5,14 @@ import {
 } from 'lucide-react';
 import { useNavigationAnalytics } from '../../hooks/useNavigationAnalytics';
 
-/**
- * Dashboard de analytics de navegación
- * Solo visible para administradores en modo desarrollo
- */
+// Dashboard de analytics de navegación.
+// Solo visible en desarrollo (se activa con Ctrl+Shift+A); refresca cada 5s.
 const AnalyticsDashboard = ({ isVisible, onToggle }) => {
   const { getAnalytics, cleanup } = useNavigationAnalytics();
   const [analytics, setAnalytics] = useState({});
   const [refreshKey, setRefreshKey] = useState(0);
 
+  // Refresca las métricas cada 5s mientras el panel está visible.
   useEffect(() => {
     if (!isVisible) return;
 
@@ -28,10 +27,12 @@ const AnalyticsDashboard = ({ isVisible, onToggle }) => {
     return () => clearInterval(interval);
   }, [isVisible, getAnalytics, refreshKey]);
 
+  // Fuerza un refresco inmediato incrementando refreshKey.
   const handleRefresh = () => {
     setRefreshKey(prev => prev + 1);
   };
 
+  // Limpia los datos persistidos de analytics (con confirmación).
   const handleCleanup = () => {
     if (window.confirm('¿Limpiar datos de analytics?')) {
       cleanup();
@@ -39,6 +40,7 @@ const AnalyticsDashboard = ({ isVisible, onToggle }) => {
     }
   };
 
+  // Helpers de formato para tiempos y porcentajes.
   const formatTime = (ms) => {
     if (!ms) return '0s';
     if (ms < 1000) return `${Math.round(ms)}ms`;
@@ -52,17 +54,17 @@ const AnalyticsDashboard = ({ isVisible, onToggle }) => {
   if (!isVisible) return null;
 
   return (
-    <div className="fixed top-4 left-4 z-50 bg-black/90 backdrop-blur-md border border-purple-500/30 rounded-xl max-w-sm w-80 shadow-2xl max-h-[80vh] overflow-y-auto custom-scrollbar">
+    <div className="fixed top-4 left-4 z-50 bg-black/90 backdrop-blur-md border border-brand-400/30 rounded-xl max-w-sm w-80 shadow-2xl max-h-[80vh] overflow-y-auto custom-scrollbar">
       {/* Header */}
-      <div className="flex items-center justify-between p-4 border-b border-purple-500/20">
+      <div className="flex items-center justify-between p-4 border-b border-brand-400/20">
         <div className="flex items-center space-x-2">
-          <BarChart3 className="w-5 h-5 text-purple-400" />
+          <BarChart3 className="w-5 h-5 text-brand-300" />
           <span className="text-sm font-semibold text-white">Navigation Analytics</span>
         </div>
         <div className="flex items-center space-x-1">
           <button
             onClick={handleRefresh}
-            className="p-1 hover:bg-purple-500/20 rounded text-purple-400 hover:text-purple-300 transition-colors"
+            className="p-1 hover:bg-brand-400/20 rounded text-brand-300 hover:text-brand-200 transition-colors"
             title="Refresh"
           >
             <RefreshCw className="w-3 h-3" />
@@ -97,30 +99,30 @@ const AnalyticsDashboard = ({ isVisible, onToggle }) => {
             </span>
           </div>
 
-          <div className="bg-green-500/10 rounded-lg p-3 border border-green-500/20">
+          <div className="bg-emerald-500/10 rounded-lg p-3 border border-emerald-500/20">
             <div className="flex items-center space-x-2 mb-1">
-              <Route className="w-3 h-3 text-green-400" />
-              <span className="text-xs text-green-300">Pageviews</span>
+              <Route className="w-3 h-3 text-emerald-400" />
+              <span className="text-xs text-emerald-300">Pageviews</span>
             </div>
             <span className="text-lg font-bold text-white">
               {analytics.overview?.totalPageviews || 0}
             </span>
           </div>
 
-          <div className="bg-purple-500/10 rounded-lg p-3 border border-purple-500/20">
+          <div className="bg-brand-400/10 rounded-lg p-3 border border-brand-400/20">
             <div className="flex items-center space-x-2 mb-1">
-              <Clock className="w-3 h-3 text-purple-400" />
-              <span className="text-xs text-purple-300">Avg. Time</span>
+              <Clock className="w-3 h-3 text-brand-300" />
+              <span className="text-xs text-brand-200">Avg. Time</span>
             </div>
             <span className="text-sm font-bold text-white">
               {formatTime(analytics.overview?.averageSessionDuration)}
             </span>
           </div>
 
-          <div className="bg-orange-500/10 rounded-lg p-3 border border-orange-500/20">
+          <div className="bg-amber-500/10 rounded-lg p-3 border border-amber-500/20">
             <div className="flex items-center space-x-2 mb-1">
-              <TrendingUp className="w-3 h-3 text-orange-400" />
-              <span className="text-xs text-orange-300">Bounce</span>
+              <TrendingUp className="w-3 h-3 text-amber-400" />
+              <span className="text-xs text-amber-300">Bounce</span>
             </div>
             <span className="text-sm font-bold text-white">
               {formatPercentage(analytics.overview?.bounceRate)}
@@ -129,10 +131,10 @@ const AnalyticsDashboard = ({ isVisible, onToggle }) => {
         </div>
 
         {/* Performance */}
-        <div className="bg-yellow-500/10 rounded-lg p-3 border border-yellow-500/20">
+        <div className="bg-amber-500/10 rounded-lg p-3 border border-amber-500/20">
           <div className="flex items-center space-x-2 mb-2">
-            <Zap className="w-4 h-4 text-yellow-400" />
-            <span className="text-sm text-yellow-300 font-medium">Performance</span>
+            <Zap className="w-4 h-4 text-amber-400" />
+            <span className="text-sm text-amber-300 font-medium">Performance</span>
           </div>
           <div className="text-xs text-gray-300 space-y-1">
             <div className="flex justify-between">
@@ -152,10 +154,10 @@ const AnalyticsDashboard = ({ isVisible, onToggle }) => {
 
         {/* Top Routes */}
         {analytics.routes?.topRoutes && analytics.routes.topRoutes.length > 0 && (
-          <div className="bg-indigo-500/10 rounded-lg p-3 border border-indigo-500/20">
+          <div className="bg-blue-500/10 rounded-lg p-3 border border-blue-500/20">
             <div className="flex items-center space-x-2 mb-2">
-              <Route className="w-4 h-4 text-indigo-400" />
-              <span className="text-sm text-indigo-300 font-medium">Top Routes</span>
+              <Route className="w-4 h-4 text-blue-400" />
+              <span className="text-sm text-blue-300 font-medium">Top Routes</span>
             </div>
             <div className="space-y-2">
               {analytics.routes.topRoutes.slice(0, 5).map((route, index) => (
@@ -166,7 +168,7 @@ const AnalyticsDashboard = ({ isVisible, onToggle }) => {
                   <div className="flex items-center space-x-1">
                     <span className="text-white font-semibold">{route.visits}</span>
                     {route.conversions > 0 && (
-                      <span className="text-green-400">({route.conversions})</span>
+                      <span className="text-emerald-400">({route.conversions})</span>
                     )}
                   </div>
                 </div>
@@ -199,16 +201,16 @@ const AnalyticsDashboard = ({ isVisible, onToggle }) => {
 
         {/* Common Journey Patterns */}
         {analytics.userJourney?.commonPatterns && analytics.userJourney.commonPatterns.length > 0 && (
-          <div className="bg-teal-500/10 rounded-lg p-3 border border-teal-500/20">
+          <div className="bg-emerald-500/10 rounded-lg p-3 border border-emerald-500/20">
             <div className="flex items-center space-x-2 mb-2">
-              <MousePointer className="w-4 h-4 text-teal-400" />
-              <span className="text-sm text-teal-300 font-medium">Journey Patterns</span>
+              <MousePointer className="w-4 h-4 text-emerald-400" />
+              <span className="text-sm text-emerald-300 font-medium">Journey Patterns</span>
             </div>
             <div className="space-y-1">
               {analytics.userJourney.commonPatterns.slice(0, 3).map(([pattern, count], index) => (
                 <div key={index} className="text-xs text-gray-300">
                   <div className="flex items-center space-x-1">
-                    <span className="text-teal-400 font-semibold">{count}×</span>
+                    <span className="text-emerald-400 font-semibold">{count}×</span>
                     <span className="truncate" title={pattern}>
                       {pattern.split(' -> ').map((step, i, arr) => (
                         <React.Fragment key={i}>
@@ -246,9 +248,8 @@ const AnalyticsDashboard = ({ isVisible, onToggle }) => {
   );
 };
 
-/**
- * Hook para controlar el dashboard de analytics
- */
+// Hook que expone visibilidad, toggle y el componente del dashboard.
+// Registra el atajo Ctrl+Shift+A solo cuando NODE_ENV es 'development'.
 export const useAnalyticsDashboard = () => {
   const [isVisible, setIsVisible] = useState(false);
 

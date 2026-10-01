@@ -1,9 +1,7 @@
-/**
- * Validaciones para gastos recurrentes
- * 
- * Proporciona validaciones consistentes para configuraciones de
- * gastos recurrentes en frontend y backend.
- */
+// Validaciones para gastos recurrentes
+//
+// Proporciona validaciones consistentes para configuraciones de
+// gastos recurrentes en frontend y backend.
 
 import { 
   FREQUENCY_PATTERNS, 
@@ -12,11 +10,9 @@ import {
   CALCULATION_CONSTANTS 
 } from './constants.js';
 
-/**
- * Valida una configuración de recurrencia completa
- * @param {Object} config - Configuración de recurrencia
- * @returns {Object} - { isValid: boolean, errors: string[] }
- */
+// Valida una configuración de recurrencia completa
+// @param {Object} config - Configuración de recurrencia
+// @returns {Object} - { isValid: boolean, errors: string[] }
 export const validateRecurrenceConfig = (config) => {
   const errors = [];
   
@@ -58,11 +54,9 @@ export const validateRecurrenceConfig = (config) => {
   };
 };
 
-/**
- * Valida el patrón de frecuencia
- * @param {string} pattern - Patrón de frecuencia
- * @returns {Object} - Resultado de validación
- */
+// Valida el patrón de frecuencia
+// @param {string} pattern - Patrón de frecuencia
+// @returns {Object} - Resultado de validación
 export const validateFrequencyPattern = (pattern) => {
   const errors = [];
   
@@ -78,11 +72,9 @@ export const validateFrequencyPattern = (pattern) => {
   };
 };
 
-/**
- * Valida el intervalo de recurrencia
- * @param {number} interval - Intervalo
- * @returns {Object} - Resultado de validación
- */
+// Valida el intervalo de recurrencia
+// @param {number} interval - Intervalo
+// @returns {Object} - Resultado de validación
 export const validateInterval = (interval) => {
   const errors = [];
   
@@ -103,12 +95,10 @@ export const validateInterval = (interval) => {
   };
 };
 
-/**
- * Valida fechas de inicio y fin
- * @param {string|Date} startDate - Fecha de inicio
- * @param {string|Date} endDate - Fecha de fin (opcional)
- * @returns {Object} - Resultado de validación
- */
+// Valida fechas de inicio y fin
+// @param {string|Date} startDate - Fecha de inicio
+// @param {string|Date} endDate - Fecha de fin (opcional)
+// @returns {Object} - Resultado de validación
 export const validateDates = (startDate, endDate) => {
   const errors = [];
   
@@ -141,12 +131,10 @@ export const validateDates = (startDate, endDate) => {
   };
 };
 
-/**
- * Valida configuración específica según el patrón
- * @param {string} pattern - Patrón de frecuencia
- * @param {Object} config - Configuración específica
- * @returns {Object} - Resultado de validación
- */
+// Valida configuración específica según el patrón
+// @param {string} pattern - Patrón de frecuencia
+// @param {Object} config - Configuración específica
+// @returns {Object} - Resultado de validación
 export const validatePatternSpecificConfig = (pattern, config) => {
   const errors = [];
   
@@ -206,11 +194,9 @@ export const validatePatternSpecificConfig = (pattern, config) => {
   };
 };
 
-/**
- * Valida el monto de un gasto
- * @param {number} amount - Monto del gasto
- * @returns {Object} - Resultado de validación
- */
+// Valida el monto de un gasto
+// @param {number} amount - Monto del gasto
+// @returns {Object} - Resultado de validación
 export const validateAmount = (amount) => {
   const errors = [];
   
@@ -233,11 +219,9 @@ export const validateAmount = (amount) => {
   };
 };
 
-/**
- * Valida ajustes diarios
- * @param {Object} dailyAdjustments - Ajustes por día
- * @returns {Object} - Resultado de validación
- */
+// Valida ajustes diarios
+// @param {Object} dailyAdjustments - Ajustes por día
+// @returns {Object} - Resultado de validación
 export const validateDailyAdjustments = (dailyAdjustments) => {
   const errors = [];
   

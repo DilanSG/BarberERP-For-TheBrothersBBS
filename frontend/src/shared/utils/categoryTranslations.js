@@ -1,12 +1,8 @@
-/**
- * Utilidad de traducción de categorías de gastos
- * Mapea categorías legacy en inglés a español
- */
+// Utilidad de traducción de categorías de gastos
+// Mapea categorías legacy en inglés a español
 
-/**
- * Diccionario de traducciones para categorías de gastos
- * Mapea categorías en inglés (legacy) a español
- */
+// Diccionario de traducciones para categorías de gastos
+// Mapea categorías en inglés (legacy) a español
 export const CATEGORY_TRANSLATIONS = {
   // Categorías legacy en inglés
   'rent': 'Arriendo',
@@ -28,10 +24,8 @@ export const CATEGORY_TRANSLATIONS = {
   'equipos': 'Equipos'
 };
 
-/**
- * Diccionario de traducciones para métodos de pago
- * Mapea valores de backend a nombres legibles
- */
+// Diccionario de traducciones para métodos de pago
+// Mapea valores de backend a nombres legibles
 export const PAYMENT_METHOD_TRANSLATIONS = {
   // Métodos de pago en español/minúsculas
   'efectivo': 'Efectivo',
@@ -49,11 +43,9 @@ export const PAYMENT_METHOD_TRANSLATIONS = {
   'digital': 'Digital'
 };
 
-/**
- * Obtiene la etiqueta traducida de una categoría
- * @param {string} category - Categoría en inglés o español
- * @returns {string} Etiqueta en español
- */
+// Obtiene la etiqueta traducida de una categoría
+// @param {string} category - Categoría en inglés o español
+// @returns {string} Etiqueta en español
 export const getCategoryLabel = (category) => {
   if (!category) return 'Sin categoría';
   
@@ -65,11 +57,9 @@ export const getCategoryLabel = (category) => {
   return category.charAt(0).toUpperCase() + category.slice(1);
 };
 
-/**
- * Obtiene la etiqueta traducida de un método de pago
- * @param {string} paymentMethod - Método de pago (efectivo, cash, tarjeta, etc.)
- * @returns {string} Etiqueta capitalizada
- */
+// Obtiene la etiqueta traducida de un método de pago
+// @param {string} paymentMethod - Método de pago (efectivo, cash, tarjeta, etc.)
+// @returns {string} Etiqueta capitalizada
 export const getPaymentMethodLabel = (paymentMethod) => {
   if (!paymentMethod) return 'Sin especificar';
   
@@ -81,11 +71,9 @@ export const getPaymentMethodLabel = (paymentMethod) => {
   return paymentMethod.charAt(0).toUpperCase() + paymentMethod.slice(1);
 };
 
-/**
- * Traduce un array de categorías
- * @param {Array} categories - Array de categorías {value, label}
- * @returns {Array} Array con labels traducidos
- */
+// Traduce un array de categorías
+// @param {Array} categories - Array de categorías {value, label}
+// @returns {Array} Array con labels traducidos
 export const translateCategories = (categories) => {
   if (!Array.isArray(categories)) return [];
   
@@ -95,11 +83,9 @@ export const translateCategories = (categories) => {
   }));
 };
 
-/**
- * Normaliza y traduce una categoría desde cualquier estructura
- * @param {string|Object} category - Categoría como string o objeto
- * @returns {Object} {value, label}
- */
+// Normaliza y traduce una categoría desde cualquier estructura
+// @param {string|Object} category - Categoría como string o objeto
+// @returns {Object} {value, label}
 export const normalizeCategory = (category) => {
   if (!category) {
     return { value: 'other', label: 'Otros' };

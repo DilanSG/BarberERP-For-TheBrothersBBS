@@ -1,5 +1,6 @@
 ﻿// Servicio unificado para obtener fechas disponibles
-import { salesService, appointmentsService } from './api';
+import { salesService } from './salesService';
+import { appointmentsService } from './appointmentsService';
 
 import logger from '../utils/logger';
 // Configuración de debugging
@@ -12,6 +13,7 @@ const debugLog = (message, ...args) => {
 };
 
 export class AvailableDatesService {
+  // Inicializa la caché en memoria (Map fuente → fechas) con TTL de 5 minutos
   constructor() {
     this.dateCache = new Map();
     this.lastCacheUpdate = null;
@@ -19,6 +21,8 @@ export class AvailableDatesService {
   }
 
   // Obtener todas las fechas disponibles de todas las fuentes
+  // Devuelve un array de fechas 'YYYY-MM-DD' ordenado de más reciente a más antiguo.
+  // Usa caché si sigue vigente; si las fuentes fallan, cae al fallback de 90 días.
   async getAllAvailableDates() {
     debugLog('📅 Obteniendo fechas disponibles de todas las fuentes...');
     
@@ -85,6 +89,7 @@ export class AvailableDatesService {
   }
 
   // Obtener fechas disponibles para un barbero específico
+  // De momento, si no hay endpoint por barbero, reutiliza las fechas generales.
   async getBarberAvailableDates(barberId) {
     debugLog(`👤 Obteniendo fechas disponibles para barbero: ${barberId}`);
     
@@ -123,6 +128,7 @@ export class AvailableDatesService {
   }
 
   // Verificar si una fecha específica tiene datos
+  // Recibe Date o string y devuelve un booleano.
   async hasDataForDate(date, barberId = null) {
     const availableDates = barberId 
       ? await this.getBarberAvailableDates(barberId)
@@ -133,6 +139,7 @@ export class AvailableDatesService {
   }
 
   // Obtener fechas en un rango específico
+  // Filtra las fechas disponibles entre startDate y endDate (inclusive).
   async getDatesInRange(startDate, endDate, barberId = null) {
     const availableDates = barberId 
       ? await this.getBarberAvailableDates(barberId)
@@ -148,6 +155,7 @@ export class AvailableDatesService {
   }
 
   // Generar fechas de fallback (últimos 90 días)
+  // Solo incluye de lunes a sábado (domingo cerrado).
   generateFallbackDates() {
     debugLog('🔄 Generando fechas de fallback...');
     const dates = [];

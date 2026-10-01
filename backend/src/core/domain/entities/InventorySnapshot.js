@@ -1,5 +1,8 @@
 import mongoose from 'mongoose';
 
+// Modelo Mongoose de cortes de inventario (snapshots).
+// Guarda una foto del stock esperado vs. el stock real contado para una fecha,
+// desglosado por producto, más los totales agregados del conteo.
 const inventorySnapshotSchema = new mongoose.Schema({
   date: {
     type: Date,
@@ -67,6 +70,8 @@ const inventorySnapshotSchema = new mongoose.Schema({
 });
 
 // Middleware para calcular totales antes de guardar
+// totalItems = número de productos contados; totalDifference = suma de las
+// diferencias (realStock - expectedStock) de cada ítem.
 inventorySnapshotSchema.pre('save', function(next) {
   this.totalItems = this.items.length;
   this.totalDifference = this.items.reduce((sum, item) => sum + item.difference, 0);

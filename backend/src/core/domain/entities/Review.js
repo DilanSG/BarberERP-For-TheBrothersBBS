@@ -1,5 +1,8 @@
 import mongoose from 'mongoose';
 
+// Modelo Mongoose de reseñas de barberos.
+// Cada reseña pertenece a un usuario, un barbero y una cita única (1 review por
+// cita); al guardarse/eliminarse recalcula el rating agregado del barbero.
 const reviewSchema = new mongoose.Schema({
   user: {
     type: mongoose.Schema.Types.ObjectId,
@@ -47,10 +50,13 @@ const reviewSchema = new mongoose.Schema({
 });
 
 // Índices para búsquedas rápidas
+// Soportan las reseñas recientes por barbero y por usuario.
 reviewSchema.index({ barber: 1, createdAt: -1 });
 reviewSchema.index({ user: 1, createdAt: -1 });
 
 // Método estático: Calcular rating promedio de un barbero
+// Agrega en Mongo solo las reseñas aprobadas del barbero y devuelve el promedio
+// redondeado a 1 decimal junto con el total. Sin reseñas retorna ceros.
 reviewSchema.statics.calculateBarberRating = async function(barberId) {
   const result = await this.aggregate([
     { 
@@ -79,6 +85,8 @@ reviewSchema.statics.calculateBarberRating = async function(barberId) {
 };
 
 // Middleware: Actualizar rating del barbero después de crear/actualizar review
+// Efecto secundario: persiste averageRating/totalReviews en el documento Barber.
+// Los errores se registran en consola para no bloquear el guardado de la review.
 reviewSchema.post('save', async function(doc) {
   try {
     const Barber = mongoose.model('Barber');
@@ -94,6 +102,8 @@ reviewSchema.post('save', async function(doc) {
 });
 
 // Middleware: Actualizar rating del barbero después de eliminar review
+// Recalcula las estadísticas solo si el hook recibe el documento eliminado;
+// si falla la actualización solo se registra el error en consola.
 reviewSchema.post('findOneAndDelete', async function(doc) {
   if (doc) {
     try {

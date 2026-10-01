@@ -1,6 +1,4 @@
-/**
- * Constantes para tipos de datos en el sistema de ventas
- */
+// Constantes para tipos de datos en el sistema de ventas
 
 // Tipos de transacciones/ventas
 export const SALE_TYPES = {
@@ -59,29 +57,37 @@ export const PAYMENT_METHOD_LABELS = {
   [PAYMENT_METHODS.DIGITAL]: 'Digital'
 };
 
-// Colores para métodos de pago (consistente con sistema existente)
+// Colores para métodos de pago (derivados de la paleta de 15 en @utils/formatters)
+import { PAYMENT_METHOD_PALETTE } from '@utils/formatters';
+
+// Extrae solo las clases visuales de un color de la paleta compartida
+const paletteOf = (name) => {
+  const p = PAYMENT_METHOD_PALETTE[name] || PAYMENT_METHOD_PALETTE.gray;
+  return { bg: p.bg, border: p.border, text: p.text, dot: p.dot };
+};
+
 export const PAYMENT_METHOD_COLORS = {
-  [PAYMENT_METHODS.CASH]: { bg: 'bg-green-500/10', border: 'border-green-500/30', text: 'text-green-300', dot: 'bg-green-400' },
-  'cash': { bg: 'bg-green-500/10', border: 'border-green-500/30', text: 'text-green-300', dot: 'bg-green-400' },
-  'efectivo': { bg: 'bg-green-500/10', border: 'border-green-500/30', text: 'text-green-300', dot: 'bg-green-400' },
-  [PAYMENT_METHODS.NEQUI]: { bg: 'bg-pink-500/10', border: 'border-pink-500/30', text: 'text-pink-300', dot: 'bg-pink-400' },
-  [PAYMENT_METHODS.NU]: { bg: 'bg-purple-500/10', border: 'border-purple-500/30', text: 'text-purple-300', dot: 'bg-purple-400' },
-  [PAYMENT_METHODS.DAVIPLATA]: { bg: 'bg-red-500/10', border: 'border-red-500/30', text: 'text-red-300', dot: 'bg-red-400' },
-  [PAYMENT_METHODS.DEBIT]: { bg: 'bg-blue-500/10', border: 'border-blue-500/30', text: 'text-blue-300', dot: 'bg-blue-400' },
-  [PAYMENT_METHODS.BANCOLOMBIA]: { bg: 'bg-yellow-500/10', border: 'border-yellow-500/30', text: 'text-yellow-300', dot: 'bg-yellow-400' },
-  [PAYMENT_METHODS.DIGITAL]: { bg: 'bg-cyan-500/10', border: 'border-cyan-500/30', text: 'text-cyan-300', dot: 'bg-cyan-400' },
-  [PAYMENT_METHODS.CARD]: { bg: 'bg-blue-500/10', border: 'border-blue-500/30', text: 'text-blue-300', dot: 'bg-blue-400' },
-  'card': { bg: 'bg-blue-500/10', border: 'border-blue-500/30', text: 'text-blue-300', dot: 'bg-blue-400' },
-  'tarjeta': { bg: 'bg-blue-500/10', border: 'border-blue-500/30', text: 'text-blue-300', dot: 'bg-blue-400' },
-  [PAYMENT_METHODS.TRANSFER]: { bg: 'bg-cyan-500/10', border: 'border-cyan-500/30', text: 'text-cyan-300', dot: 'bg-cyan-400' },
-  'transfer': { bg: 'bg-cyan-500/10', border: 'border-cyan-500/30', text: 'text-cyan-300', dot: 'bg-cyan-400' },
-  'transferencia': { bg: 'bg-cyan-500/10', border: 'border-cyan-500/30', text: 'text-cyan-300', dot: 'bg-cyan-400' }
+  [PAYMENT_METHODS.CASH]: paletteOf('emerald'),
+  'cash': paletteOf('emerald'),
+  'efectivo': paletteOf('emerald'),
+  [PAYMENT_METHODS.NEQUI]: paletteOf('violet'),
+  [PAYMENT_METHODS.NU]: paletteOf('purple'),
+  [PAYMENT_METHODS.DAVIPLATA]: paletteOf('red'),
+  [PAYMENT_METHODS.DEBIT]: paletteOf('blue'),
+  [PAYMENT_METHODS.BANCOLOMBIA]: paletteOf('amber'),
+  [PAYMENT_METHODS.DIGITAL]: paletteOf('cyan'),
+  [PAYMENT_METHODS.CARD]: paletteOf('blue'),
+  'card': paletteOf('blue'),
+  'tarjeta': paletteOf('blue'),
+  [PAYMENT_METHODS.TRANSFER]: paletteOf('blue'),
+  'transfer': paletteOf('blue'),
+  'transferencia': paletteOf('blue'),
 };
 
 // Color por defecto para métodos no reconocidos
-export const DEFAULT_PAYMENT_COLOR = { bg: 'bg-gray-500/10', border: 'border-gray-500/30', text: 'text-gray-300', dot: 'bg-gray-400' };
+export const DEFAULT_PAYMENT_COLOR = paletteOf('gray');
 
-// Iconos para tipos de transacciones
+// Iconos para tipos de transacciones (nombres de iconos de lucide-react)
 export const SALE_TYPE_ICONS = {
   [SALE_TYPES.PRODUCT]: 'Package',
   [SALE_TYPES.SERVICE]: 'Scissors', 
@@ -91,6 +97,6 @@ export const SALE_TYPE_ICONS = {
 // Colores para tipos de transacciones
 export const SALE_TYPE_COLORS = {
   [SALE_TYPES.PRODUCT]: 'text-blue-400',
-  [SALE_TYPES.SERVICE]: 'text-green-400',
-  [SALE_TYPES.APPOINTMENT]: 'text-purple-400'
+  [SALE_TYPES.SERVICE]: 'text-emerald-400',
+  [SALE_TYPES.APPOINTMENT]: 'text-brand-300'
 };

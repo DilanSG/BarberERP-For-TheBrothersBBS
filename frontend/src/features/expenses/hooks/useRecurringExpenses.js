@@ -3,28 +3,25 @@ import { toast } from 'react-toastify';
 import { api } from '@services/api';
 import { RecurringExpenseHelper } from '@shared/recurring-expenses';
 
-/**
- * Hook personalizado para trabajar con gastos recurrentes
- * 
- * Proporciona funciones para crear, actualizar, eliminar y gestionar gastos recurrentes,
- * así como para trabajar con sus ocurrencias y ajustes diarios.
- */
+// Hook para gestionar gastos recurrentes: crear, actualizar, eliminar,
+// activar/desactivar, procesar ocurrencias, consultar y editar ajustes diarios
+// y estimar el monto mensual de cada plantilla.
 export const useRecurringExpenses = () => {
   const [recurringExpenses, setRecurringExpenses] = useState([]);
   const [inferredRecurringTotal, setInferredRecurringTotal] = useState(0); // Total inferido (cuando no hay templates)
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   
-  /**
-   * Cargar todos los gastos recurrentes
-   */
+  // Carga todos los gastos recurrentes desde el backend.
+  // Solicita la lista sin caché y normaliza los distintos formatos de respuesta
+  // (array, data, templates, expenses), descartando ítems nulos.
   const loadRecurringExpenses = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
       
   // Forzar sin caché para evitar respuestas estancadas mientras diagnosticamos
-  const response = await api.get('/expenses/recurring', { useCache: false, params: { _ts: Date.now() } });
+  const response = await api.get('/expenses/recurring');
       const payload = response.data;
       // 🔍 DEBUG: log crudo de la respuesta antes de normalizar
       try {
@@ -48,12 +45,13 @@ export const useRecurringExpenses = () => {
         // Normalizar flag activo
         _isActive: (item.recurrence?.isActive !== undefined) ? item.recurrence.isActive : (item.recurringConfig?.isActive ?? item.isActive ?? true)
       }));
+      // Reintento único cuando el backend migra registros inline y responde lista vacía.
       if (list.length === 0) {
         // Lista recurrente vacía tras normalización
         if (migratedInline > 0) {
           console.log('🔁 Detectada migración inline de', migratedInline, 'registros. Reintentando fetch inmediato...');
           try {
-            const second = await api.get('/expenses/recurring', { useCache: false, params: { _ts: Date.now() } });
+            const second = await api.get('/expenses/recurring');
             const secondPayload = second.data;
             let secondList = [];
             if (Array.isArray(secondPayload)) secondList = secondPayload; else if (Array.isArray(secondPayload?.data)) secondList = secondPayload.data; else if (Array.isArray(secondPayload?.templates)) secondList = secondPayload.templates; else if (Array.isArray(secondPayload?.expenses)) secondList = secondPayload.expenses; else secondList = [];
@@ -83,6 +81,7 @@ export const useRecurringExpenses = () => {
       setRecurringExpenses(cleaned);
 
       // Si la lista está vacía intentar obtener el total inferido desde summary global
+      // Sin plantillas: consulta el resumen anual para obtener el total recurrente inferido.
       if (list.length === 0) {
         try {
           // El endpoint /expenses/summary exige startDate y endDate -> usar último año como rango por defecto
@@ -101,14 +100,14 @@ export const useRecurringExpenses = () => {
           const summaryResp = await api.get('/expenses/summary', { params: { startDate: startISO, endDate: endISO }, useCache: false });
           const summaryPayload = summaryResp.data || summaryResp; // compatibilidad si api devuelve directo
           const summaryData = summaryPayload?.data || summaryPayload?.summary || summaryPayload;
-          // Campos posibles expuestos por useFinancialReports backend/hook
+            // Campos posibles expuestos por useFinancialReports backend/hook
             const inferred = summaryData?.recurringExpensesTotal 
               || summaryData?.recurringExpensesInferred 
               || summaryData?.recurringExpensesRecalculated 
               || 0;
           setInferredRecurringTotal(inferred);
           if (inferred > 0) {
-            // Usando total recurrente inferido
+          // Usando total recurrente inferido
           }
         } catch (e) {
           // Silencioso: si falla no bloqueamos el flujo
@@ -127,16 +126,12 @@ export const useRecurringExpenses = () => {
     }
   }, []);
   
-  /**
-   * Cargar gastos recurrentes al montar el componente
-   */
+  // Carga los gastos recurrentes al montar el componente.
   useEffect(() => {
     loadRecurringExpenses();
   }, [loadRecurringExpenses]);
   
-  /**
-   * Crear un nuevo gasto recurrente
-   */
+  // Crea un gasto recurrente convirtiendo el formato antiguo si es necesario.
   const createRecurringExpense = async (expenseData) => {
     try {
       setLoading(true);
@@ -173,9 +168,7 @@ export const useRecurringExpenses = () => {
     }
   };
   
-  /**
-   * Actualizar un gasto recurrente existente
-   */
+  // Actualiza un gasto recurrente y refleja el cambio en la lista local.
   const updateRecurringExpense = async (expenseId, expenseData) => {
     try {
       setLoading(true);
@@ -205,9 +198,7 @@ export const useRecurringExpenses = () => {
     }
   };
   
-  /**
-   * Eliminar un gasto recurrente
-   */
+  // Elimina un gasto recurrente y lo quita de la lista local.
   const deleteRecurringExpense = async (expenseId) => {
     try {
       setLoading(true);
@@ -230,9 +221,7 @@ export const useRecurringExpenses = () => {
     }
   };
   
-  /**
-   * Cambiar el estado de activación de un gasto recurrente
-   */
+  // Activa o desactiva un gasto recurrente y sincroniza el ítem local.
   const toggleRecurringStatus = async (expenseId, isActive) => {
     try {
       setLoading(true);
@@ -257,9 +246,7 @@ export const useRecurringExpenses = () => {
     }
   };
   
-  /**
-   * Procesar gastos recurrentes (solo admin)
-   */
+  // Procesa manualmente los gastos recurrentes pendientes (pensado para admin).
   const processRecurringExpenses = async () => {
     try {
       setLoading(true);
@@ -279,9 +266,7 @@ export const useRecurringExpenses = () => {
     }
   };
   
-  /**
-   * Obtener próximas ocurrencias de un gasto recurrente
-   */
+  // Obtiene las próximas ocurrencias de un gasto en los meses indicados.
   const getNextOccurrences = async (expenseId, months = 6) => {
     try {
       const response = await api.get(`/expenses/${expenseId}/occurrences`, {
@@ -297,9 +282,7 @@ export const useRecurringExpenses = () => {
     }
   };
   
-  /**
-   * Obtener ajustes diarios de un gasto recurrente
-   */
+  // Obtiene los ajustes diarios de un gasto para un mes concreto (yearMonth).
   const getDailyAdjustments = async (expenseId, yearMonth) => {
     try {
       const response = await api.get(`/expenses/${expenseId}/daily-adjustments`, {
@@ -315,9 +298,7 @@ export const useRecurringExpenses = () => {
     }
   };
   
-  /**
-   * Actualizar ajustes diarios de un gasto recurrente
-   */
+  // Reemplaza los ajustes diarios de un gasto para un mes concreto.
   const updateDailyAdjustments = async (expenseId, yearMonth, adjustments) => {
     try {
       setLoading(true);
@@ -340,9 +321,7 @@ export const useRecurringExpenses = () => {
     }
   };
   
-  /**
-   * Calcular monto mensual estimado para un gasto recurrente
-   */
+  // Estima el monto mensual de un gasto según su frecuencia e intervalo.
   const calculateMonthlyAmount = (expense) => {
     if (!expense) return 0;
     
@@ -353,6 +332,7 @@ export const useRecurringExpenses = () => {
     // Frecuencia basada en recurrence o recurringConfig
     let multiplier = 1;
     
+    // Multiplicadores que convierten cada frecuencia a su equivalente mensual.
     if (expense.recurrence?.pattern) {
       switch (expense.recurrence.pattern) {
         case 'daily':
@@ -392,11 +372,13 @@ export const useRecurringExpenses = () => {
     }
     
     // Aplicar intervalo
+    // Ajusta el estimado cuando el gasto ocurre cada N periodos.
     const interval = (expense.recurrence?.interval || expense.recurringConfig?.interval || 1);
     
     return baseAmount * multiplier / interval;
   };
   
+  // API pública del hook: estado y acciones sobre gastos recurrentes.
   return {
     recurringExpenses,
     inferredRecurringTotal,

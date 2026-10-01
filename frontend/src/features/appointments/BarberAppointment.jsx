@@ -1,15 +1,56 @@
 ﻿import React, { useState, useEffect } from 'react';
 import { PageContainer } from '@components/layout/PageContainer';
-import GradientText from '@components/ui/GradientText';
 import { useAuth } from '@contexts/AuthContext';
-import { api, barberService, appointmentService } from '@services/api';
+import { api } from '@services/api';
+import { barberService } from '@services/barberService';
+import { appointmentService } from '@services/appointmentService';
 import { useNotification } from '@contexts/NotificationContext';
-import { constructFrom, format } from 'date-fns';
+import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
-import { Calendar, Clock, User, Scissors, CheckCircle, XCircle, AlertTriangle, Eye, Trash2, Check, X } from 'lucide-react';
+import { Calendar, Clock, User, Scissors, CheckCircle, XCircle, AlertTriangle, Eye, Trash2, Check, X, Mail, BarChart3, ChevronRight } from 'lucide-react';
 import CompleteAppointmentModal from '@components/modals/CompleteAppointmentModal';
+import Modal from '@components/ui/Modal';
+
+import { Skeleton, BarberAppointmentsSkeleton } from '@components/ui/Skeleton';
+
+// Configuración visual de los filtros de estado
+const TAB_CONFIG = {
+  pending: {
+    label: 'Pendientes',
+    icon: Clock,
+    active: 'border-amber-500/50 bg-amber-500/10 text-amber-300',
+    iconActive: 'text-amber-400',
+  },
+  confirmed: {
+    label: 'Confirmadas',
+    icon: CheckCircle,
+    active: 'border-emerald-500/50 bg-emerald-500/10 text-emerald-300',
+    iconActive: 'text-emerald-400',
+  },
+  completed: {
+    label: 'Completadas',
+    icon: Check,
+    active: 'border-blue-500/50 bg-blue-500/10 text-blue-300',
+    iconActive: 'text-blue-400',
+  },
+  cancelled: {
+    label: 'Canceladas',
+    icon: X,
+    active: 'border-red-500/50 bg-red-500/10 text-red-300',
+    iconActive: 'text-red-400',
+  },
+  reports: {
+    label: 'Reportes',
+    icon: BarChart3,
+    active: 'border-brand-400/50 bg-brand-400/10 text-brand-200',
+    iconActive: 'text-brand-300',
+  },
+};
 
 import logger from '@utils/logger';
+// Panel de citas del barbero: carga su perfil y sus citas asignadas.
+// Permite confirmar, completar con método de pago, cancelar con motivo (obligatorio),
+// ver el detalle, marcar inasistencia y eliminar reportes de citas cerradas.
 const BarberAppointment = () => {
   const [appointments, setAppointments] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -38,25 +79,14 @@ const BarberAppointment = () => {
   const { user } = useAuth();
   const { showSuccess, showError } = useNotification();
 
-  // Bloquear scroll cuando hay modales abiertos
-  useEffect(() => {
-    if (showCancelModal || showInfoModal || showDeleteModal) {
-      document.body.style.overflow = 'hidden';
-    } else {
-      document.body.style.overflow = 'unset';
-    }
-    
-    return () => {
-      document.body.style.overflow = 'unset';
-    };
-  }, [showCancelModal, showInfoModal, showDeleteModal]);
-
+  // Al iniciar sesión carga el perfil del barbero para obtener su id.
   useEffect(() => {
     if (user && user.role === 'barber') {
       fetchBarberProfile();
     }
   }, [user]);
 
+  // Obtiene el perfil del barbero y con él dispara la carga de sus citas.
   const fetchBarberProfile = async () => {
     try {
       const data = await barberService.getBarberProfile();
@@ -70,6 +100,7 @@ const BarberAppointment = () => {
     }
   };
 
+  // Consulta las citas asignadas al barbero y las guarda en el estado.
   const fetchBarberAppointments = async (barberId) => {
     try {
       setLoading(true);
@@ -85,6 +116,8 @@ const BarberAppointment = () => {
     }
   };
 
+  // Gestiona el cambio de estado de una cita: cancelar y completar abren modal
+  // (motivo o método de pago) y el resto se aprueba o marca como no asistida.
   const handleStatusChange = async (appointmentId, newStatus) => {
     if (processingAppointments.has(appointmentId)) return;
 
@@ -134,6 +167,7 @@ const BarberAppointment = () => {
     }
   };
 
+  // Elimina el reporte de una cita cerrada y recarga la lista.
   const handleDeleteAppointment = async (appointmentId) => {
     try {
       const data = await appointmentService.deleteAppointment(appointmentId);
@@ -161,6 +195,8 @@ const BarberAppointment = () => {
   };
 
   // Función para completar cita con método de pago
+  // Completa la cita registrando el método de pago elegido en el modal.
+  // Refresca la lista y cierra el modal al terminar.
   const handleCompleteWithPayment = async (appointmentId, paymentMethod) => {
     try {
       setProcessingAppointments(prev => new Set(prev).add(appointmentId));
@@ -188,28 +224,34 @@ const BarberAppointment = () => {
   };
 
   // Funciones para modal de eliminación
+  // Abre el modal de confirmación para eliminar el reporte.
   const handleOpenDeleteModal = (appointmentId) => {
     setDeleteAppointmentId(appointmentId);
     setShowDeleteModal(true);
   };
 
+  // Cierra el modal de eliminación y limpia la cita pendiente.
   const handleCloseDeleteModal = () => {
     setShowDeleteModal(false);
     setDeleteAppointmentId(null);
   };
 
+  // Abre el modal de cancelación exigiendo un motivo (se limpia al abrir).
   const handleOpenCancelModal = (appointmentId) => {
     setCancelAppointmentId(appointmentId);
     setCancellationReason('');
     setShowCancelModal(true);
   };
 
+  // Cierra el modal de cancelación y descarta el motivo escrito.
   const handleCloseCancelModal = () => {
     setShowCancelModal(false);
     setCancelAppointmentId(null);
     setCancellationReason('');
   };
 
+  // Envía la cancelación con motivo: valida que exista y no supere 100 palabras
+  // antes de llamar al endpoint de cancelación.
   const handleSubmitCancellation = async () => {
     if (!cancellationReason || cancellationReason.trim().length === 0) {
       showError('Debe proporcionar un motivo para cancelar la cita');
@@ -238,92 +280,74 @@ const BarberAppointment = () => {
   };
 
   // Componente para tarjeta de cita compacta
-  const AppointmentCard = ({ appointment }) => (
-    <div className={`group relative backdrop-blur-sm border rounded-lg p-4 transition-all duration-300 overflow-hidden hover:scale-[1.002] hover:-translate-y-0.5 cursor-pointer mx-1 my-2 ${
-      appointment.status === 'confirmed' ? 'border-green-500/30 bg-green-500/5 shadow-sm shadow-green-500/20' :
-      appointment.status === 'pending' ? 'border-yellow-500/30 bg-yellow-500/5 shadow-sm shadow-yellow-500/20' :
-      appointment.status === 'cancelled' ? 'border-red-500/30 bg-red-500/5 shadow-sm shadow-red-500/20' :
-      'border-blue-500/30 bg-blue-500/5 shadow-sm shadow-blue-500/20'
-    }`}>
-      {/* Efecto de brillo */}
-      <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/[2.5%] to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-1000 ease-out rounded-lg"></div>
-      
-      <div className="relative flex flex-col gap-3">
-        <div>
-          <div className="flex items-center justify-between mb-2">
-            <h3 className="text-sm font-semibold flex items-center gap-2">
-              <Scissors className="w-4 h-4 text-purple-400" />
-              <span className="text-white">
-                {appointment.service?.name || 'Servicio no especificado'}
-              </span>
-            </h3>
+  // Tarjeta compacta de cita con las acciones disponibles según su estado.
+  const AppointmentCard = ({ appointment }) => {
+    const statusClasses = {
+      pending: 'border-amber-500/30 bg-amber-500/5 shadow-sm shadow-soft',
+      confirmed: 'border-emerald-500/30 bg-emerald-500/5 shadow-sm shadow-soft',
+      completed: 'border-blue-500/30 bg-blue-500/5 shadow-sm shadow-soft',
+      cancelled: 'border-red-500/30 bg-red-500/5 shadow-sm shadow-soft',
+    };
+
+    return (
+      <div className={`flex items-center gap-2 rounded-xl border backdrop-blur-sm py-2 pl-3 pr-1.5 transition-all duration-200 hover:-translate-y-0.5 ${statusClasses[appointment.status] || 'border-gray-500/30 bg-gray-500/5 shadow-sm shadow-soft'}`}>
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2">
+            <span className="truncate text-sm font-medium text-white">
+              {appointment.service?.name || 'Servicio no especificado'}
+            </span>
             <StatusBadge status={appointment.status} />
           </div>
-          
-          <div className="grid grid-cols-1 gap-2 text-xs">
-            <div className="flex items-center gap-2">
-              <User className="w-3.5 h-3.5 text-amber-400" />
-              <span className="text-gray-300">Cliente:</span>
-              <span className="text-amber-300 font-medium">
-                {appointment.user?.name || 'Usuario no disponible'}
-              </span>
-            </div>
-            <div className="flex items-center gap-2">
-              <Calendar className="w-3.5 h-3.5 text-blue-400" />
-              <span className="text-gray-300">Fecha:</span>
-              <span className="text-blue-300 font-medium">
-                {format(new Date(appointment.date), "EEEE d 'de' MMM", { locale: es })}
-              </span>
-            </div>
-            <div className="flex items-center gap-2">
-              <Clock className="w-3.5 h-3.5 text-green-400" />
-              <span className="text-gray-300">Hora:</span>
-              <span className="text-green-300 font-medium">
-                {format(new Date(appointment.date), "HH:mm")}
-              </span>
-            </div>
+          <div className="mt-0.5 flex min-w-0 items-center gap-1.5 text-xs text-gray-400">
+            <span className="truncate">{appointment.user?.name || 'Usuario no disponible'}</span>
+            <span className="flex-shrink-0 text-gray-600">•</span>
+            <span className="flex-shrink-0 capitalize">{format(new Date(appointment.date), "EEE d MMM", { locale: es })}</span>
+            <span className="flex-shrink-0 text-gray-600">•</span>
+            <span className="flex-shrink-0">{format(new Date(appointment.date), 'HH:mm')}</span>
           </div>
         </div>
-        
-        {/* Botones de acción */}
-        <div className="flex gap-2 justify-end">
-          {/* Botón de información (siempre visible) */}
+
+        {/* Acciones */}
+        <div className="flex flex-shrink-0 items-center gap-0.5">
           <button
             onClick={() => handleOpenInfoModal(appointment)}
-            className="p-1.5 bg-blue-500/10 border border-blue-500/30 rounded-md text-blue-400 hover:text-blue-300 hover:bg-blue-500/20 transition-all duration-300 shadow-sm shadow-blue-500/20"
+            className="flex h-10 w-10 items-center justify-center rounded-lg text-gray-400 transition-colors hover:bg-white/[0.05] hover:text-blue-300"
             title="Ver información"
+            aria-label="Ver información"
           >
-            <Eye className="w-3.5 h-3.5" />
+            <Eye className="w-4 h-4" />
           </button>
           {appointment.status === 'pending' && (
             <>
               <button
                 onClick={() => handleStatusChange(appointment._id, 'confirmed')}
                 disabled={processingAppointments.has(appointment._id)}
-                className={`p-1.5 border rounded-md transition-all duration-300 shadow-sm ${
+                className={`flex h-10 w-10 items-center justify-center rounded-lg transition-colors ${
                   processingAppointments.has(appointment._id)
-                    ? 'bg-gray-500/10 border-gray-500/30 text-gray-500 cursor-not-allowed'
-                    : 'bg-green-500/10 border-green-500/30 text-green-400 hover:text-green-300 hover:bg-green-500/20 shadow-green-500/20'
+                    ? 'cursor-not-allowed text-gray-600'
+                    : 'text-gray-400 hover:bg-white/[0.05] hover:text-emerald-300'
                 }`}
                 title="Confirmar cita"
+                aria-label="Confirmar cita"
               >
                 {processingAppointments.has(appointment._id) ? (
-                  <div className="animate-spin rounded-full h-3 w-3 border-b border-current"></div>
+                  <Skeleton className="h-3 w-3 rounded-full" />
                 ) : (
-                  <Check className="w-3.5 h-3.5" />
+                  <Check className="w-4 h-4" />
                 )}
               </button>
               <button
                 onClick={() => handleOpenCancelModal(appointment._id)}
                 disabled={processingAppointments.has(appointment._id)}
-                className={`p-1.5 border rounded-md transition-all duration-300 shadow-sm ${
+                className={`flex h-10 w-10 items-center justify-center rounded-lg transition-colors ${
                   processingAppointments.has(appointment._id)
-                    ? 'bg-gray-500/10 border-gray-500/30 text-gray-500 cursor-not-allowed'
-                    : 'bg-red-500/10 border-red-500/30 text-red-400 hover:text-red-300 hover:bg-red-500/20 shadow-red-500/20'
+                    ? 'cursor-not-allowed text-gray-600'
+                    : 'text-gray-400 hover:bg-white/[0.05] hover:text-red-300'
                 }`}
                 title="Cancelar cita"
+                aria-label="Cancelar cita"
               >
-                <X className="w-3.5 h-3.5" />
+                <X className="w-4 h-4" />
               </button>
             </>
           )}
@@ -332,141 +356,90 @@ const BarberAppointment = () => {
               <button
                 onClick={() => handleStatusChange(appointment._id, 'completed')}
                 disabled={processingAppointments.has(appointment._id)}
-                className={`p-1.5 border rounded-md transition-all duration-300 shadow-sm ${
+                className={`flex h-10 w-10 items-center justify-center rounded-lg transition-colors ${
                   processingAppointments.has(appointment._id)
-                    ? 'bg-gray-500/10 border-gray-500/30 text-gray-500 cursor-not-allowed'
-                    : 'bg-blue-500/10 border-blue-500/30 text-blue-400 hover:text-blue-300 hover:bg-blue-500/20 shadow-blue-500/20'
+                    ? 'cursor-not-allowed text-gray-600'
+                    : 'text-gray-400 hover:bg-white/[0.05] hover:text-blue-300'
                 }`}
                 title="Completar cita"
+                aria-label="Completar cita"
               >
                 {processingAppointments.has(appointment._id) ? (
-                  <div className="animate-spin rounded-full h-3 w-3 border-b border-current"></div>
+                  <Skeleton className="h-3 w-3 rounded-full" />
                 ) : (
-                  <CheckCircle className="w-3.5 h-3.5" />
+                  <CheckCircle className="w-4 h-4" />
                 )}
               </button>
               <button
                 onClick={() => handleOpenCancelModal(appointment._id)}
-                className="p-1.5 bg-orange-500/10 border border-orange-500/30 rounded-md text-orange-400 hover:text-orange-300 hover:bg-orange-500/20 transition-all duration-300 shadow-sm shadow-orange-500/20"
+                className="flex h-10 w-10 items-center justify-center rounded-lg text-gray-400 transition-colors hover:bg-white/[0.05] hover:text-amber-300"
                 title="Cancelar con motivo"
+                aria-label="Cancelar con motivo"
               >
-                <X className="w-3.5 h-3.5" />
+                <X className="w-4 h-4" />
               </button>
             </>
           )}
           {(appointment.status === 'completed' || appointment.status === 'cancelled') && (
             <button
               onClick={() => handleOpenDeleteModal(appointment._id)}
-              className="p-1.5 bg-red-500/10 border border-red-500/30 rounded-md text-red-400 hover:text-red-300 hover:bg-red-500/20 transition-all duration-300 shadow-sm shadow-red-500/20"
+              className="flex h-10 w-10 items-center justify-center rounded-lg text-gray-400 transition-colors hover:bg-white/[0.05] hover:text-red-300"
               title="Eliminar reporte"
+              aria-label="Eliminar reporte"
             >
-              <Trash2 className="w-3.5 h-3.5" />
+              <Trash2 className="w-4 h-4" />
             </button>
           )}
         </div>
       </div>
-    </div>
-  );
+    );
+  };
 
+  // Etiqueta de estado con color y texto según la situación de la cita.
   const StatusBadge = ({ status }) => {
-    const statusStyles = {
-      pending: 'bg-yellow-500/20 text-yellow-300 border-yellow-500/40',
-      confirmed: 'bg-green-500/20 text-green-300 border-green-500/40',
-      cancelled: 'bg-red-500/20 text-red-300 border-red-500/40',
-      completed: 'bg-blue-500/20 text-blue-300 border-blue-500/40'
+    const styles = {
+      pending: 'text-amber-300',
+      confirmed: 'text-emerald-300',
+      completed: 'text-blue-300',
+      cancelled: 'text-red-300',
     };
 
-    const statusText = {
+    const labels = {
       pending: 'Pendiente',
       confirmed: 'Confirmada',
+      completed: 'Completada',
       cancelled: 'Cancelada',
-      completed: 'Completada'
     };
 
     return (
-      <span className={`px-2.5 py-1 rounded-full text-xs font-medium border ${statusStyles[status]}`}>
-        {statusText[status]}
+      <span className={`flex-shrink-0 text-[11px] font-medium ${styles[status] || 'text-gray-400'}`}>
+        {labels[status] || status}
       </span>
     );
   };
 
-  const TabButton = ({ status, count }) => {
-    const getButtonStyles = () => {
-      const isSelected = selectedTab === status;
-      
-      switch (status) {
-        case 'pending':
-          return isSelected 
-            ? 'border-yellow-500/50 bg-yellow-500/10 shadow-xl shadow-yellow-500/20'
-            : 'border-yellow-500/30 bg-yellow-500/5 hover:border-yellow-500/50 hover:bg-yellow-500/10';
-        case 'confirmed':
-          return isSelected 
-            ? 'border-green-500/50 bg-green-500/10 shadow-xl shadow-green-500/20'
-            : 'border-green-500/30 bg-green-500/5 hover:border-green-500/50 hover:bg-green-500/10';
-        case 'completed':
-          return isSelected 
-            ? 'border-blue-500/50 bg-blue-500/10 shadow-xl shadow-blue-500/20'
-            : 'border-blue-500/30 bg-blue-500/5 hover:border-blue-500/50 hover:bg-blue-500/10';
-        case 'cancelled':
-          return isSelected 
-            ? 'border-red-500/50 bg-red-500/10 shadow-xl shadow-red-500/20'
-            : 'border-red-500/30 bg-red-500/5 hover:border-red-500/50 hover:bg-red-500/10';
-        case 'reports':
-          return isSelected 
-            ? 'border-purple-500/50 bg-purple-500/10 shadow-xl shadow-purple-500/20'
-            : 'border-purple-500/30 bg-purple-500/5 hover:border-purple-500/50 hover:bg-purple-500/10';
-        default:
-          return isSelected 
-            ? 'border-blue-500/50 bg-blue-500/10 shadow-xl shadow-blue-500/20'
-            : 'border-white/20 bg-white/5 hover:border-white/40 hover:bg-white/10';
-      }
-    };
-
-    const getTextColor = () => {
-      const isSelected = selectedTab === status;
-      if (!isSelected) return 'text-white';
-      
-      switch (status) {
-        case 'pending': return 'text-yellow-300';
-        case 'confirmed': return 'text-green-300';
-        case 'completed': return 'text-blue-300';
-        case 'cancelled': return 'text-red-300';
-        case 'reports': return 'text-purple-300';
-        default: return 'text-blue-300';
-      }
-    };
-
-    const getBadgeColor = () => {
-      const isSelected = selectedTab === status;
-      if (!isSelected) return 'bg-white/10 text-gray-300';
-      
-      switch (status) {
-        case 'pending': return 'bg-yellow-500/20 text-yellow-300';
-        case 'confirmed': return 'bg-green-500/20 text-green-300';
-        case 'completed': return 'bg-blue-500/20 text-blue-300';
-        case 'cancelled': return 'bg-red-500/20 text-red-300';
-        default: return 'bg-blue-500/20 text-blue-300';
-      }
-    };
+  // Botón de pestaña que filtra la lista y muestra el conteo de citas.
+  const TabButton = ({ status, count, className = '' }) => {
+    const isSelected = selectedTab === status;
+    const config = TAB_CONFIG[status] || TAB_CONFIG.pending;
+    const Icon = config.icon;
 
     return (
       <button
         onClick={() => setSelectedTab(status)}
-        className={`group relative w-full px-4 sm:px-6 py-3 sm:py-4 rounded-xl border cursor-pointer transition-all duration-300 hover:scale-105 overflow-hidden backdrop-blur-sm ${
-          status === 'reports' 
-            ? 'flex items-center justify-center'
-            : 'flex items-center justify-between'
-        } ${getButtonStyles()}`}
+        aria-pressed={isSelected}
+        className={`flex w-full items-center gap-2 rounded-xl border px-3.5 py-2.5 text-sm font-medium whitespace-nowrap transition-colors duration-200 ${
+          isSelected
+            ? config.active
+            : 'border-white/[0.08] bg-white/[0.03] text-gray-300 hover:border-white/[0.16] hover:bg-white/[0.05]'
+        } ${className}`}
       >
-        <span className={`font-medium text-sm sm:text-base lg:text-lg ${getTextColor()}`}>
-          {status === 'pending' ? 'Pendientes' : 
-           status === 'confirmed' ? 'Confirmadas' : 
-           status === 'cancelled' ? 'Canceladas' : 
-           status === 'reports' ? 'Reportes' :
-           'Completadas'}
-        </span>
-        {status !== 'reports' && count > 0 && (
-          <span className={`px-3 py-1 rounded-full text-sm font-medium ${getBadgeColor()}`}>
+        <Icon className={`h-4 w-4 flex-shrink-0 ${isSelected ? config.iconActive : 'text-gray-400'}`} />
+        <span className="flex-1 text-left xl:flex-none">{config.label}</span>
+        {count > 0 && (
+          <span className={`rounded-full px-2 py-0.5 text-xs font-semibold xl:ml-auto ${
+            isSelected ? 'bg-white/15' : 'bg-white/[0.06] text-gray-400'
+          }`}>
             {count}
           </span>
         )}
@@ -474,6 +447,8 @@ const BarberAppointment = () => {
     );
   };
 
+  // La pestaña 'reports' agrupa completadas y canceladas; el resto filtra
+  // por estado exacto. 'counts' alimenta los contadores de cada pestaña.
   const filteredAppointments = selectedTab === 'reports' 
     ? appointments.filter(app => app.status === 'completed' || app.status === 'cancelled')
     : appointments.filter(app => app.status === selectedTab);
@@ -485,52 +460,89 @@ const BarberAppointment = () => {
     reports: appointments.filter(app => app.status === 'completed' || app.status === 'cancelled').length
   };
 
+  // Esqueleto de carga mientras llegan el perfil y las citas.
+  if (loading) {
+    return (
+      <PageContainer>
+        <div className="relative z-10 w-full pb-6">
+          <BarberAppointmentsSkeleton cards={4} />
+        </div>
+      </PageContainer>
+    );
+  }
+
+  // Vista principal: pestañas de estado (móvil y escritorio), panel de reportes
+  // con totales y listado de citas, más los modales de cancelar, informar,
+  // eliminar y completar cita.
   return (
     <PageContainer>
-      <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-6 space-y-8">
+      <div className="relative z-10 w-full pb-6 space-y-5">
         
-        {/* Header principal */}
-        <div className="text-center">
-          <div className="inline-flex items-center gap-3 mb-4">
-            <div className="p-2 sm:p-3 bg-gradient-to-r from-blue-600/20 to-purple-600/20 rounded-xl border border-blue-500/20 shadow-xl shadow-blue-500/20">
-              <Calendar className="w-5 h-5 sm:w-6 sm:h-6 lg:w-8 lg:h-8 text-blue-400" />
+        {/* ── Top bar ── */}
+        <div className="flex flex-col lg:flex-row lg:items-center gap-4">
+          <div className="flex items-center gap-3 flex-shrink-0">
+            <div className="p-2.5 rounded-xl bg-brand-500/10 border border-brand-500/20">
+              <Calendar className="w-5 h-5 sm:w-6 sm:h-6 text-brand-300" />
             </div>
-            <GradientText className="text-xl sm:text-2xl lg:text-3xl xl:text-4xl font-bold">
-              Gestión de Citas
-            </GradientText>
+            <div>
+              <h1 className="text-lg sm:text-xl lg:text-2xl font-bold text-white">Gestión de Citas</h1>
+              <p className="text-xs sm:text-sm text-gray-400">
+                Administra y gestiona las citas de tus clientes
+              </p>
+            </div>
           </div>
-          <p className="text-gray-300 text-xs sm:text-sm max-w-2xl mx-auto leading-relaxed px-2">
-            Administra y gestiona todas las citas de tus clientes desde un solo lugar
-          </p>
         </div>
 
-        {loading ? (
-          <div className="flex justify-center py-12">
-            <div className="flex flex-col items-center gap-4">
-              <div className="animate-spin rounded-full h-8 w-8 border-2 border-blue-500 border-t-transparent"></div>
-              <p className="text-gray-400 text-sm">Cargando citas...</p>
-            </div>
+        {/* ── Filtros de estado (móvil/tablet) ── */}
+        <div className="space-y-2 xl:hidden">
+          <div className="grid grid-cols-2 gap-2">
+            <TabButton status="pending" count={counts.pending} />
+            <TabButton status="confirmed" count={counts.confirmed} />
+            <TabButton status="completed" count={counts.completed} />
+            <TabButton status="cancelled" count={counts.cancelled} />
           </div>
-        ) : (
-          /* Grid de 2 columnas responsivo */
-          <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 lg:gap-8">
+
+          {/* Reportes: acción aparte (no es un estado) */}
+          <button
+            onClick={() => setSelectedTab('reports')}
+            aria-pressed={selectedTab === 'reports'}
+            className={`flex w-full items-center gap-2 rounded-xl border px-3.5 py-2.5 text-sm font-medium transition-colors duration-200 ${
+              selectedTab === 'reports'
+                ? 'border-brand-400/50 bg-brand-400/10 text-brand-200'
+                : 'border-brand-400/20 bg-brand-400/[0.04] text-gray-300 hover:border-brand-400/40 hover:bg-brand-400/10'
+            }`}
+          >
+            <BarChart3 className={`h-4 w-4 flex-shrink-0 ${selectedTab === 'reports' ? 'text-brand-300' : 'text-brand-300/70'}`} />
+            <span className="flex-1 text-left">Ver reportes</span>
+            {counts.reports > 0 && (
+              <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${
+                selectedTab === 'reports' ? 'bg-white/15' : 'bg-white/[0.06] text-gray-400'
+              }`}>
+                {counts.reports}
+              </span>
+            )}
+            <ChevronRight className="h-4 w-4 flex-shrink-0 text-brand-300/70" />
+          </button>
+        </div>
+
+        {/* Grid de 2 columnas responsivo */}
+        <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 sm:gap-6">
             
             {/* Columna Izquierda - Tabs y Estadísticas */}
-            <div className="group relative bg-white/5 backdrop-blur-sm rounded-2xl p-6 lg:p-8 border border-white/10 shadow-xl shadow-blue-500/20 hover:border-white/40 transition-all duration-300 overflow-hidden">
-              {/* Efecto de brillo */}
-              <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/[2.5%] to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-1000 ease-out rounded-2xl"></div>
+            <div className="hidden xl:block relative rounded-2xl border border-white/[0.08] bg-white/[0.03] backdrop-blur-sm p-4 sm:p-6">
               <div className="relative">
-                <div className="flex items-center space-x-3 mb-6">
-                  <div className="p-3 bg-gradient-to-r from-purple-600/20 to-blue-600/20 rounded-xl border border-purple-500/20 shadow-xl shadow-blue-500/20">
-                    <CheckCircle className="w-6 h-6 text-purple-400" />
+                <div className="flex items-center gap-3 mb-5">
+                  <div className="p-2.5 rounded-xl bg-brand-500/10 border border-brand-500/20">
+                    <CheckCircle className="w-5 h-5 text-brand-300" />
                   </div>
-                  <GradientText className="text-xl lg:text-2xl font-bold">
-                    Estados de Citas
-                  </GradientText>
+                  <div>
+                    <h2 className="text-base sm:text-lg font-semibold text-white">Estados de Citas</h2>
+                    <p className="text-xs text-gray-400">Filtra la lista por estado</p>
+                  </div>
                 </div>
                 
-                {/* Tabs Compactos */}
-                <div className="space-y-3">
+                {/* Tabs Compactos — scroll horizontal en móvil */}
+                <div className="flex flex-col space-y-2">
                   <TabButton status="pending" count={counts.pending} />
                   <TabButton status="confirmed" count={counts.confirmed} />
                   <TabButton status="completed" count={counts.completed} />
@@ -541,22 +553,25 @@ const BarberAppointment = () => {
             </div>
             
             {/* Columna Derecha - Lista de Citas */}
-            <div className="group relative bg-white/5 backdrop-blur-sm rounded-2xl p-6 lg:p-8 border border-white/10 shadow-xl shadow-blue-500/20 hover:border-white/40 transition-all duration-300 overflow-hidden">
+            <div className="relative rounded-2xl border border-white/[0.08] bg-white/[0.03] backdrop-blur-sm p-4 sm:p-6">
               {/* Efecto de brillo */}
-              <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/[2.5%] to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-1000 ease-out rounded-2xl"></div>
+              
               <div className="relative">
-                <div className="flex items-center space-x-3 mb-6">
-                  <div className="p-3 bg-gradient-to-r from-blue-600/20 to-green-600/20 rounded-xl border border-blue-500/20 shadow-xl shadow-blue-500/20">
-                    <Scissors className="w-6 h-6 text-blue-400" />
+                <div className="flex items-center gap-3 mb-5">
+                  <div className="p-2.5 rounded-xl bg-blue-500/10 border border-blue-500/20">
+                    <Scissors className="w-5 h-5 text-blue-400" />
                   </div>
-                  <GradientText className="text-xl lg:text-2xl font-bold">
-                    {selectedTab === 'pending' ? 'Citas Pendientes' : 
-                     selectedTab === 'confirmed' ? 'Citas Confirmadas' : 
-                     selectedTab === 'completed' ? 'Citas Completadas' : 
-                     selectedTab === 'cancelled' ? 'Citas Canceladas' :
-                     selectedTab === 'reports' ? 'Reportes de Citas' : 
-                     'Otras Citas'}
-                  </GradientText>
+                  <div className="min-w-0">
+                    <h2 className="text-base sm:text-lg font-semibold text-white truncate">
+                      {selectedTab === 'pending' ? 'Citas Pendientes' : 
+                       selectedTab === 'confirmed' ? 'Citas Confirmadas' : 
+                       selectedTab === 'completed' ? 'Citas Completadas' : 
+                       selectedTab === 'cancelled' ? 'Citas Canceladas' :
+                       selectedTab === 'reports' ? 'Reportes de Citas' : 
+                       'Otras Citas'}
+                    </h2>
+                    <p className="text-xs text-gray-400">{filteredAppointments.length} cita{filteredAppointments.length !== 1 ? 's' : ''}</p>
+                  </div>
                 </div>
                 
                 {/* Lista de Citas Compacta o Reportes */}
@@ -564,27 +579,27 @@ const BarberAppointment = () => {
                   /* Reportes - Solo 2 divs con totales */
                   <div className="space-y-4">
                     {/* Div de Completadas */}
-                    <div className="group relative bg-green-500/5 border border-green-500/30 rounded-xl p-4 backdrop-blur-sm shadow-xl shadow-green-500/20 hover:border-green-500/50 transition-all duration-300 overflow-hidden">
+                    <div className="group relative bg-emerald-500/5 border border-emerald-500/30 rounded-xl p-4 backdrop-blur-sm shadow-xl shadow-soft hover:border-emerald-500/50 transition-all duration-300 overflow-hidden">
                       <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/[2.5%] to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-1000 ease-out rounded-xl"></div>
                       <div className="relative flex items-center justify-between">
                         <div className="flex items-center gap-3">
-                          <div className="p-2 bg-green-500/20 rounded-lg border border-green-500/40">
-                            <CheckCircle className="w-6 h-6 text-green-400" />
+                          <div className="p-2 bg-emerald-500/20 rounded-lg border border-emerald-500/40">
+                            <CheckCircle className="w-6 h-6 text-emerald-400" />
                           </div>
                           <div>
-                            <h3 className="text-base lg:text-lg font-bold text-green-300">Citas Completadas</h3>
-                            <p className="text-xs text-green-200/80">Total de servicios finalizados</p>
+                            <h3 className="text-base lg:text-lg font-bold text-emerald-300">Citas Completadas</h3>
+                            <p className="text-xs text-emerald-200/80">Total de servicios finalizados</p>
                           </div>
                         </div>
                         <div className="text-right">
-                          <div className="text-2xl lg:text-3xl font-bold text-green-400">{counts.completed}</div>
-                          <div className="text-xs text-green-300/80">servicios</div>
+                          <div className="text-2xl lg:text-3xl font-bold text-emerald-400">{counts.completed}</div>
+                          <div className="text-xs text-emerald-300/80">servicios</div>
                         </div>
                       </div>
                     </div>
 
                     {/* Div de Canceladas */}
-                    <div className="group relative bg-red-500/5 border border-red-500/30 rounded-xl p-4 backdrop-blur-sm shadow-xl shadow-red-500/20 hover:border-red-500/50 transition-all duration-300 overflow-hidden">
+                    <div className="group relative bg-red-500/5 border border-red-500/30 rounded-xl p-4 backdrop-blur-sm shadow-xl shadow-soft hover:border-red-500/50 transition-all duration-300 overflow-hidden">
                       <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/[2.5%] to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-1000 ease-out rounded-xl"></div>
                       <div className="relative flex items-center justify-between">
                         <div className="flex items-center gap-3">
@@ -605,13 +620,13 @@ const BarberAppointment = () => {
                   </div>
                 ) : (
                   /* Lista normal de citas */
-                  <div className="space-y-1 max-h-96 overflow-y-auto custom-scrollbar pr-2 pt-2">
+                  <div className="space-y-2 max-h-none xl:max-h-96 xl:overflow-y-auto custom-scrollbar pr-2 pt-2">
                     {filteredAppointments.length === 0 ? (
-                      <div className="bg-white/5 rounded-2xl p-8 border border-white/10 text-center backdrop-blur-sm shadow-xl shadow-blue-500/20">
+                      <div className="bg-white/5 rounded-2xl p-8 border border-white/10 text-center backdrop-blur-sm shadow-xl shadow-soft">
                         <div className="inline-block p-4 bg-gradient-to-br from-gray-700/50 to-gray-800/50 rounded-2xl mb-4">
                           <Calendar className="w-8 h-8 text-gray-400" />
                         </div>
-                        <h3 className="text-lg font-semibold mb-2 bg-gradient-to-r from-white to-gray-300 bg-clip-text text-transparent">
+                        <h3 className="text-lg font-semibold mb-2 text-white">
                           No hay citas {
                             selectedTab === 'pending' ? 'pendientes' : 
                             selectedTab === 'confirmed' ? 'confirmadas' : 
@@ -639,285 +654,212 @@ const BarberAppointment = () => {
                 )}
               </div>
             </div>
-          </div>
-        )}
+        </div>
 
         {/* Cancel with Reason Modal */}
-        {showCancelModal && (
-          <div 
-            className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-[9999] p-4 sm:p-6 lg:p-8"
-            style={{ overflow: 'hidden' }}
-            onClick={(e) => {
-              if (e.target === e.currentTarget) {
-                handleCloseCancelModal();
-              }
-            }}
-          >
-            <div className="relative w-full max-w-sm sm:max-w-md mx-auto h-[70vh] sm:h-[65vh] lg:h-[60vh] flex flex-col">
-              <div className="relative bg-red-500/5 backdrop-blur-md border border-red-500/20 rounded-2xl shadow-2xl shadow-red-500/20 h-full flex flex-col overflow-hidden">
-                <div className="relative z-10 flex-shrink-0 p-4 sm:p-6">
-                  {/* Header del modal */}
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2 sm:gap-3">
-                      <div className="p-1.5 sm:p-2 rounded-lg bg-red-500/20">
-                        <XCircle className="w-4 h-4 sm:w-5 sm:h-5 text-red-400" />
-                      </div>
-                      <h3 className="text-base sm:text-lg font-semibold text-white">Cancelar Cita</h3>
-                    </div>
-                    <button
-                      onClick={handleCloseCancelModal}
-                      className="p-1 text-gray-400 hover:text-white transition-colors duration-200"
-                    >
-                      <XCircle className="w-4 h-4 sm:w-5 sm:h-5" />
-                    </button>
-                  </div>
-                </div>
+        <Modal
+          isOpen={showCancelModal}
+          onClose={handleCloseCancelModal}
+          color="red"
+          icon={XCircle}
+          title="Cancelar Cita"
+          subtitle="El cliente será notificado"
+          size="md"
+          footer={
+            <div className="flex flex-col sm:flex-row gap-3 sm:justify-end">
+              <button
+                type="button"
+                onClick={handleCloseCancelModal}
+                className="px-4 py-2.5 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.08] text-gray-300 hover:text-white text-sm font-medium transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={handleSubmitCancellation}
+                disabled={!cancellationReason.trim()}
+                className="px-5 py-2.5 rounded-xl bg-red-500/80 hover:bg-red-500 border border-red-500/50 text-white text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Confirmar Cancelación
+              </button>
+            </div>
+          }
+        >
+          <div className="space-y-4">
+            <div className="rounded-xl border border-white/[0.08] bg-white/[0.02] p-4">
+              <p className="text-blue-200/80 text-sm leading-relaxed">
+                Como barbero, debe proporcionar un motivo para cancelar la cita. El cliente será notificado.
+              </p>
+            </div>
 
-                {/* Contenido scrolleable */}
-                <div className="flex-1 overflow-y-auto overflow-x-hidden custom-scrollbar px-4 sm:px-6 pb-4 sm:pb-6" style={{ minHeight: 0 }}>
-                  <div className="space-y-3 sm:space-y-4">
-                    {/* Descripción */}
-                    <div className="p-3 sm:p-4 bg-white/5 rounded-lg border border-white/10">
-                      <p className="text-white/80 text-sm sm:text-base leading-relaxed">
-                        Como barbero, debe proporcionar un motivo para cancelar la cita. El cliente será notificado.
-                      </p>
-                    </div>
-                    
-                    {/* Textarea */}
-                    <div className="relative">
-                      <textarea
-                        value={cancellationReason}
-                        onChange={(e) => setCancellationReason(e.target.value)}
-                        placeholder="Escriba el motivo de la cancelación (máximo 100 palabras)..."
-                        className="glassmorphism-textarea h-24 sm:h-28 text-xs sm:text-sm"
-                        maxLength={500}
-                      />
-                    </div>
-                    
-                    <div className="text-right text-xs text-white/60">
-                      {cancellationReason.split(' ').filter(word => word.length > 0).length}/100 palabras
-                    </div>
-                    
-                    <div className="flex justify-end gap-2 sm:gap-3 pt-2 sm:pt-4">
-                      <button
-                        onClick={handleCloseCancelModal}
-                        className="px-3 sm:px-4 py-2 text-white/80 hover:text-white transition-all duration-200 text-xs sm:text-sm font-medium"
-                      >
-                        Cancelar
-                      </button>
-                      <button
-                        onClick={handleSubmitCancellation}
-                        disabled={!cancellationReason.trim()}
-                        className="px-4 sm:px-6 py-2 bg-gradient-to-r from-red-500 to-red-600 text-white rounded-xl hover:from-red-600 hover:to-red-700 transition-all duration-200 text-xs sm:text-sm font-medium shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
-                      >
-                        Confirmar Cancelación
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              </div>
+            <textarea
+              value={cancellationReason}
+              onChange={(e) => setCancellationReason(e.target.value)}
+              placeholder="Escriba el motivo de la cancelación (máximo 100 palabras)..."
+              className="glassmorphism-textarea h-24 sm:h-28 text-xs sm:text-sm"
+              maxLength={500}
+            />
+
+            <div className="text-right text-xs text-blue-200/60">
+              {cancellationReason.split(' ').filter(word => word.length > 0).length}/100 palabras
             </div>
           </div>
-        )}
+        </Modal>
 
         {/* Modal de Información de Cita */}
-        {showInfoModal && selectedAppointment && (
-          <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-[9999] p-4 sm:p-6 lg:p-8">
-            <div className="relative w-full max-w-sm sm:max-w-md lg:max-w-lg mx-auto h-[90vh] sm:h-[85vh] lg:h-[80vh] flex flex-col">
-              <div className={`relative backdrop-blur-md border rounded-2xl shadow-2xl h-full flex flex-col overflow-hidden ${
-                selectedAppointment.status === 'confirmed' ? 'bg-green-500/5 border-green-500/20 shadow-green-500/20' :
-                selectedAppointment.status === 'pending' ? 'bg-yellow-500/5 border-yellow-500/20 shadow-yellow-500/20' :
-                selectedAppointment.status === 'cancelled' ? 'bg-red-500/5 border-red-500/20 shadow-red-500/20' :
-                'bg-blue-500/5 border-blue-500/20 shadow-blue-500/20'
-              }`}>
-                {/* Header fijo */}
-                <div className="relative z-10 flex-shrink-0 p-4 sm:p-6">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2 sm:gap-3">
-                      <div className={`p-1.5 sm:p-2 rounded-lg ${
-                        selectedAppointment.status === 'confirmed' ? 'bg-green-500/20' :
-                        selectedAppointment.status === 'pending' ? 'bg-yellow-500/20' :
-                        selectedAppointment.status === 'cancelled' ? 'bg-red-500/20' :
-                        'bg-blue-500/20'
-                      }`}>
-                        <Calendar className={`w-4 h-4 sm:w-5 sm:h-5 ${
-                          selectedAppointment.status === 'confirmed' ? 'text-green-400' :
-                          selectedAppointment.status === 'pending' ? 'text-yellow-400' :
-                          selectedAppointment.status === 'cancelled' ? 'text-red-400' :
-                          'text-blue-400'
-                        }`} />
-                      </div>
-                      <h3 className="text-base sm:text-lg font-semibold text-white">Información de Cita</h3>
-                    </div>
-                    <button 
-                      onClick={handleCloseInfoModal}
-                      className="p-1 text-gray-400 hover:text-white transition-colors duration-200"
-                    >
-                      <XCircle className="w-4 h-4 sm:w-5 sm:h-5" />
-                    </button>
-                  </div>
-                </div>
-                
-                {/* Contenido scrolleable */}
-                <div className="flex-1 overflow-y-auto overflow-x-hidden custom-scrollbar px-4 sm:px-6 pb-4 sm:pb-6" style={{ minHeight: 0 }}>
-                  <div className="space-y-4">
-                    {/* Estado */}
-                    <div className="bg-white/5 rounded-xl p-4 border border-white/10">
-                      <div className="flex items-center justify-between mb-2">
-                        <h4 className="text-sm font-semibold text-white">Estado</h4>
-                        <div className={`px-2.5 py-1 rounded-full text-xs font-medium border ${
-                          selectedAppointment.status === 'confirmed' ? 'bg-green-500/20 text-green-300 border-green-500/40' :
-                          selectedAppointment.status === 'pending' ? 'bg-yellow-500/20 text-yellow-300 border-yellow-500/40' :
-                          selectedAppointment.status === 'cancelled' ? 'bg-red-500/20 text-red-300 border-red-500/40' :
-                          'bg-blue-500/20 text-blue-300 border-blue-500/40'
-                        }`}>
-                          {selectedAppointment.status === 'pending' ? 'Pendiente' :
-                           selectedAppointment.status === 'confirmed' ? 'Confirmada' :
-                           selectedAppointment.status === 'cancelled' ? 'Cancelada' :
-                           'Completada'}
-                        </div>
-                      </div>
-                      
-                      {/* Motivo de cancelación dentro del estado */}
-                      {selectedAppointment.status === 'cancelled' && selectedAppointment.cancellationReason && (
-                        <div className="mt-3 p-3 bg-red-500/10 border border-red-500/20 rounded-lg">
-                          <div className="flex items-start gap-2">
-                            <AlertTriangle className="w-4 h-4 text-red-400 flex-shrink-0 mt-0.5" />
-                            <div>
-                              <h5 className="text-xs font-semibold text-red-300 mb-1">Motivo de Cancelación</h5>
-                              <p className="text-xs text-red-200/80 leading-relaxed">{selectedAppointment.cancellationReason}</p>
-                              <p className="text-xs text-red-300/60 mt-1">
-                                Cancelada por: {selectedAppointment.cancelledBy === 'barber' ? 'Barbero' : 'Cliente'}
-                              </p>
-                            </div>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Cliente */}
-                    <div className="bg-white/5 rounded-xl p-4 border border-white/10">
-                      <h4 className="text-sm font-semibold text-white mb-2">Cliente</h4>
-                      <div className="space-y-1">
-                        <p className="text-sm text-gray-300">
-                          <User className="w-4 h-4 inline mr-2" />
-                          {selectedAppointment.user?.name || 'Usuario no disponible'}
-                        </p>
-                        {selectedAppointment.user?.email && (
-                          <p className="text-sm text-gray-300">
-                            📧 {selectedAppointment.user.email}
-                          </p>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Fecha y Hora */}
-                    <div className="bg-white/5 rounded-xl p-4 border border-white/10">
-                      <h4 className="text-sm font-semibold text-white mb-2">Fecha y Hora</h4>
-                      <div className="space-y-1">
-                        <p className="text-sm text-gray-300">
-                          <Calendar className="w-4 h-4 inline mr-2" />
-                          {format(new Date(selectedAppointment.date), 'EEEE, d MMMM yyyy', { locale: es })}
-                        </p>
-                        <p className="text-sm text-gray-300">
-                          <Clock className="w-4 h-4 inline mr-2" />
-                          {format(new Date(selectedAppointment.date), "HH:mm")}
-                        </p>
-                      </div>
-                    </div>
-
-                    {/* Servicio */}
-                    <div className="bg-white/5 rounded-xl p-4 border border-white/10">
-                      <h4 className="text-sm font-semibold text-white mb-2">Servicio</h4>
-                      <div className="space-y-2">
-                        <p className="text-sm text-gray-300">
-                          <Scissors className="w-4 h-4 inline mr-2" />
-                          {selectedAppointment.service?.name || 'Servicio no especificado'}
-                        </p>
-                        {selectedAppointment.service?.duration && (
-                          <p className="text-xs text-gray-400">
-                            Duración: {selectedAppointment.service.duration} minutos
-                          </p>
-                        )}
-                        <p className="text-sm font-medium text-green-400">
-                          ${selectedAppointment.status === 'cancelled' ? '0' : (selectedAppointment.service?.price?.toLocaleString() || '0')}
-                        </p>
-                      </div>
-                    </div>
-
-                    {/* Notas adicionales */}
-                    {selectedAppointment.notes && (
-                      <div className="bg-white/5 rounded-xl p-4 border border-white/10">
-                        <h4 className="text-sm font-semibold text-white mb-2">Notas</h4>
-                        <p className="text-sm text-gray-300">{selectedAppointment.notes}</p>
-                      </div>
-                    )}
-                  </div>
+        {(selectedAppointment != null) && ((
+        <Modal
+          isOpen={showInfoModal}
+          onClose={handleCloseInfoModal}
+          color="blue"
+          icon={Calendar}
+          title="Información de Cita"
+          subtitle="Detalles completos de la cita"
+          size="lg"
+        >
+          <div className="space-y-4">
+            {/* Estado */}
+            <div className="rounded-xl border border-white/[0.08] bg-white/[0.02] p-4">
+              <div className="flex items-center justify-between mb-2">
+                <h4 className="text-sm font-semibold text-blue-200">Estado</h4>
+                <div className={`px-2.5 py-1 rounded-full text-xs font-medium border ${
+                  selectedAppointment.status === 'confirmed' ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40' :
+                  selectedAppointment.status === 'pending' ? 'bg-amber-500/20 text-amber-300 border-amber-500/40' :
+                  selectedAppointment.status === 'cancelled' ? 'bg-red-500/20 text-red-300 border-red-500/40' :
+                  'bg-blue-500/20 text-blue-300 border-blue-500/40'
+                }`}>
+                  {selectedAppointment.status === 'pending' ? 'Pendiente' :
+                   selectedAppointment.status === 'confirmed' ? 'Confirmada' :
+                   selectedAppointment.status === 'cancelled' ? 'Cancelada' :
+                   'Completada'}
                 </div>
               </div>
+              
+              {/* Motivo de cancelación dentro del estado */}
+              {selectedAppointment.status === 'cancelled' && selectedAppointment.cancellationReason && (
+                <div className="mt-3 p-3 bg-red-500/10 border border-red-500/20 rounded-lg">
+                  <div className="flex items-start gap-2">
+                    <AlertTriangle className="w-4 h-4 text-red-400 flex-shrink-0 mt-0.5" />
+                    <div>
+                      <h5 className="text-xs font-semibold text-red-300 mb-1">Motivo de Cancelación</h5>
+                      <p className="text-xs text-red-200/80 leading-relaxed">{selectedAppointment.cancellationReason}</p>
+                      <p className="text-xs text-red-300/60 mt-1">
+                        Cancelada por: {selectedAppointment.cancelledBy === 'barber' ? 'Barbero' : 'Cliente'}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
+
+            {/* Cliente */}
+            <div className="rounded-xl border border-white/[0.08] bg-white/[0.02] p-4">
+              <h4 className="text-sm font-semibold text-blue-200 mb-2">Cliente</h4>
+              <div className="space-y-1">
+                <p className="text-sm text-gray-300">
+                  <User className="w-4 h-4 inline mr-2" />
+                  {selectedAppointment.user?.name || 'Usuario no disponible'}
+                </p>
+                {selectedAppointment.user?.email && (
+                  <p className="text-sm text-gray-300">
+                    <Mail className="w-4 h-4 inline mr-2" />{selectedAppointment.user.email}
+                  </p>
+                )}
+              </div>
+            </div>
+
+            {/* Fecha y Hora */}
+            <div className="rounded-xl border border-white/[0.08] bg-white/[0.02] p-4">
+              <h4 className="text-sm font-semibold text-blue-200 mb-2">Fecha y Hora</h4>
+              <div className="space-y-1">
+                <p className="text-sm text-gray-300">
+                  <Calendar className="w-4 h-4 inline mr-2" />
+                  {format(new Date(selectedAppointment.date), 'EEEE, d MMMM yyyy', { locale: es })}
+                </p>
+                <p className="text-sm text-gray-300">
+                  <Clock className="w-4 h-4 inline mr-2" />
+                  {format(new Date(selectedAppointment.date), "HH:mm")}
+                </p>
+              </div>
+            </div>
+
+            {/* Servicio */}
+            <div className="rounded-xl border border-white/[0.08] bg-white/[0.02] p-4">
+              <h4 className="text-sm font-semibold text-blue-200 mb-2">Servicio</h4>
+              <div className="space-y-2">
+                <p className="text-sm text-gray-300">
+                  <Scissors className="w-4 h-4 inline mr-2" />
+                  {selectedAppointment.service?.name || 'Servicio no especificado'}
+                </p>
+                {selectedAppointment.service?.duration && (
+                  <p className="text-xs text-gray-400">
+                    Duración: {selectedAppointment.service.duration} minutos
+                  </p>
+                )}
+                <p className="text-sm font-medium text-emerald-400">
+                  ${selectedAppointment.status === 'cancelled' ? '0' : (selectedAppointment.service?.price?.toLocaleString() || '0')}
+                </p>
+              </div>
+            </div>
+
+            {/* Notas adicionales */}
+            {selectedAppointment.notes && (
+              <div className="rounded-xl border border-white/[0.08] bg-white/[0.02] p-4">
+                <h4 className="text-sm font-semibold text-blue-200 mb-2">Notas</h4>
+                <p className="text-sm text-gray-300">{selectedAppointment.notes}</p>
+              </div>
+            )}
           </div>
-        )}
+        </Modal>
+        ))}
 
         {/* Modal de Confirmación de Eliminación */}
-        {showDeleteModal && (
-          <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-[9999] p-4 sm:p-6 lg:p-8">
-            <div className="relative w-full max-w-sm sm:max-w-md mx-auto">
-              <div className="relative bg-red-500/5 backdrop-blur-md border border-red-500/20 rounded-2xl shadow-2xl shadow-red-500/20 overflow-hidden">
-                <div className="relative z-10 p-4 sm:p-6">
-                  <div className="flex items-center justify-between mb-4">
-                    <div className="flex items-center gap-2 sm:gap-3">
-                      <div className="p-1.5 sm:p-2 rounded-lg bg-red-500/20">
-                        <Trash2 className="w-4 h-4 sm:w-5 sm:h-5 text-red-400" />
-                      </div>
-                      <h3 className="text-base sm:text-lg font-semibold text-white">Eliminar Reporte</h3>
-                    </div>
-                    <button 
-                      onClick={handleCloseDeleteModal}
-                      className="p-1 text-gray-400 hover:text-white transition-colors duration-200"
-                    >
-                      <XCircle className="w-4 h-4 sm:w-5 sm:h-5" />
-                    </button>
-                  </div>
-                  
-                  <div className="mb-6">
-                    <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-4 mb-4">
-                      <div className="flex items-center gap-3">
-                        <AlertTriangle className="w-6 h-6 text-red-400 flex-shrink-0" />
-                        <div>
-                          <h4 className="text-sm font-semibold text-red-300 mb-1">Acción Irreversible</h4>
-                          <p className="text-sm text-red-200/80">Esta acción no se puede deshacer.</p>
-                        </div>
-                      </div>
-                    </div>
-                    
-                    <p className="text-sm text-gray-300 mb-2">
-                      ¿Estás seguro de que deseas eliminar este reporte de cita?
-                    </p>
-                    <p className="text-xs text-gray-400">
-                      Se eliminará permanentemente del historial y no podrá ser recuperado.
-                    </p>
-                  </div>
-                  
-                  <div className="flex gap-3">
-                    <button
-                      onClick={handleCloseDeleteModal}
-                      className="flex-1 px-3 sm:px-4 py-2 text-white/80 hover:text-white transition-all duration-200 text-xs sm:text-sm font-medium border border-white/20 rounded-xl hover:border-white/40"
-                    >
-                      Cancelar
-                    </button>
-                    <button
-                      onClick={() => handleDeleteAppointment(deleteAppointmentId)}
-                      className="flex-1 px-4 sm:px-6 py-2 bg-gradient-to-r from-red-500 to-red-600 text-white rounded-xl hover:from-red-600 hover:to-red-700 transition-all duration-200 text-xs sm:text-sm font-medium shadow-lg"
-                    >
-                      Eliminar
-                    </button>
-                  </div>
+        <Modal
+          isOpen={showDeleteModal}
+          onClose={handleCloseDeleteModal}
+          color="red"
+          icon={Trash2}
+          title="Eliminar Reporte"
+          subtitle="Esta acción no se puede deshacer"
+          size="md"
+          footer={
+            <div className="flex flex-col sm:flex-row gap-3 sm:justify-end">
+              <button
+                type="button"
+                onClick={handleCloseDeleteModal}
+                className="px-4 py-2.5 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.08] text-gray-300 hover:text-white text-sm font-medium transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={() => handleDeleteAppointment(deleteAppointmentId)}
+                className="px-5 py-2.5 rounded-xl bg-red-500/80 hover:bg-red-500 border border-red-500/50 text-white text-sm font-medium transition-colors"
+              >
+                Eliminar
+              </button>
+            </div>
+          }
+        >
+          <div className="space-y-4">
+            <div className="rounded-xl border border-red-500/20 bg-red-500/10 p-4">
+              <div className="flex items-center gap-3">
+                <AlertTriangle className="w-6 h-6 text-red-400 flex-shrink-0" />
+                <div>
+                  <h4 className="text-sm font-semibold text-red-300 mb-1">Acción Irreversible</h4>
+                  <p className="text-sm text-red-200/80">Esta acción no se puede deshacer.</p>
                 </div>
               </div>
             </div>
+
+            <p className="text-sm text-gray-300 mb-2">
+              ¿Estás seguro de que deseas eliminar este reporte de cita?
+            </p>
+            <p className="text-xs text-gray-400">
+              Se eliminará permanentemente del historial y no podrá ser recuperado.
+            </p>
           </div>
-        )}
+        </Modal>
 
         {/* Modal de completar cita */}
         <CompleteAppointmentModal

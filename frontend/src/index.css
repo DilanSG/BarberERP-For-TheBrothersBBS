@@ -1,3 +1,6 @@
+@import './styles/tokens.css';
+@import './styles/theme-light.css';
+@import './styles/barber-poles.css';
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -244,17 +247,16 @@
   .custom-scrollbar::-webkit-scrollbar-track {
     background: rgba(255, 255, 255, 0.05);
     border-radius: 10px;
-    backdrop-filter: blur(4px);
   }
   
   .custom-scrollbar::-webkit-scrollbar-thumb {
-    background: linear-gradient(135deg, rgba(59, 130, 246, 0.4), rgba(147, 51, 234, 0.4));
+    background: linear-gradient(135deg, rgba(59, 130, 246, 0.4), rgba(37, 99, 235, 0.4));
     border-radius: 10px;
     border: 1px solid rgba(255, 255, 255, 0.1);
   }
   
   .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-    background: linear-gradient(135deg, rgba(59, 130, 246, 0.6), rgba(147, 51, 234, 0.6));
+    background: linear-gradient(135deg, rgba(59, 130, 246, 0.6), rgba(37, 99, 235, 0.6));
     box-shadow: 0 0 10px rgba(59, 130, 246, 0.3);
   }
 
@@ -272,7 +274,6 @@
   .red-scrollbar::-webkit-scrollbar-track {
     background: rgba(0, 0, 0, 0.1);
     border-radius: 10px;
-    backdrop-filter: blur(4px);
   }
   
   .red-scrollbar::-webkit-scrollbar-thumb {
@@ -292,60 +293,53 @@
     scrollbar-color: rgba(239, 68, 68, 0.4) rgba(0, 0, 0, 0.1);
   }
 
-  /* Inputs glassmorphism */
+  /* Inputs estilo shadcn (dark): borde sutil, fondo tenue, ring suave.
+     En móvil: 16px (evita el auto-zoom de iOS) y 44px de alto táctil. */
   .glassmorphism-input {
-    @apply w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-white text-sm backdrop-blur-sm placeholder-gray-400;
-    @apply focus:border-blue-500/50 focus:ring-2 focus:ring-blue-500/20 focus:bg-white/10;
-    @apply shadow-lg shadow-blue-500/10 transition-all duration-300;
+    @apply flex h-11 w-full rounded-xl border border-white/[0.08] bg-white/[0.02] px-3.5 py-2 text-base text-white sm:h-10 sm:text-sm;
+    @apply placeholder:text-gray-500;
+    @apply transition-colors duration-150 ease-out;
+    @apply focus-visible:outline-none focus-visible:border-blue-500/40 focus-visible:ring-2 focus-visible:ring-blue-500/15 focus-visible:bg-white/[0.04];
+    @apply disabled:cursor-not-allowed disabled:opacity-50;
   }
 
-  /* Textarea glassmorphism */
+  /* Textarea estilo shadcn */
   .glassmorphism-textarea {
-    @apply w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-white text-sm backdrop-blur-sm placeholder-gray-400 resize-none;
-    @apply focus:border-blue-500/50 focus:ring-2 focus:ring-blue-500/20 focus:bg-white/10;
-    @apply shadow-lg shadow-blue-500/10 transition-all duration-300;
+    @apply w-full rounded-xl border border-white/[0.08] bg-white/[0.02] px-3.5 py-2.5 text-base text-white resize-none sm:text-sm;
+    @apply placeholder:text-gray-500;
+    @apply transition-colors duration-150 ease-out;
+    @apply focus-visible:outline-none focus-visible:border-blue-500/40 focus-visible:ring-2 focus-visible:ring-blue-500/15 focus-visible:bg-white/[0.04];
+    @apply disabled:cursor-not-allowed disabled:opacity-50;
   }
 
-  /* Select glassmorphism */
+  /* Select estilo shadcn */
   .glassmorphism-select {
-    @apply w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-white text-sm backdrop-blur-sm;
-    @apply focus:border-blue-500/50 focus:ring-2 focus:ring-blue-500/20 focus:bg-white/10;
-    @apply shadow-lg shadow-blue-500/10 transition-all duration-300 appearance-none;
+    @apply h-11 w-full rounded-xl border border-white/[0.08] bg-white/[0.02] px-3.5 py-2 text-base text-white cursor-pointer sm:h-10 sm:text-sm;
+    @apply transition-colors duration-150 ease-out;
+    @apply focus-visible:outline-none focus-visible:border-blue-500/40 focus-visible:ring-2 focus-visible:ring-blue-500/15 focus-visible:bg-white/[0.04];
+    @apply appearance-none disabled:cursor-not-allowed disabled:opacity-50;
     background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='m6 8 4 4 4-4'/%3e%3c/svg%3e");
-    background-position: right 0.5rem center;
+    background-position: right 0.65rem center;
     background-repeat: no-repeat;
-    background-size: 1.5em 1.5em;
+    background-size: 1.25em 1.25em;
     padding-right: 2.5rem;
   }
 
-  /* Opciones de select glassmorphism */
+  /* Opciones de select (dark sólido, sin ruido) */
   .glassmorphism-select option {
-    background-color: #1f2937;
-    background-image: linear-gradient(135deg, rgba(59, 130, 246, 0.1), rgba(147, 51, 234, 0.1));
-    color: #ffffff;
+    background-color: #1c2030;
+    color: #e5e7eb;
     padding: 8px 12px;
-    border: none;
-    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
-  }
-
-  .glassmorphism-select option:hover,
-  .glassmorphism-select option:focus {
-    background-color: #374151;
-    background-image: linear-gradient(135deg, rgba(59, 130, 246, 0.2), rgba(147, 51, 234, 0.2));
-    color: #93c5fd;
   }
 
   .glassmorphism-select option:checked {
     background-color: #1d4ed8;
-    background-image: linear-gradient(135deg, rgba(59, 130, 246, 0.3), rgba(147, 51, 234, 0.3));
     color: #ffffff;
     font-weight: 600;
   }
 
   .glassmorphism-select option:disabled {
-    background-color: #374151;
-    color: #9ca3af;
-    opacity: 0.6;
+    color: #6b7280;
   }
 
   /* Input date glassmorphism */
@@ -399,16 +393,28 @@
 }
 
 body {
-  @apply bg-gray-900 text-gray-100;
-  background-color: #111827 !important;  /* Forzar fondo oscuro */
+  @apply text-gray-100;
+  background-color: var(--app-bg) !important;
+  color: var(--text-primary);
+}
+
+html {
+  overflow-x: hidden;
+  scroll-behavior: smooth;
+}
+
+/* Dropdowns/controles nativos acordes al tema oscuro */
+html.dark {
+  color-scheme: dark;
 }
 
 input, button, textarea, select {
   @apply outline-none focus:ring-2 focus:ring-blue-400 transition-all;
 }
 
+/* Fluid container — sin ancho fijo, estira a lados. Fase 1 */
 .container {
-  @apply max-w-6xl mx-auto px-4;
+  @apply w-full mx-auto px-[clamp(1rem,4vw,3rem)] max-w-none;
 }
 
 .card {
@@ -472,4 +478,41 @@ input, button, textarea, select {
 
 .animate-fade-out {
   animation: fade-out 0.2s ease-in;
+}
+
+/* ── Modal abierto: ocultar el navbar para que la vista sea solo el modal ── */
+/* Detecta cualquier overlay de modal ([data-modal-overlay]) y oculta el navbar.  */
+/* También cubre el caso gestionado por scrollLockManager (html.modal-open).      */
+html:has([data-modal-overlay]) nav[data-app-navbar],
+html.modal-open nav[data-app-navbar] {
+  transform: translateY(-100%) !important;
+  opacity: 0;
+  pointer-events: none;
+  transition: transform 0.25s ease-out, opacity 0.2s ease-out;
+}
+
+/* ── Modales: rendimiento al hacer scroll ───────────────────────────────────
+   - Panel opaco con tinte por color: evita backdrop-filter (caro al scrollear).
+   - contain/translateZ: aísla pintura y promueve el panel a su propia capa.
+   - Sin backdrop-filter anidado dentro de modales: cada chip/card con blur
+     obligaba a re-difuminar por frame al desplazar la lista. */
+.modal-panel {
+  background-color: #12151d;
+  contain: layout paint;
+  transform: translateZ(0);
+}
+.modal-panel[data-modal-color="neutral"] { background-color: #151821; }
+.modal-panel[data-modal-color="red"] { background-image: linear-gradient(rgba(239, 68, 68, 0.06), rgba(239, 68, 68, 0.06)); }
+.modal-panel[data-modal-color="blue"] { background-image: linear-gradient(rgba(59, 130, 246, 0.06), rgba(59, 130, 246, 0.06)); }
+.modal-panel[data-modal-color="emerald"] { background-image: linear-gradient(rgba(16, 185, 129, 0.06), rgba(16, 185, 129, 0.06)); }
+.modal-panel[data-modal-color="amber"] { background-image: linear-gradient(rgba(245, 158, 11, 0.07), rgba(245, 158, 11, 0.07)); }
+.modal-panel[data-modal-color="brand"] { background-image: linear-gradient(rgba(198, 166, 100, 0.08), rgba(198, 166, 100, 0.08)); }
+
+[data-modal-overlay] .backdrop-blur-sm,
+[data-modal-overlay] .backdrop-blur,
+[data-modal-overlay] .backdrop-blur-md,
+[data-modal-overlay] .backdrop-blur-lg,
+[data-modal-overlay] .backdrop-blur-xl {
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
 }

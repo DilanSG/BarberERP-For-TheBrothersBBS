@@ -1,3 +1,5 @@
+// Conecta el NotificationContext de React con el módulo api.js, de modo que los
+// errores HTTP disparen notificaciones globales; lo desconecta al desmontar.
 import { useEffect } from 'react';
 import { useNotification } from '../contexts/NotificationContext';
 import { setNotificationContext } from '../services/api';

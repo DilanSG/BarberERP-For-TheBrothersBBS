@@ -1,5 +1,9 @@
 import { logger } from './logger.js';
 
+// Error de aplicación con status HTTP y datos extra.
+// @param {string} message - Mensaje para el cliente
+// @param {number} statusCode - Código HTTP
+// @param {*} details - Detalle adicional (ej. errores de validación)
 export class AppError extends Error {
   constructor(message, statusCode, details = null) {
     super(message);
@@ -12,9 +16,7 @@ export class AppError extends Error {
   }
 }
 
-/**
- * Errores comunes predefinidos
- */
+// Errores comunes predefinidos
 export const CommonErrors = {
   // Errores de autenticación (401)
   UNAUTHORIZED: new AppError('No autorizado. Por favor inicie sesión', 401),
@@ -60,9 +62,10 @@ export const CommonErrors = {
   INVALID_OPERATION: (message) => new AppError(message, 422)
 };
 
-/**
- * Función para manejar errores
- */
+// Función para manejar errores
+// Envía una respuesta JSON uniforme; en desarrollo incluye stack y error completo.
+// @param {Error} err - Error capturado
+// @param {Object} res - Response de Express
 export const handleError = (err, res) => {
   const { statusCode = 500, message, status = 'error', details, isOperational = false } = err;
   
@@ -89,9 +92,9 @@ export const handleError = (err, res) => {
   res.status(statusCode).json(response);
 };
 
-/**
- * Wrapper para manejar errores en funciones asíncronas
- */
+// Wrapper para manejar errores en funciones asíncronas
+// @param {Function} fn - Handler async de Express
+// @returns {Function} Handler que reenvía los rechazos a next()
 export const asyncHandler = (fn) => {
   return (req, res, next) => {
     Promise.resolve(fn(req, res, next)).catch(next);

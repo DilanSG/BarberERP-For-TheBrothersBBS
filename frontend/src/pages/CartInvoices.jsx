@@ -12,26 +12,30 @@ import {
   X,
   CreditCard,
   Banknote,
-  ArrowLeftRight
+  ArrowLeftRight,
+  ShoppingCart
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@contexts/AuthContext';
 import { useNotification } from '@contexts/NotificationContext';
 import { PageContainer } from '@components/layout/PageContainer';
 import GradientText from '@components/ui/GradientText';
-import { salesService } from '@services/api';
+import Modal from '@components/ui/Modal';
+import { salesService } from '@services/salesService';
 import { logger } from '@utils/logger';
+import { CartInvoicesSkeleton } from '@components/ui/Skeleton';
+import { BUSINESS, isIvaResponsible } from '@shared/config/business';
 
-/**
- * Vista de Facturas de Carrito
- * Muestra todas las facturas generadas desde carritos de venta con datos de cliente
- */
+// Vista de Facturas de Carrito.
+// Lista todas las facturas/carritos generados desde el punto de venta, los
+// agrupa por carrito, permite buscar/filtrar y abrir el detalle en un modal.
 const CartInvoices = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
   const { showSuccess, showError } = useNotification();
 
   // Estados
+  // invoices: facturas consolidadas; filteredInvoices: resultado de búsqueda/fecha
   const [invoices, setInvoices] = useState([]);
   const [filteredInvoices, setFilteredInvoices] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -50,6 +54,7 @@ const CartInvoices = () => {
     filterInvoices();
   }, [searchTerm, dateFilter, invoices]);
 
+  // Carga las facturas de carrito desde el servicio de ventas y las consolida
   const loadCartInvoices = async () => {
     try {
       setLoading(true);
@@ -86,6 +91,7 @@ const CartInvoices = () => {
   };
 
   // Función helper para obtener resumen de métodos de pago
+  // Agrupa los items por método, suma montos y calcula el porcentaje de cada uno
   const getPaymentMethodsSummary = (items) => {
     const paymentSummary = {};
     
@@ -105,6 +111,7 @@ const CartInvoices = () => {
   };
 
   // Función helper para obtener icono de método de pago
+  // Efectivo, tarjeta o transferencia (incluye billeteras) con fallback genérico
   const getPaymentIcon = (method) => {
     switch (method?.toLowerCase()) {
       case 'efectivo':
@@ -121,6 +128,8 @@ const CartInvoices = () => {
   };
 
   // Agrupar ventas por CARRITO (mismo minuto + mismo barbero)
+  // Cada venta suelta (producto/servicio) se une a su carrito y los reembolsados
+  // se incluyen con cantidad/total 0 para que la factura refleje el estado actual.
   const groupSalesByInvoice = (sales) => {
     const grouped = {};
 
@@ -188,6 +197,7 @@ const CartInvoices = () => {
     return Object.values(grouped).sort((a, b) => new Date(b.date) - new Date(a.date));
   };
 
+  // Aplica búsqueda por texto (cliente/barbero/productos) y filtro por rango de fecha
   const filterInvoices = () => {
     let filtered = [...invoices];
 
@@ -242,6 +252,7 @@ const CartInvoices = () => {
     setFilteredInvoices(filtered);
   };
 
+  // Formatea un monto como pesos colombianos sin decimales
   const formatPrice = (amount) => {
     return new Intl.NumberFormat('es-CO', {
       style: 'currency',
@@ -250,6 +261,7 @@ const CartInvoices = () => {
     }).format(amount);
   };
 
+  // Formatea fecha y hora en formato corto es-CO
   const formatDate = (dateString) => {
     return new Date(dateString).toLocaleString('es-CO', {
       year: 'numeric',
@@ -260,49 +272,47 @@ const CartInvoices = () => {
     });
   };
 
+  // Abre el modal de detalle guardando la factura seleccionada
   const openInvoiceModal = (invoice) => {
     setSelectedInvoice(invoice);
     setIsModalOpen(true);
   };
 
+  // Cierra el modal y limpia la selección
   const closeInvoiceModal = () => {
     setSelectedInvoice(null);
     setIsModalOpen(false);
   };
 
-  /**
-   * Genera e imprime una factura cumpliendo con requisitos legales DIAN (Resolución 000165 de 2023)
-   * usando la estructura de facturas consolidadas (formato térmico 80mm)
-   * 
-   * Estructura de la factura:
-   * - Header: "THE BROTHERS BARBER SHOP" + NIT + Dirección + Régimen fiscal
-   * - Documento Equivalente POS con número consecutivo y resolución DIAN
-   * - Información del Cliente: nombre, email, teléfono, dirección (solo si clientData existe)
-   * - Información de la Venta: fecha, barbero, número de items
-   * - Tabla de Items: descripción, cantidad, precio unitario, IVA, total
-   * - Resumen: subtotal, impuestos (19% IVA si aplica), total final
-   * - Métodos de Pago: desglose por método con montos
-   * - Footer: mensaje de agradecimiento + Software POS + espacio para QR/CUDE futuro
-   * 
-   * @param {Object} invoice - Objeto de factura con datos completos del carrito
-   */
+  // Genera e imprime una factura cumpliendo con requisitos legales DIAN (Resolución 000165 de 2023)
+  // usando la estructura de facturas consolidadas (formato térmico 80mm).
+  //
+  // Estructura de la factura:
+  // - Header: "THE BROTHERS BARBER SHOP" + NIT + Dirección + Régimen fiscal
+  // - Documento Equivalente POS con número consecutivo y resolución DIAN
+  // - Información del Cliente: nombre, email, teléfono, dirección (solo si clientData existe)
+  // - Información de la Venta: fecha, barbero, número de items
+  // - Tabla de Items: descripción, cantidad, precio unitario, IVA, total
+  // - Resumen: subtotal, impuestos (19% IVA si aplica), total final
+  // - Métodos de Pago: desglose por método con montos
+  // - Footer: mensaje de agradecimiento + Software POS + espacio para QR/CUDE futuro
   const printInvoice = (invoice) => {
     // Configuración del establecimiento (Requerimientos DIAN)
     const establecimiento = {
-      nombre: "THE BROTHERS BARBER SHOP",
-      nit: "123456-8", // Actualizar con NIT real
-      direccion: "Cra 77vBis #52 A - 08, Bogotá,Cundinamarca",
-      telefono: "311 588 2528",
-      regimen: "No responsable de IVA (Art. 437 ET)", // Actualizar según régimen real
-      resolucionDIAN: "18760000012345 del 01/01/2025" // Actualizar con resolución real
+      nombre: BUSINESS.name,
+      nit: BUSINESS.nit,
+      direccion: BUSINESS.address,
+      telefono: BUSINESS.phone,
+      regimen: BUSINESS.taxRegime,
+      resolucionDIAN: BUSINESS.dianResolution
     };
 
     // Generar número consecutivo POS (en producción debe ser secuencial desde BD)
     const consecutivoPOS = `POS-${String(Math.floor(Math.random() * 999999) + 1).padStart(6, '0')}`;
     
     // Determinar si es responsable de IVA
-    const esResponsableIVA = establecimiento.regimen.toLowerCase().includes('responsable de iva');
-    const tarifaIVA = esResponsableIVA ? 0.19 : 0;
+    const esResponsableIVA = isIvaResponsible();
+    const tarifaIVA = esResponsableIVA ? BUSINESS.ivaRate : 0;
     
     // Calcular impuestos por item y totales (PRECIOS YA INCLUYEN IVA)
     let subtotalGeneral = 0;
@@ -547,9 +557,7 @@ const CartInvoices = () => {
   if (loading) {
     return (
       <PageContainer>
-        <div className="flex items-center justify-center min-h-screen">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
-        </div>
+        <CartInvoicesSkeleton cards={6} />
       </PageContainer>
     );
   }
@@ -565,6 +573,7 @@ const CartInvoices = () => {
             </GradientText>
             <p className="text-gray-400">
               {filteredInvoices.length} carrito{filteredInvoices.length !== 1 ? 's' : ''} encontrado{filteredInvoices.length !== 1 ? 's' : ''}
+              {/* Desglose: carritos con datos de cliente (factura) vs ventas POS */}
               {filteredInvoices.length > 0 && (
                 <span className="ml-2 text-sm">
                   • {filteredInvoices.filter(i => i.clientData).length} con factura
@@ -585,7 +594,7 @@ const CartInvoices = () => {
               placeholder="Buscar por cliente, barbero o 'venta pos'..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 bg-white/5 border border-blue-500/30 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-blue-500/50"
+              className="w-full min-h-11 pl-10 pr-4 py-2 bg-white/5 border border-blue-500/30 rounded-lg text-base sm:text-sm text-white placeholder-gray-400 focus:outline-none focus:border-blue-500/50"
             />
             {searchTerm && (
               <button
@@ -603,7 +612,7 @@ const CartInvoices = () => {
             <select
               value={dateFilter}
               onChange={(e) => setDateFilter(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 bg-white/5 border border-blue-500/30 rounded-lg text-white focus:outline-none focus:border-blue-500/50"
+              className="w-full min-h-11 pl-10 pr-4 py-2 bg-white/5 border border-blue-500/30 rounded-lg text-base sm:text-sm text-white focus:outline-none focus:border-blue-500/50"
             >
               <option value="all">Todas las fechas</option>
               <option value="today">Hoy</option>
@@ -614,6 +623,7 @@ const CartInvoices = () => {
         </div>
 
         {/* Lista de facturas - Grid 3 columnas */}
+        {/* Estado vacío (con/sin filtros) o grid de tarjetas de carrito */}
         {filteredInvoices.length === 0 ? (
           <div className="text-center py-12 bg-white/5 rounded-xl border border-blue-500/20">
             <FileText className="w-16 h-16 text-gray-400 mx-auto mb-4" />
@@ -625,18 +635,18 @@ const CartInvoices = () => {
             </p>
             <button
               onClick={() => navigate('/admin/sales')}
-              className="mt-4 px-6 py-2 bg-blue-600/20 border border-blue-500/30 rounded-lg text-blue-400 hover:bg-blue-600/30 transition-colors"
+              className="mt-4 min-h-11 px-6 py-2 bg-blue-600/20 border border-blue-500/30 rounded-lg text-blue-400 hover:bg-blue-600/30 transition-colors"
             >
               Ir al Punto de Venta
             </button>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {filteredInvoices.map((invoice) => (
               <div
                 key={invoice.id}
                 onClick={() => openInvoiceModal(invoice)}
-                className="bg-white/5 backdrop-blur-md border border-blue-500/20 rounded-lg p-3 hover:border-blue-500/40 transition-all duration-300 cursor-pointer hover:scale-[1.02] hover:shadow-lg hover:shadow-blue-500/20"
+                className="bg-white/5 backdrop-blur-md border border-blue-500/20 rounded-lg p-3 hover:border-blue-500/40 transition-all duration-300 cursor-pointer hover:scale-[1.02] hover:shadow-lg hover:shadow-soft"
               >
                 {/* Header con badge y total */}
                 <div className="flex items-start justify-between mb-2">
@@ -646,21 +656,21 @@ const CartInvoices = () => {
                       {invoice.isPOSSale ? (
                         `POS - ${invoice.barberName}`
                       ) : invoice.type === 'informal' || !invoice.clientData ? (
-                        `🛒 Carrito - ${invoice.barberName}`
+                        <><ShoppingCart className="w-4 h-4 inline" /> Carrito - {invoice.barberName}</>
                       ) : (
                         `${invoice.clientData?.firstName} ${invoice.clientData?.lastName}`
                       )}
                     </h3>
                   </div>
                   <div className="text-right flex-shrink-0 ml-2">
-                    <div className="text-lg font-bold text-green-400 leading-none">
+                    <div className="text-lg font-bold text-emerald-400 leading-none">
                       {formatPrice(invoice.total)}
                     </div>
                     <div className="flex flex-col gap-0.5 mt-1">
                       <span className={`inline-block text-[9px] px-1.5 py-0.5 rounded ${
                         invoice.isPOSSale 
-                          ? 'bg-yellow-500/20 text-yellow-400' 
-                          : 'bg-green-500/20 text-green-400'
+                          ? 'bg-amber-500/20 text-amber-400' 
+                          : 'bg-emerald-500/20 text-emerald-400'
                       }`}>
                         {invoice.isPOSSale ? 'POS' : 'Factura'}
                       </span>
@@ -723,190 +733,170 @@ const CartInvoices = () => {
         )}
 
         {/* Modal de detalles de factura */}
-        {isModalOpen && selectedInvoice && (
-          <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-start justify-center z-[60] pt-12 pb-10 px-4 overflow-y-auto">
-            <div className="relative w-full max-w-2xl mx-auto flex flex-col">
-              <div className="relative bg-blue-500/5 backdrop-blur-md border border-blue-500/20 rounded-2xl shadow-2xl shadow-blue-500/20 flex flex-col overflow-hidden">
-                {/* Header */}
-                <div className="flex-shrink-0 p-6 border-b border-blue-500/20">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <div className="p-2 bg-gradient-to-r from-blue-600/20 to-purple-600/20 rounded-xl border border-blue-500/20">
-                        <FileText className="w-5 h-5 text-blue-400" />
-                      </div>
-                      <div>
-                        <h3 className="text-lg font-semibold text-white">
-                          {selectedInvoice.isPOSSale ? (
-                            `Venta POS - ${selectedInvoice.barberName}`
-                          ) : selectedInvoice.type === 'informal' || !selectedInvoice.clientData ? (
-                            `🛒 Carrito - ${selectedInvoice.barberName}`
-                          ) : (
-                            `Factura - ${selectedInvoice.clientData?.firstName} ${selectedInvoice.clientData?.lastName}`
-                          )}
-                        </h3>
-                        <p className="text-sm text-gray-300">
-                          {new Date(selectedInvoice.date).toLocaleString('es-CO')}
-                        </p>
-                      </div>
-                    </div>
-                    <button
-                      onClick={closeInvoiceModal}
-                      className="p-1 text-gray-400 hover:text-white transition-colors duration-300"
-                    >
-                      <X className="w-5 h-5" />
-                    </button>
+        {(selectedInvoice != null) && ((
+        <Modal
+          isOpen={isModalOpen}
+          onClose={closeInvoiceModal}
+          color="blue"
+          icon={FileText}
+          title={
+            !selectedInvoice ? '' :
+            selectedInvoice.isPOSSale
+              ? `Venta POS - ${selectedInvoice.barberName}`
+              : selectedInvoice.type === 'informal' || !selectedInvoice.clientData
+                ? `Carrito - ${selectedInvoice.barberName}`
+                : `Factura - ${selectedInvoice.clientData?.firstName} ${selectedInvoice.clientData?.lastName}`
+          }
+          subtitle={selectedInvoice ? new Date(selectedInvoice.date).toLocaleString('es-CO') : ''}
+          size="2xl"
+          footer={
+            <div className="flex flex-col sm:flex-row gap-3 sm:justify-end">
+              <button
+                type="button"
+                onClick={closeInvoiceModal}
+                className="px-4 py-2.5 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.08] text-gray-300 hover:text-white text-sm font-medium transition-colors"
+              >
+                Cerrar
+              </button>
+              <button
+                type="button"
+                onClick={() => printInvoice(selectedInvoice)}
+                className="px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium transition-colors flex items-center justify-center gap-2"
+              >
+                <Printer className="w-4 h-4" />
+                Imprimir
+              </button>
+            </div>
+          }
+        >
+          <div className="space-y-6">
+            {/* Información del cliente */}
+            {selectedInvoice?.clientData && (
+              <div className="bg-white/5 border border-blue-500/20 rounded-lg p-4">
+                <h4 className="text-sm font-medium text-blue-300 mb-3">Información del Cliente</h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+                  <div className="flex items-center gap-2">
+                    <User className="w-4 h-4 text-blue-400" />
+                    <span className="text-gray-300">Nombre:</span>
+                    <span className="text-white">{selectedInvoice.clientData.firstName} {selectedInvoice.clientData.lastName}</span>
                   </div>
-                </div>
-
-                {/* Contenido con scroll */}
-                <div className="flex-1 overflow-y-auto custom-scrollbar p-6 space-y-6 max-h-[60vh]">
-                  {/* Información del cliente */}
-                  {selectedInvoice.clientData && (
-                    <div className="bg-white/5 border border-blue-500/20 rounded-lg p-4">
-                      <h4 className="text-sm font-medium text-blue-300 mb-3">Información del Cliente</h4>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
-                        <div className="flex items-center gap-2">
-                          <User className="w-4 h-4 text-blue-400" />
-                          <span className="text-gray-300">Nombre:</span>
-                          <span className="text-white">{selectedInvoice.clientData.firstName} {selectedInvoice.clientData.lastName}</span>
-                        </div>
-                        {selectedInvoice.clientData.email && (
-                          <div className="flex items-center gap-2">
-                            <Mail className="w-4 h-4 text-blue-400" />
-                            <span className="text-gray-300">Email:</span>
-                            <span className="text-white">{selectedInvoice.clientData.email}</span>
-                          </div>
-                        )}
-                        {selectedInvoice.clientData.phone && (
-                          <div className="flex items-center gap-2">
-                            <Phone className="w-4 h-4 text-blue-400" />
-                            <span className="text-gray-300">Teléfono:</span>
-                            <span className="text-white">{selectedInvoice.clientData.phone}</span>
-                          </div>
-                        )}
-                        {selectedInvoice.clientData.address && (
-                          <div className="flex items-center gap-2 md:col-span-2">
-                            <span className="text-gray-300">Dirección:</span>
-                            <span className="text-white">{selectedInvoice.clientData.address}</span>
-                          </div>
-                        )}
-                      </div>
+                  {selectedInvoice.clientData.email && (
+                    <div className="flex items-center gap-2">
+                      <Mail className="w-4 h-4 text-blue-400" />
+                      <span className="text-gray-300">Email:</span>
+                      <span className="text-white">{selectedInvoice.clientData.email}</span>
                     </div>
                   )}
-
-                  {/* Items de la factura */}
-                  <div className="bg-white/5 border border-blue-500/20 rounded-lg p-4">
-                    <h4 className="text-sm font-medium text-blue-300 mb-3">Items de la Factura</h4>
-                    <div className="space-y-3">
-                      {selectedInvoice.items.map((item, idx) => {
-                        const isRefunded = item.status === 'refunded' || item.isRefunded;
-                        const displayQuantity = isRefunded ? 0 : item.quantity;
-                        const displayTotal = isRefunded ? 0 : (item.total || item.totalAmount);
-                        
-                        return (
-                          <div
-                            key={idx}
-                            className={`flex justify-between items-start p-3 rounded-lg border ${
-                              isRefunded 
-                                ? 'bg-red-900/20 border-red-500/30 opacity-70' 
-                                : 'bg-white/5 border-white/10'
-                            }`}
-                          >
-                            <div className="flex-1">
-                              <div className={`font-medium mb-1 ${isRefunded ? 'text-red-300' : 'text-white'}`}>
-                                {isRefunded && <span className="text-red-400 text-xs font-bold mr-2">[REEMBOLSADO]</span>}
-                                {item.productName || item.name || item.serviceName}
-                              </div>
-                              <div className={`text-sm mb-2 ${isRefunded ? 'text-red-400' : 'text-gray-400'}`}>
-                                {displayQuantity} x {formatPrice(item.unitPrice)} = {formatPrice(displayTotal)}
-                                {isRefunded && (
-                                  <div className="text-xs text-red-400 mt-1">
-                                    Original: {item.originalQuantity || item.quantity} x {formatPrice(item.unitPrice)} = {formatPrice(item.originalTotal || item.totalAmount)}
-                                  </div>
-                                )}
-                              </div>
-                              <div className="flex items-center gap-2 text-xs">
-                                {getPaymentIcon(item.paymentMethod)}
-                                <span className={`capitalize ${isRefunded ? 'text-red-300' : 'text-blue-300'}`}>
-                                  {item.paymentMethod || 'efectivo'}
-                                </span>
-                                <span className="text-gray-400">•</span>
-                                <span className="text-gray-400 capitalize">{item.category}</span>
-                                {isRefunded && item.refundReason && (
-                                  <>
-                                    <span className="text-gray-400">•</span>
-                                    <span className="text-red-400 text-xs">Motivo: {item.refundReason}</span>
-                                  </>
-                                )}
-                              </div>
-                            </div>
-                            <div className="text-right">
-                              <div className={`text-lg font-semibold ${isRefunded ? 'text-red-400' : 'text-green-400'}`}>
-                                {formatPrice(displayTotal)}
-                              </div>
-                              {isRefunded && (
-                                <div className="text-xs text-red-400 line-through">
-                                  {formatPrice(item.originalTotal || item.totalAmount)}
-                                </div>
-                              )}
-                            </div>
-                          </div>
-                        );
-                      })}
+                  {selectedInvoice.clientData.phone && (
+                    <div className="flex items-center gap-2">
+                      <Phone className="w-4 h-4 text-blue-400" />
+                      <span className="text-gray-300">Teléfono:</span>
+                      <span className="text-white">{selectedInvoice.clientData.phone}</span>
                     </div>
-                  </div>
+                  )}
+                  {selectedInvoice.clientData.address && (
+                    <div className="flex items-center gap-2 md:col-span-2">
+                      <span className="text-gray-300">Dirección:</span>
+                      <span className="text-white">{selectedInvoice.clientData.address}</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
 
-                  {/* Resumen de métodos de pago */}
-                  <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg p-4">
-                    <h4 className="text-sm font-medium text-blue-300 mb-3">Resumen de Métodos de Pago</h4>
-                    <div className="space-y-2">
-                      {getPaymentMethodsSummary(selectedInvoice.items).map((summary, idx) => (
-                        <div key={idx} className="flex justify-between items-center p-2 bg-white/5 rounded">
-                          <span className="text-gray-300 capitalize flex items-center gap-2">
-                            {getPaymentIcon(summary.method)}
-                            {summary.method}
-                          </span>
-                          <span className="text-white font-medium">
-                            {formatPrice(summary.amount)} ({summary.percentage}%)
-                          </span>
+            {/* Items de la factura */}
+            <div className="bg-white/5 border border-blue-500/20 rounded-lg p-4">
+              <h4 className="text-sm font-medium text-blue-300 mb-3">Items de la Factura</h4>
+              <div className="space-y-3">
+                {selectedInvoice?.items.map((item, idx) => {
+                  // Los items reembolsados se muestran con cantidad/total 0 y estilo rojo
+                  const isRefunded = item.status === 'refunded' || item.isRefunded;
+                  const displayQuantity = isRefunded ? 0 : item.quantity;
+                  const displayTotal = isRefunded ? 0 : (item.total || item.totalAmount);
+                  
+                  return (
+                    <div
+                      key={idx}
+                      className={`flex justify-between items-start p-3 rounded-lg border ${
+                        isRefunded 
+                          ? 'bg-red-900/20 border-red-500/30 opacity-70' 
+                          : 'bg-white/5 border-white/10'
+                      }`}
+                    >
+                      <div className="flex-1">
+                        <div className={`font-medium mb-1 ${isRefunded ? 'text-red-300' : 'text-white'}`}>
+                          {isRefunded && <span className="text-red-400 text-xs font-bold mr-2">[REEMBOLSADO]</span>}
+                          {item.productName || item.name || item.serviceName}
                         </div>
-                      ))}
+                        <div className={`text-sm mb-2 ${isRefunded ? 'text-red-400' : 'text-gray-400'}`}>
+                          {displayQuantity} x {formatPrice(item.unitPrice)} = {formatPrice(displayTotal)}
+                          {isRefunded && (
+                            <div className="text-xs text-red-400 mt-1">
+                              Original: {item.originalQuantity || item.quantity} x {formatPrice(item.unitPrice)} = {formatPrice(item.originalTotal || item.totalAmount)}
+                            </div>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-2 text-xs">
+                          {getPaymentIcon(item.paymentMethod)}
+                          <span className={`capitalize ${isRefunded ? 'text-red-300' : 'text-blue-300'}`}>
+                            {item.paymentMethod || 'efectivo'}
+                          </span>
+                          <span className="text-gray-400">•</span>
+                          <span className="text-gray-400 capitalize">{item.category}</span>
+                          {isRefunded && item.refundReason && (
+                            <>
+                              <span className="text-gray-400">•</span>
+                              <span className="text-red-400 text-xs">Motivo: {item.refundReason}</span>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <div className={`text-lg font-semibold ${isRefunded ? 'text-red-400' : 'text-emerald-400'}`}>
+                          {formatPrice(displayTotal)}
+                        </div>
+                        {isRefunded && (
+                          <div className="text-xs text-red-400 line-through">
+                            {formatPrice(item.originalTotal || item.totalAmount)}
+                          </div>
+                        )}
+                      </div>
                     </div>
-                  </div>
+                  );
+                })}
+              </div>
+            </div>
 
-                  {/* Total */}
-                  <div className="bg-gradient-to-r from-green-500/10 to-blue-500/10 border border-green-500/20 rounded-lg p-4">
-                    <div className="flex justify-between items-center">
-                      <span className="text-lg font-medium text-gray-300">Total de la Factura:</span>
-                      <span className="text-2xl font-bold text-green-400">
-                        {formatPrice(selectedInvoice.total)}
-                      </span>
-                    </div>
+            {/* Resumen de métodos de pago */}
+            <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg p-4">
+              <h4 className="text-sm font-medium text-blue-300 mb-3">Resumen de Métodos de Pago</h4>
+              <div className="space-y-2">
+                {getPaymentMethodsSummary(selectedInvoice?.items || []).map((summary, idx) => (
+                  <div key={idx} className="flex justify-between items-center p-2 bg-white/5 rounded">
+                    <span className="text-gray-300 capitalize flex items-center gap-2">
+                      {getPaymentIcon(summary.method)}
+                      {summary.method}
+                    </span>
+                    <span className="text-white font-medium">
+                      {formatPrice(summary.amount)} ({summary.percentage}%)
+                    </span>
                   </div>
-                </div>
+                ))}
+              </div>
+            </div>
 
-                {/* Footer con acciones */}
-                <div className="flex-shrink-0 p-6 border-t border-blue-500/20 bg-white/5">
-                  <div className="flex justify-end gap-3">
-                    <button
-                      onClick={closeInvoiceModal}
-                      className="px-4 py-2 text-gray-400 hover:text-white transition-colors"
-                    >
-                      Cerrar
-                    </button>
-                    <button
-                      onClick={() => printInvoice(selectedInvoice)}
-                      className="px-4 py-2 bg-blue-600/20 border border-blue-500/30 rounded-lg text-blue-400 hover:bg-blue-600/30 hover:text-blue-300 transition-colors flex items-center gap-2"
-                    >
-                      <Printer className="w-4 h-4" />
-                      Imprimir
-                    </button>
-                  </div>
-                </div>
+            {/* Total */}
+            <div className="bg-gradient-to-r from-emerald-500/10 to-blue-500/10 border border-emerald-500/20 rounded-lg p-4">
+              <div className="flex justify-between items-center">
+                <span className="text-lg font-medium text-gray-300">Total de la Factura:</span>
+                <span className="text-2xl font-bold text-emerald-400">
+                  {formatPrice(selectedInvoice?.total)}
+                </span>
               </div>
             </div>
           </div>
-        )}
+        </Modal>
+        ))}
       </div>
     </PageContainer>
   );

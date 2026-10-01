@@ -1,17 +1,14 @@
-/**
- * Implementación Repository de Inventario
- * Implementación concreta del repositorio de inventario usando Mongoose
- */
+// Implementación Repository de Inventario
+// Implementación concreta del repositorio de inventario usando Mongoose
+// Gestiona stock (add/subtract validando negativos), estadísticas y valor del inventario.
 
 import IInventoryRepository from '../../../core/domain/repositories/IInventoryRepository.js';
 import { Inventory, logger, AppError } from '../../../barrel.js';
 
 class InventoryRepositoryImpl extends IInventoryRepository {
-  /**
-   * Buscar producto por ID
-   * @param {string} id - ID del producto
-   * @returns {Promise<Inventory|null>}
-   */
+  // Buscar producto por ID
+  // @param {string} id - ID del producto
+  // @returns {Promise<Inventory|null>}
   async findById(id) {
     try {
       logger.info(`Buscando producto por ID: ${id}`);
@@ -28,11 +25,9 @@ class InventoryRepositoryImpl extends IInventoryRepository {
     }
   }
 
-  /**
-   * Buscar producto por nombre
-   * @param {string} name - Nombre del producto
-   * @returns {Promise<Inventory|null>}
-   */
+  // Buscar producto por nombre
+  // @param {string} name - Nombre del producto
+  // @returns {Promise<Inventory|null>}
   async findByName(name) {
     try {
       logger.info(`Buscando producto por nombre: ${name}`);
@@ -49,11 +44,9 @@ class InventoryRepositoryImpl extends IInventoryRepository {
     }
   }
 
-  /**
-   * Crear nuevo producto
-   * @param {Object} inventoryData - Datos del producto
-   * @returns {Promise<Inventory>}
-   */
+  // Crear nuevo producto
+  // @param {Object} inventoryData - Datos del producto
+  // @returns {Promise<Inventory>}
   async create(inventoryData) {
     try {
       logger.info(`Creando nuevo producto: ${inventoryData.name}`);
@@ -72,12 +65,10 @@ class InventoryRepositoryImpl extends IInventoryRepository {
     }
   }
 
-  /**
-   * Actualizar producto existente
-   * @param {string} id - ID del producto
-   * @param {Object} updateData - Datos a actualizar
-   * @returns {Promise<Inventory>}
-   */
+  // Actualizar producto existente
+  // @param {string} id - ID del producto
+  // @param {Object} updateData - Datos a actualizar
+  // @returns {Promise<Inventory>}
   async update(id, updateData) {
     try {
       logger.info(`Actualizando producto: ${id}`);
@@ -112,11 +103,9 @@ class InventoryRepositoryImpl extends IInventoryRepository {
     }
   }
 
-  /**
-   * Eliminar producto
-   * @param {string} id - ID del producto
-   * @returns {Promise<boolean>}
-   */
+  // Eliminar producto
+  // @param {string} id - ID del producto
+  // @returns {Promise<boolean>}
   async delete(id) {
     try {
       logger.info(`Eliminando producto: ${id}`);
@@ -139,13 +128,11 @@ class InventoryRepositoryImpl extends IInventoryRepository {
     }
   }
 
-  /**
-   * Actualizar stock del producto
-   * @param {string} id - ID del producto
-   * @param {number} quantity - Cantidad a agregar/reducir
-   * @param {string} operation - 'add' o 'subtract'
-   * @returns {Promise<Inventory>}
-   */
+  // Actualizar stock del producto
+  // @param {string} id - ID del producto
+  // @param {number} quantity - Cantidad a agregar/reducir
+  // @param {string} operation - 'add' o 'subtract'
+  // @returns {Promise<Inventory>}
   async updateStock(id, quantity, operation) {
     try {
       logger.info(`Actualizando stock del producto ${id}: ${operation} ${quantity}`);
@@ -190,11 +177,9 @@ class InventoryRepositoryImpl extends IInventoryRepository {
     }
   }
 
-  /**
-   * Buscar productos con stock bajo
-   * @param {number} threshold - Umbral mínimo de stock
-   * @returns {Promise<Inventory[]>}
-   */
+  // Buscar productos con stock bajo
+  // @param {number} threshold - Umbral mínimo de stock
+  // @returns {Promise<Inventory[]>}
   async findLowStock(threshold = 10) {
     try {
       logger.info(`Buscando productos con stock bajo (umbral: ${threshold})`);
@@ -202,7 +187,7 @@ class InventoryRepositoryImpl extends IInventoryRepository {
       const products = await Inventory.find({
         stock: { $lte: threshold },
         isActive: true
-      }).sort({ stock: 1, name: 1 });
+      }).sort({ stock: 1, name: 1 }).lean();
       
       logger.info(`Encontrados ${products.length} productos con stock bajo`);
       return products;
@@ -212,12 +197,10 @@ class InventoryRepositoryImpl extends IInventoryRepository {
     }
   }
 
-  /**
-   * Buscar productos por categoría
-   * @param {string} category - Categoría del producto
-   * @param {Object} options - Opciones de consulta
-   * @returns {Promise<Inventory[]>}
-   */
+  // Buscar productos por categoría
+  // @param {string} category - Categoría del producto
+  // @param {Object} options - Opciones de consulta
+  // @returns {Promise<Inventory[]>}
   async findByCategory(category, options = {}) {
     try {
       const { sort = { name: 1 }, limit } = options;
@@ -231,7 +214,7 @@ class InventoryRepositoryImpl extends IInventoryRepository {
         query = query.limit(limit);
       }
       
-      const products = await query;
+      const products = await query.lean();
       logger.info(`Encontrados ${products.length} productos en categoría ${category}`);
       
       return products;
@@ -241,12 +224,10 @@ class InventoryRepositoryImpl extends IInventoryRepository {
     }
   }
 
-  /**
-   * Buscar productos activos/inactivos
-   * @param {boolean} isActive - Estado activo/inactivo
-   * @param {Object} options - Opciones de consulta
-   * @returns {Promise<Inventory[]>}
-   */
+  // Buscar productos activos/inactivos
+  // @param {boolean} isActive - Estado activo/inactivo
+  // @param {Object} options - Opciones de consulta
+  // @returns {Promise<Inventory[]>}
   async findByStatus(isActive, options = {}) {
     try {
       const { sort = { name: 1 }, limit } = options;
@@ -260,7 +241,7 @@ class InventoryRepositoryImpl extends IInventoryRepository {
         query = query.limit(limit);
       }
       
-      const products = await query;
+      const products = await query.lean();
       logger.info(`Encontrados ${products.length} productos ${isActive ? 'activos' : 'inactivos'}`);
       
       return products;
@@ -270,18 +251,18 @@ class InventoryRepositoryImpl extends IInventoryRepository {
     }
   }
 
-  /**
-   * Obtener valor total del inventario
-   * @returns {Promise<number>}
-   */
+  // Obtener valor total del inventario
+  // @returns {Promise<number>}
   async getTotalValue() {
     try {
       logger.info('Calculando valor total del inventario');
       
       const result = await Inventory.aggregate([
+        // Solo productos activos
         {
           $match: { isActive: true }
         },
+        // Valor total = precio * stock, además de conteos
         {
           $group: {
             _id: null,
@@ -306,11 +287,9 @@ class InventoryRepositoryImpl extends IInventoryRepository {
     }
   }
 
-  /**
-   * Listar todos los productos con paginación y filtros
-   * @param {Object} options - Opciones de consulta
-   * @returns {Promise<{products: Inventory[], total: number, page: number, totalPages: number}>}
-   */
+  // Listar todos los productos con paginación y filtros
+  // @param {Object} options - Opciones de consulta
+  // @returns {Promise<{products: Inventory[], total: number, page: number, totalPages: number}>}
   async findAll(options = {}) {
     try {
       const {
@@ -320,7 +299,7 @@ class InventoryRepositoryImpl extends IInventoryRepository {
         filters = {}
       } = options;
 
-      logger.info(`Listando productos - Página: ${page}, Límite: ${limit}`);
+      logger.debug(`Listando productos - Página: ${page}, Límite: ${limit}`);
 
       const skip = (page - 1) * limit;
       
@@ -336,7 +315,7 @@ class InventoryRepositoryImpl extends IInventoryRepository {
 
       const totalPages = Math.ceil(total / limit);
 
-      logger.info(`Encontrados ${products.length} productos de ${total} totales`);
+      logger.debug(`Encontrados ${products.length} productos de ${total} totales`);
 
       return {
         products,
@@ -352,13 +331,11 @@ class InventoryRepositoryImpl extends IInventoryRepository {
     }
   }
 
-  /**
-   * Buscar productos por rango de precios
-   * @param {number} minPrice - Precio mínimo
-   * @param {number} maxPrice - Precio máximo
-   * @param {Object} options - Opciones de consulta
-   * @returns {Promise<Inventory[]>}
-   */
+  // Buscar productos por rango de precios
+  // @param {number} minPrice - Precio mínimo
+  // @param {number} maxPrice - Precio máximo
+  // @param {Object} options - Opciones de consulta
+  // @returns {Promise<Inventory[]>}
   async findByPriceRange(minPrice, maxPrice, options = {}) {
     try {
       const { sort = { price: 1 }, limit } = options;
@@ -376,7 +353,7 @@ class InventoryRepositoryImpl extends IInventoryRepository {
         query = query.limit(limit);
       }
       
-      const products = await query;
+      const products = await query.lean();
       logger.info(`Encontrados ${products.length} productos en el rango de precios`);
       
       return products;
@@ -386,16 +363,14 @@ class InventoryRepositoryImpl extends IInventoryRepository {
     }
   }
 
-  /**
-   * Obtener estadísticas completas del inventario
-   * @returns {Promise<Object>}
-   */
+  // Obtener estadísticas completas del inventario
+  // @returns {Promise<Object>}
   async getInventoryStats() {
     try {
       logger.info('Obteniendo estadísticas del inventario');
       
       const [generalStats, categoryStats, stockStats] = await Promise.all([
-        // Estadísticas generales
+        // Estadísticas generales (totales, activos, valor, stock y precio promedio)
         Inventory.aggregate([
           {
             $group: {
@@ -426,7 +401,7 @@ class InventoryRepositoryImpl extends IInventoryRepository {
           },
           { $sort: { totalValue: -1 } }
         ]),
-        // Stock crítico
+        // Stock crítico: clasifica en 'low' (<=10), 'medium' (<=50) y 'high' (>50)
         Inventory.aggregate([
           {
             $group: {

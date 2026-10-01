@@ -17,8 +17,14 @@ import {
   validateId
 } from '../middleware/validation.js';
 import { protect, adminAuth } from '../middleware/auth.js';
+import { cacheMiddleware, invalidateCacheMiddleware } from '../middleware/cache.js';
 
 const router = express.Router();
+
+// Cache patterns para invalidación
+const CACHE_PATTERNS = [
+  '^/api/v1/socios'
+];
 
 // Aplicar autenticación a todas las rutas
 router.use(protect);
@@ -26,7 +32,7 @@ router.use(protect);
 // @desc    Obtener todos los socios activos
 // @route   GET /api/socios
 // @access  Privado
-router.get('/', getSocios);
+router.get('/', cacheMiddleware(300), getSocios);
 
 // @desc    Obtener información del usuario actual
 // @route   GET /api/socios/current-user
@@ -51,21 +57,21 @@ router.get('/admins-disponibles', getAdminsDisponibles);
 // @desc    Asignar subrol de socio a un admin
 // @route   POST /api/socios
 // @access  Privado (solo fundador)
-router.post('/', validateCreateSocio, asignarSocio);
+router.post('/', adminAuth, validateCreateSocio, invalidateCacheMiddleware(CACHE_PATTERNS), asignarSocio);
 
 // @desc    Actualizar porcentaje de socio
 // @route   PUT /api/socios/:id/porcentaje
 // @access  Privado (solo fundador o admin)
-router.put('/:id/porcentaje', validateUpdatePorcentaje, updatePorcentaje);
+router.put('/:id/porcentaje', adminAuth, validateUpdatePorcentaje, invalidateCacheMiddleware(CACHE_PATTERNS), updatePorcentaje);
 
 // @desc    Actualizar datos de socio
 // @route   PUT /api/socios/:id
 // @access  Privado (el mismo socio o fundador)
-router.put('/:id', validateId, updateSocio);
+router.put('/:id', adminAuth, validateId, invalidateCacheMiddleware(CACHE_PATTERNS), updateSocio);
 
 // @desc    Desactivar socio
 // @route   DELETE /api/socios/:id
 // @access  Privado (solo fundador)
-router.delete('/:id', validateId, deleteSocio);
+router.delete('/:id', adminAuth, validateId, invalidateCacheMiddleware(CACHE_PATTERNS), deleteSocio);
 
 export default router;
