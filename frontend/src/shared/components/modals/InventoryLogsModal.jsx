@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Clock, 
   User, 
@@ -78,9 +78,9 @@ const InventoryLogsModal = ({ isOpen, onClose, onRefresh }) => {
       const response = await inventoryService.getLogs(queryParams.toString());
       
       if (response.success) {
-        logger.debug('📊 Logs recibidos:', response.data);
-        logger.debug('📊 Total logs:', response.data?.length || 0);
-        logger.debug('📊 Acciones encontradas:', [...new Set(response.data?.map(log => log.action) || [])]);
+        logger.debug('Logs recibidos:', response.data);
+        logger.debug('Total logs:', response.data?.length || 0);
+        logger.debug('Acciones encontradas:', [...new Set(response.data?.map(log => log.action) || [])]);
         setLogs(response.data || []);
       } else {
         showError('Error al cargar los logs de movimientos');

@@ -1,4 +1,4 @@
-﻿// Hook de reportes detallados (ventas de productos, cortes walk-in, cortes y
+// Hook de reportes detallados (ventas de productos, cortes walk-in, cortes y
 // citas completadas). Mantiene una caché en memoria por clave de filtro
 // (5 minutos) y estados independientes por tipo de reporte.
 import { useState, useEffect, useCallback } from 'react';
@@ -49,7 +49,7 @@ export const useDetailedReports = () => {
     setError(null);
     
     try {
-      logger.debug('🛒 Obteniendo reporte detallado de ventas:', { barberId, startDate, endDate });
+      logger.debug('Obteniendo reporte detallado de ventas:', { barberId, startDate, endDate });
       
       const response = await salesService.getDetailedSalesReport(barberId, startDate, endDate);
       const data = response.data || [];
@@ -64,11 +64,11 @@ export const useDetailedReports = () => {
         }));
       }
       
-      logger.debug('✅ Reporte detallado de ventas obtenido:', data);
+      logger.debug('Reporte detallado de ventas obtenido:', data);
       return data;
       
     } catch (error) {
-      console.error('❌ Error obteniendo reporte detallado de ventas:', error);
+      console.error('Error obteniendo reporte detallado de ventas:', error);
       const errorMessage = error.response?.data?.message || 'Error al obtener reporte de ventas';
       setErrorWithTimeout(errorMessage);
       setDetailedSales([]);
@@ -96,7 +96,7 @@ export const useDetailedReports = () => {
     setError(null);
     
     try {
-      logger.debug('✂️ Obteniendo detalles de cortes walk-in:', { barberId, startDate, endDate });
+      logger.debug('Obteniendo detalles de cortes walk-in:', { barberId, startDate, endDate });
       
       const response = await salesService.getWalkInDetails(barberId, startDate, endDate);
       const data = response.data || [];
@@ -111,11 +111,11 @@ export const useDetailedReports = () => {
         }));
       }
       
-      logger.debug('✅ Detalles de cortes walk-in obtenidos:', data);
+      logger.debug('Detalles de cortes walk-in obtenidos:', data);
       return data;
       
     } catch (error) {
-      console.error('❌ Error obteniendo detalles de cortes walk-in:', error);
+      console.error('Error obteniendo detalles de cortes walk-in:', error);
       const errorMessage = error.response?.data?.message || 'Error al obtener detalles de cortes';
       setErrorWithTimeout(errorMessage);
       setWalkInDetails([]);
@@ -145,7 +145,7 @@ export const useDetailedReports = () => {
     setError(null);
     
     try {
-      logger.debug('✂️ Obteniendo reporte detallado de cortes:', { barberId, startDate, endDate });
+      logger.debug('Obteniendo reporte detallado de cortes:', { barberId, startDate, endDate });
       
       const response = await salesService.getDetailedCutsReport(barberId, startDate, endDate);
       const data = response.data || [];
@@ -160,11 +160,11 @@ export const useDetailedReports = () => {
         }));
       }
       
-      logger.debug('✅ Reporte detallado de cortes obtenido:', data);
+      logger.debug('Reporte detallado de cortes obtenido:', data);
       return data;
       
     } catch (error) {
-      console.error('❌ Error obteniendo reporte detallado de cortes:', error);
+      console.error('Error obteniendo reporte detallado de cortes:', error);
       const errorMessage = error.response?.data?.message || 'Error al obtener reporte de cortes';
       setErrorWithTimeout(errorMessage);
       setWalkInDetails([]);
@@ -192,7 +192,7 @@ export const useDetailedReports = () => {
     setError(null);
     
     try {
-      logger.debug('📅 Obteniendo detalles de citas completadas:', { barberId, startDate, endDate });
+      logger.debug('Obteniendo detalles de citas completadas:', { barberId, startDate, endDate });
       
       const response = await appointmentsService.getCompletedDetails(barberId, startDate, endDate);
       const data = response.data || [];
@@ -207,11 +207,11 @@ export const useDetailedReports = () => {
         }));
       }
       
-      logger.debug('✅ Detalles de citas completadas obtenidos:', data);
+      logger.debug('Detalles de citas completadas obtenidos:', data);
       return data;
       
     } catch (error) {
-      console.error('❌ Error obteniendo detalles de citas completadas:', error);
+      console.error('Error obteniendo detalles de citas completadas:', error);
       const errorMessage = error.response?.data?.message || 'Error al obtener detalles de citas';
       setErrorWithTimeout(errorMessage);
       setCompletedAppointments([]);
@@ -237,7 +237,7 @@ export const useDetailedReports = () => {
       return { sales, walkIns, appointments };
       
     } catch (error) {
-      console.error('❌ Error obteniendo todos los reportes:', error);
+      console.error('Error obteniendo todos los reportes:', error);
       setErrorWithTimeout('Error al obtener los reportes detallados');
       return { sales: [], walkIns: [], appointments: [] };
     } finally {

@@ -1,4 +1,4 @@
-﻿import mongoose from "mongoose";
+import mongoose from "mongoose";
 import { SALE_TYPES } from "../../../shared/constants/salesConstants.js";
 
 // Modelo Mongoose de ventas.

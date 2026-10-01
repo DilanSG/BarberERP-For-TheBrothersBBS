@@ -1,12 +1,12 @@
 // Fondo decorativo de mini postes de barbero semi-transparentes.
 // - Franjas con el mismo movimiento que el GradientButton (background-position
-//   por un tile exacto → bucle infinito perfecto, sincronizado en todos).
+// por un tile exacto → bucle infinito perfecto, sincronizado en todos).
 // - Reparto por grilla con jitter: una celda por poste (filas alternas
-//   desplazadas media celda) para que queden bien distribuidos sin juntarse.
+// desplazadas media celda) para que queden bien distribuidos sin juntarse.
 // - Deriva tipo partícula (bucle suave alrededor de su posición) con rango
-//   acotado para que no se acerquen entre sí.
+// acotado para que no se acerquen entre sí.
 // - `variant="dark"` usa la paleta profunda del tema oscuro con el mismo
-//   tamaño de poste que el tema claro.
+// tamaño de poste que el tema claro.
 
 // PRNG determinista basado en seno: misma distribución en cada render.
 const seededRandom = (seed) => {

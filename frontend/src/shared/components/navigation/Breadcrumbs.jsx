@@ -8,10 +8,10 @@ import { ChevronRight, Home, ArrowLeft } from 'lucide-react';
 // - Siempre inicia en "Inicio" (/).
 // - Cada segmento de la ruta se traduce a una etiqueta legible (ROUTE_LABELS).
 // - Los segmentos de acción (view/edit/create/new) no generan crumb propio:
-//   se combinan con el ID siguiente en una sola etiqueta (ej: "Detalle de Cita").
+// se combinan con el ID siguiente en una sola etiqueta (ej: "Detalle de Cita").
 // - Los IDs (ObjectId) se etiquetan según el recurso padre (ej: barbers → "Perfil").
 // - El botón "Volver" regresa a la página desde la que se ingresó (historial real);
-//   si no hay historial (carga directa), vuelve al inicio.
+// si no hay historial (carga directa), vuelve al inicio.
 
 // Etiquetas legibles por segmento de ruta
 const ROUTE_LABELS = {

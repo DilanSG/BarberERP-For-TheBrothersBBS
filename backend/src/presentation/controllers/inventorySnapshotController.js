@@ -3,7 +3,7 @@ import InventorySnapshotService from '../../core/application/usecases/inventoryS
 import { logger } from '../../barrel.js';
 
 export const createSnapshot = asyncHandler(async (req, res) => {
-  logger.info('🎯 Solicitud para crear snapshot de inventario', { 
+  logger.info('Solicitud para crear snapshot de inventario', { 
     userId: req.user.id,
     body: req.body 
   });
@@ -81,7 +81,7 @@ export const getSnapshotStats = asyncHandler(async (req, res) => {
 export const downloadSnapshotExcel = asyncHandler(async (req, res) => {
   const { id } = req.params;
   
-  logger.info('📊 Solicitud para descargar snapshot como Excel', { 
+  logger.info('Solicitud para descargar snapshot como Excel', { 
     snapshotId: id,
     userId: req.user.id 
   });

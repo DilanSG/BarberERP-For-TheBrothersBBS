@@ -400,7 +400,7 @@ export const debugLogs = asyncHandler(async (req, res) => {
 // @access  Admin
 export const fixInventoryConsistency = asyncHandler(async (req, res) => {
   try {
-    logger.debug('🔧 Iniciando corrección de consistencia de inventario');
+    logger.debug('Iniciando corrección de consistencia de inventario');
     
     // Obtener todos los productos del inventario
     const inventoryItems = await Inventory.find({});
@@ -414,7 +414,7 @@ export const fixInventoryConsistency = asyncHandler(async (req, res) => {
     const salesMap = new Map(salesAggregation.map(s => [s._id.toString(), s.totalSold]));
     
     for (const item of inventoryItems) {
-      logger.debug(`🔍 Procesando: ${item.name}`);
+      logger.debug(`Procesando: ${item.name}`);
       
       const completedSales = salesMap.get(item._id.toString()) || 0;
       
@@ -427,7 +427,7 @@ export const fixInventoryConsistency = asyncHandler(async (req, res) => {
       const needsSalesCorrection = item.sales !== completedSales;
       
       if (needsStockCorrection || needsRealStockCorrection || needsSalesCorrection) {
-        logger.debug(`⚠️ Corrigiendo ${item.name}:`, {
+        logger.debug(`Corrigiendo ${item.name}:`, {
           oldStock: item.stock,
           newStock: expectedStock,
           oldRealStock: item.realStock,
@@ -447,7 +447,7 @@ export const fixInventoryConsistency = asyncHandler(async (req, res) => {
       }
     }
     
-    logger.debug(`✅ Corrección de consistencia completada: ${fixedCount} productos actualizados`);
+    logger.debug(`Corrección de consistencia completada: ${fixedCount} productos actualizados`);
     
     res.status(200).json({
       success: true,
@@ -460,7 +460,7 @@ export const fixInventoryConsistency = asyncHandler(async (req, res) => {
     });
     
   } catch (error) {
-    logger.error('❌ Error corrigiendo consistencia de inventario:', error);
+    logger.error('Error corrigiendo consistencia de inventario:', error);
     res.status(500).json({
       success: false,
       message: 'Error al corregir consistencia de inventario',

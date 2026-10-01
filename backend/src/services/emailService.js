@@ -21,7 +21,7 @@ class EmailService {
         sgMail.setApiKey(process.env.SENDGRID_API_KEY);
         this.provider = 'sendgrid';
         this.isConfigured = true;
-        logger.info('✅ Servicio de email configurado con SendGrid');
+        logger.info('Servicio de email configurado con SendGrid');
         return;
       }
 
@@ -49,7 +49,7 @@ class EmailService {
       this.provider = 'smtp';
       this.isConfigured = true;
       
-      logger.info('✅ Servicio de email configurado con SMTP');
+      logger.info('Servicio de email configurado con SMTP');
     } catch (error) {
       logger.error('Error configurando servicio de email:', error);
       this.isConfigured = false;
@@ -72,13 +72,13 @@ class EmailService {
     try {
       if (this.provider === 'sendgrid') {
         // SendGrid no requiere verificación de conexión
-        logger.info('✅ SendGrid API Key configurada correctamente');
+        logger.info('SendGrid API Key configurada correctamente');
         return true;
       }
 
       if (this.provider === 'smtp') {
         await this.transporter.verify();
-        logger.info('✅ Conexión SMTP verificada correctamente');
+        logger.info('Conexión SMTP verificada correctamente');
         return true;
       }
     } catch (error) {
@@ -125,7 +125,7 @@ class EmailService {
 
         const response = await sgMail.send(msg);
         
-        logger.info(`✅ Email enviado via SendGrid a ${to}`, {
+        logger.info(`Email enviado via SendGrid a ${to}`, {
           subject,
           timestamp: new Date().toISOString()
         });
@@ -153,7 +153,7 @@ class EmailService {
 
         const info = await this.transporter.sendMail(mailOptions);
         
-        logger.info(`✅ Email enviado via SMTP a ${to}`, {
+        logger.info(`Email enviado via SMTP a ${to}`, {
           messageId: info.messageId,
           subject,
           timestamp: new Date().toISOString()
@@ -945,7 +945,7 @@ class EmailService {
     
     const reviewUrl = `${frontendUrl}/reviews/create/${appointment._id}`;
     
-    logger.info(`📧 Generando URL de reseña: ${reviewUrl} (env: ${process.env.NODE_ENV})`);
+    logger.info(`Generando URL de reseña: ${reviewUrl} (env: ${process.env.NODE_ENV})`);
 
     const html = `
       <!DOCTYPE html>
@@ -987,7 +987,7 @@ class EmailService {
         <div class="container">
           <!-- Header -->
           <div class="header">
-            <h1>✂️ ¡Gracias por tu visita!</h1>
+            <h1>¡Gracias por tu visita!</h1>
             <p>Tu opinión es muy importante para nosotros</p>
           </div>
 
@@ -1003,12 +1003,12 @@ class EmailService {
 
             <!-- Appointment Details -->
             <div class="appointment-card">
-              <h3>📅 Detalles de tu visita</h3>
+              <h3>Detalles de tu visita</h3>
               <div class="appointment-detail">
-                <strong>✂️ Barbero:</strong> ${barber.user?.name || 'N/A'}
+                <strong>Barbero:</strong> ${barber.user?.name || 'N/A'}
               </div>
               <div class="appointment-detail">
-                <strong>📅 Fecha:</strong> ${new Date(appointment.date).toLocaleDateString('es-ES', { 
+                <strong>Fecha:</strong> ${new Date(appointment.date).toLocaleDateString('es-ES', { 
                   weekday: 'long', 
                   year: 'numeric', 
                   month: 'long', 
@@ -1016,7 +1016,7 @@ class EmailService {
                 })}
               </div>
               <div class="appointment-detail">
-                <strong>🕐 Hora:</strong> ${new Date(appointment.date).toLocaleTimeString('es-ES', { 
+                <strong>Hora:</strong> ${new Date(appointment.date).toLocaleTimeString('es-ES', { 
                   hour: '2-digit', 
                   minute: '2-digit',
                   hour12: false
@@ -1031,17 +1031,17 @@ class EmailService {
 
             <!-- Stars Preview -->
             <div class="stars-preview">
-              <span class="star">⭐</span>
-              <span class="star">⭐</span>
-              <span class="star">⭐</span>
-              <span class="star">⭐</span>
-              <span class="star">⭐</span>
+              <span class="star"></span>
+              <span class="star"></span>
+              <span class="star"></span>
+              <span class="star"></span>
+              <span class="star"></span>
             </div>
 
             <!-- CTA Button -->
             <div style="text-align: center;">
               <a href="${reviewUrl}" class="cta-button">
-                ⭐ Dejar mi reseña
+                Dejar mi reseña
               </a>
             </div>
 
@@ -1054,8 +1054,8 @@ class EmailService {
           <!-- Footer -->
           <div class="footer">
             <p><strong>The Brothers Barber Shop</strong></p>
-            <p>📍 Dirección de la barbería</p>
-            <p>📞 Teléfono de contacto</p>
+            <p>Dirección de la barbería</p>
+            <p>Teléfono de contacto</p>
             <p style="margin-top: 15px; font-size: 12px;">
               Si tienes alguna pregunta o comentario, no dudes en contactarnos.
             </p>
@@ -1069,7 +1069,7 @@ class EmailService {
 
     return await this.sendEmail({
       to: user.email,
-      subject: '⭐ ¡Cuéntanos tu experiencia en The Brothers Barber Shop!',
+      subject: '¡Cuéntanos tu experiencia en The Brothers Barber Shop!',
       html
     });
   }

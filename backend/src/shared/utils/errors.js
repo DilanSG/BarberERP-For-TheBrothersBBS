@@ -86,7 +86,7 @@ export const handleError = (err, res) => {
 
   // Log del error
   if (!isOperational) {
-    logger.error('ERROR NO OPERACIONAL 💥:', err);
+    logger.error('ERROR NO OPERACIONAL :', err);
   }
 
   res.status(statusCode).json(response);

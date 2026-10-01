@@ -1,347 +1,180 @@
-# 🚀 CI/CD Pipeline Guide - The Brothers Barber Shop
+# Guía de CI/CD
 
-## 📋 Resumen
+Documentación del pipeline de integración y despliegue continuo de The Brothers
+Barber Shop (BarberERP).
 
-Pipeline automatizado completo usando **GitHub Actions** (100% gratuito) para testing, building y deployment continuo.
+## Resumen
 
----
+| Elemento | Configuración |
+|----------|---------------|
+| Plataforma CI | GitHub Actions |
+| Workflow principal | `.github/workflows/ci-cd.yml` |
+| Workflow de rendimiento | `.github/workflows/lighthouse.yml` |
+| Frontend | Vercel (`https://the-bro-barbers.vercel.app`) |
+| Backend | Render (`https://thebrothersbarbershop.onrender.com`) |
+| Base de datos | MongoDB Atlas |
+| Actualización de dependencias | Dependabot (`.github/dependabot.yml`) |
 
-## 🏗️ Arquitectura del Pipeline
+## Pipeline principal (`ci-cd.yml`)
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│                    TRIGGER (Push/PR)                        │
-└────────────────────┬────────────────────────────────────────┘
+Se ejecuta en cada `push` y `pull_request` hacia `main` y `develop`, y también
+puede lanzarse manualmente con `workflow_dispatch`.
 
-                     │
-         ┌───────────┴──────────┐
-         │                      │
-    ┌────▼────┐           ┌────▼────┐
-    │  Lint   │           │Security │
-    │ Backend │           │  Audit  │
-    │Frontend │           │         │
-    └────┬────┘           └─────────┘
-         │
-    ┌────▼────┐
-    │  Test   │ ◄── Jest + Coverage
-    │ Backend │
-    └────┬────┘
-         │
-    ┌────┴─────┬──────────┐
-    │          │          │
-┌───▼───┐  ┌──▼───┐  ┌───▼────┐
-│ Build │  │Build │  │Upload  │
-│Backend│  │Front │  │Coverage│
-└───┬───┘  └──┬───┘  └────────┘
-    │         │
-    └────┬────┘
-         │
-    ┌────▼────────┐
-    │   Deploy    │
-    │  to Vercel  │
-    │ (Production)│
-    └─────────────┘
-```
+| Job | Depende de | Descripción |
+|-----|------------|-------------|
+| `lint-backend` | - | Instala dependencias del backend y ejecuta ESLint. |
+| `test-backend` | `lint-backend` | Ejecuta las pruebas unitarias y genera cobertura. |
+| `build-frontend` | - | Compila el frontend con Vite. |
+| `security` | - | Ejecuta `npm audit` en backend y frontend (informativo). |
+| `deploy-frontend` | `test-backend`, `build-frontend` | Despliega a producción en Vercel (solo `main`). |
+| `deploy-backend` | `test-backend` | Dispara el despliegue del backend en Render (solo `main`). |
+| `deploy-preview` | `test-backend`, `build-frontend` | Crea un despliegue de vista previa en Vercel y comenta la URL en el pull request. |
 
----
+Notas:
 
-## 📁 Workflows Configurados
+- El pipeline usa Node.js 22.
+- Si un job de validación falla, los despliegues no se ejecutan.
+- La cancelación de ejecuciones obsoletas está habilitada mediante `concurrency`.
+- Los despliegues de vista previa solo se ejecutan para pull requests del mismo
+  repositorio (no para forks).
+- Si `VERCEL_TOKEN` o `RENDER_DEPLOY_HOOK_URL` no están configurados, el job
+  correspondiente finaliza sin desplegar y sin marcar error.
 
-### 1️⃣ **CI/CD Principal** (`.github/workflows/ci-cd.yml`)
+## Workflow de Lighthouse (`lighthouse.yml`)
 
-**Triggers:**
-- Push a `main` o `develop`
-- Pull Requests a `main` o `develop`
+Se ejecuta en pull requests que modifican `frontend/**` y en pushes a `main`.
+Compila el frontend, sirve el directorio `frontend/dist` y ejecuta Lighthouse CI
+con los presupuestos definidos en `lighthouse-budget.json`. Los resultados se
+publican como comentario en el pull request y como artefacto de la ejecución.
 
-**Jobs:**
+## Secrets requeridos
 
-| Job | Descripción | Runs On | Duration |
-|-----|-------------|---------|----------|
-| **Lint** | ESLint backend + frontend | `ubuntu-latest` | ~1 min |
-| **Test** | Jest unit tests + coverage | `ubuntu-latest` | ~2 min |
-| **Build Backend** | Validar estructura | `ubuntu-latest` | ~30 sec |
-| **Build Frontend** | Vite build + artifact | `ubuntu-latest` | ~2 min |
-| **Deploy Production** | Vercel (solo main) | `ubuntu-latest` | ~1 min |
-| **Deploy Preview** | Vercel preview (PRs) | `ubuntu-latest` | ~1 min |
-| **Security** | npm audit | `ubuntu-latest` | ~30 sec |
+Configúralos en `Settings -> Secrets and variables -> Actions`.
 
-**Total Pipeline Time:** ~7-9 minutos
+| Secreto | Obligatorio | Uso |
+|---------|-------------|-----|
+| `VERCEL_TOKEN` | Sí, para desplegar frontend | Token personal de Vercel. |
+| `VERCEL_ORG_ID` | Sí, para desplegar frontend | Identificador de la organización en Vercel. |
+| `VERCEL_PROJECT_ID` | Sí, para desplegar frontend | Identificador del proyecto del frontend. |
+| `RENDER_DEPLOY_HOOK_URL` | Sí, para desplegar backend | URL del deploy hook del servicio en Render. |
+| `CODECOV_TOKEN` | No | Carga de cobertura a Codecov. |
+| `VITE_SENTRY_DSN_FRONTEND` | No | DSN de Sentry usado durante el build. |
 
----
-
-### 2️⃣ **Tests Específicos** (`.github/workflows/test.yml`)
-
-**Triggers:**
-- Push a `main` o `develop` (solo si cambia `/backend`)
-- Pull Requests (solo si cambia `/backend`)
-- Manual dispatch
-
-**Strategy Matrix:**
-```yaml
-node-version: [18.x, 20.x]
-```
-
-**Features:**
-- ✅ Tests en múltiples versiones de Node.js
-- ✅ Coverage report (solo Node 18)
-- ✅ Upload coverage to Codecov
-- ✅ Artifacts de coverage (7 días retención)
-
----
-
-### 3️⃣ **Dependabot** (`.github/dependabot.yml`)
-
-**Automatización:**
-- 🔄 Updates semanales (Lunes 9:00 AM)
-- 📦 Backend + Frontend + GitHub Actions
-- 🏷️ Labels automáticos (`dependencies`, `backend`, `frontend`)
-- 👥 Auto-assign reviewers
-- 📝 Commit messages con prefijos semánticos
-
-**Límites:**
-- Backend: 5 PRs abiertos max
-- Frontend: 5 PRs abiertos max
-- GitHub Actions: 1 PR/mes
-
----
-
-## 🔐 Secrets Requeridos
-
-Configure estos secrets en **GitHub Repository Settings → Secrets and variables → Actions**:
-
-### Vercel Deployment
+### Cómo obtener los valores de Vercel
 
 ```bash
-VERCEL_TOKEN           # Token de tu cuenta Vercel
-VERCEL_ORG_ID          # ID de tu organización Vercel
-VERCEL_PROJECT_ID      # ID del proyecto Vercel
-```
+# 1. Token personal
+#    Vercel Dashboard -> Settings -> Tokens -> Create Token
 
-### Opcional (Coverage)
-
-```bash
-CODECOV_TOKEN          # Token de Codecov (opcional)
-```
-
----
-
-## 📊 Badges en README.md
-
-Ya agregados al README principal:
-
-```markdown
-[![CI/CD Pipeline](https://github.com/DilanSG/TheBrothersBarberShop/actions/workflows/ci-cd.yml/badge.svg)](...)
-[![Tests](https://github.com/DilanSG/TheBrothersBarberShop/actions/workflows/test.yml/badge.svg)](...)
-[![codecov](https://codecov.io/gh/DilanSG/TheBrothersBarberShop/branch/main/graph/badge.svg)](...)
-[![Dependabot](https://img.shields.io/badge/Dependabot-enabled-blue)](...)
-```
-
----
-
-## 🚦 Quality Gates
-
-### ✅ Para Deploy a Producción
-
-**Condiciones que DEBEN cumplirse:**
-
-1. ✅ Branch: `main`
-2. ✅ Event: `push` (no PRs)
-3. ✅ Lint: Passed
-4. ✅ Tests: Passed
-5. ✅ Build Backend: Passed
-6. ✅ Build Frontend: Passed
-
-**Si alguno falla:** ❌ Deploy bloqueado
-
----
-
-## 🎯 Cómo Usar
-
-### Deploy a Producción
-
-```bash
-# 1. Hacer cambios en tu rama
-git checkout -b feature/nueva-funcionalidad
-
-# 2. Commit y push
-git add .
-git commit -m "feat: nueva funcionalidad"
-git push origin feature/nueva-funcionalidad
-
-# 3. Crear Pull Request en GitHub
-# - Pipeline ejecuta: Lint → Test → Build → Deploy Preview
-# - Review code + tests passing
-
-# 4. Merge a main
-# - Pipeline ejecuta todo + Deploy Production
-# - Vercel actualiza automáticamente
-```
-
-### Ver Preview de PR
-
-1. Crea un Pull Request
-2. Espera a que termine el workflow `deploy-preview`
-3. El bot comentará con la URL del preview:
-
-```
-## 🔍 Preview Deployment Ready!
-
-✅ Your preview is available at:
-**https://thebrothersbarbers-abc123.vercel.app**
-
----
-*Deployed from commit: abc1234*
-```
-
-### Ejecutar Tests Manualmente
-
-```bash
-# Desde GitHub Actions UI
-# Actions → Tests → Run workflow → Run workflow
-```
-
----
-
-## 📈 Monitoreo y Logs
-
-### GitHub Actions
-
-- **URL**: `https://github.com/DilanSG/TheBrothersBarberShop/actions`
-- **Logs**: Disponibles por workflow run (90 días retención)
-- **Artifacts**: Coverage reports (7 días retención)
-
-### Vercel Dashboard
-
-- **URL**: `https://vercel.com/dashboard`
-- **Features**:
-  - Deployment history
-  - Build logs
-  - Analytics
-  - Error tracking
-
-### Codecov
-
-- **URL**: `https://codecov.io/gh/DilanSG/TheBrothersBarberShop`
-- **Métricas**:
-  - Coverage trends
-  - File-by-file coverage
-  - Diff coverage en PRs
-
----
-
-## 🛠️ Configurar Vercel (Primera Vez)
-
-### 1. Crear Proyecto en Vercel
-
-```bash
-# Instalar Vercel CLI
-npm i -g vercel
-
-# Login
-vercel login
-
-# Link proyecto
+# 2. Identificadores del proyecto
 cd frontend
-vercel link
-```
-
-### 2. Obtener Secrets
-
-```bash
-# Ver tokens y IDs
-vercel env ls
+npx vercel link
 cat .vercel/project.json
-
-# Copiar:
-# - VERCEL_ORG_ID
-# - VERCEL_PROJECT_ID
+# orgId     -> VERCEL_ORG_ID
+# projectId -> VERCEL_PROJECT_ID
 ```
 
-### 3. Generar Token
+### Cómo obtener el deploy hook de Render
 
-1. Ve a https://vercel.com/account/tokens
-2. Create Token
-3. Copia el token
-4. Guárdalo como `VERCEL_TOKEN` en GitHub Secrets
+```text
+Render Dashboard -> servicio del backend -> Settings -> Deploy Hook -> Create
+```
 
----
+Copia la URL generada y guárdala como `RENDER_DEPLOY_HOOK_URL`.
 
-## 🔧 Solución de Problemas
+## Configuración de despliegue
 
-### ❌ Tests Failing
+### Frontend (Vercel)
 
-**Problema:** Tests fallan en CI pero pasan local
+- El proyecto debe tener configurado el directorio raíz en `frontend`.
+- La configuración del proyecto vive en `frontend/vercel.json`:
+  - reescritura de `/api/v1/*` hacia el backend como respaldo,
+  - fallback de SPA hacia `/index.html` para las rutas del router,
+  - cabeceras de seguridad y caché de assets.
+- La URL de la API se define con `VITE_API_URL` en `frontend/.env.production`.
 
-**Solución:**
+### Backend (Render)
+
+- La infraestructura está declarada en `render.yaml`.
+- `autoDeploy` está deshabilitado para que el despliegue lo controle el
+  pipeline de GitHub Actions.
+- El comando de build es `cd backend && npm ci` y el de arranque
+  `cd backend && npm start`.
+- El health check es `/health`.
+- Las variables de entorno se configuran en el panel de Render (las marcadas
+  con `sync: false` en `render.yaml`).
+
+## Validación local
+
+Antes de subir cambios, ejecuta desde la raíz del repositorio:
+
 ```bash
-# Ejecutar con las mismas variables de entorno
-NODE_ENV=test npm test
+# Lint del backend
+npm run lint:backend
+
+# Pruebas unitarias del backend
+npm run test:backend
+
+# Build del frontend
+npm run build
+
+# Todo junto
+npm run validate
 ```
 
-### ❌ Vercel Deploy Failing
+También puedes ejecutar cada proyecto por separado:
 
-**Problema:** "Project not found"
+```bash
+cd backend
+npm run lint
+npm run test:unit
+npm run test:coverage
 
-**Solución:**
-1. Verifica `VERCEL_PROJECT_ID` en secrets
-2. Re-link proyecto: `vercel link`
-3. Actualiza secret con nuevo ID
+cd ../frontend
+npm run build
+npm run preview
+```
 
-### ❌ Coverage Upload Failing
+## Protección de rama
 
-**Problema:** Codecov rechaza el upload
+Si el repositorio usa reglas de protección de rama, configura como checks
+requeridos:
 
-**Solución:**
-- Es opcional (`continue-on-error: true`)
-- Verifica `CODECOV_TOKEN` si quieres habilitarlo
-- Sin token, Codecov funciona pero con limitaciones
+- `Lint backend`
+- `Test backend`
+- `Build frontend`
 
----
+Los jobs de despliegue solo se ejecutan después de que estos checks pasan.
 
-## 📊 Métricas de Pipeline
+## Solución de problemas
 
-### Performance
+### El job de pruebas falla
 
-- **Tiempo Total**: 7-9 minutos
-- **Jobs Paralelos**: Lint + Security (simultáneos)
-- **Cache Habilitado**: npm dependencies (reduce 30-40%)
+1. Ejecuta `cd backend && npm run test:unit` de forma local.
+2. Verifica que `NODE_ENV=test` y `JWT_SECRET` estén definidos en el entorno.
+3. Revisa que no haya dependencias sin instalar ejecutando `npm ci`.
 
-### Costos
+### El despliegue a Vercel no se ejecuta
 
-- **GitHub Actions**: ✅ FREE (2000 min/mes public repos)
-- **Vercel**: ✅ FREE (100 GB bandwidth/mes)
-- **Codecov**: ✅ FREE (public repos)
+1. Confirma que los secrets `VERCEL_TOKEN`, `VERCEL_ORG_ID` y
+   `VERCEL_PROJECT_ID` existen.
+2. Verifica que el job `deploy-frontend` solo corre en `push` a `main`.
+3. Revisa que el directorio raíz del proyecto en Vercel sea `frontend`.
 
-**Total Mensual**: **$0.00** 💰
+### El despliegue a Render no se ejecuta
 
----
+1. Confirma que `RENDER_DEPLOY_HOOK_URL` está configurado.
+2. Verifica que el hook siga activo en el panel de Render.
+3. Consulta los logs del servicio en Render para errores de build o arranque.
 
-## 🎓 Best Practices Implementadas
+### El workflow de Lighthouse falla por presupuesto
 
-✅ **Jobs Modulares** - Fácil debugging
-✅ **Caching Inteligente** - Builds rápidos
-✅ **Parallel Execution** - Optimización de tiempo
-✅ **Continue on Error** - Pipeline resiliente
-✅ **Semantic Commits** - Dependabot + changelog
-✅ **Quality Gates** - Deploy solo si pasa todo
-✅ **Preview Deployments** - Review antes de producción
-✅ **Matrix Strategy** - Tests en múltiples versiones Node
+1. Revisa el informe publicado en el pull request.
+2. Ajusta los límites en `lighthouse-budget.json` si el cambio es intencional.
+3. Optimiza los recursos si el presupuesto refleja una regresión real.
 
----
+## Dependabot
 
-## 📝 Próximos Pasos
-
-### Opcional - Mejoras Futuras
-
-- [ ] **Lighthouse CI** - Performance monitoring
-- [ ] **Sentry Integration** - Error tracking en producción
-- [ ] **Slack Notifications** - Alertas de deploy
-- [ ] **E2E Tests** - Playwright/Cypress
-- [ ] **Docker Builds** - Containerización
-- [ ] **Staging Environment** - Ambiente de pre-producción
-
----
-
-**Última actualización**: Octubre 14, 2025  
-**Mantenedor**: DilanSG  
-**Status**: ✅ Production Ready
+`.github/dependabot.yml` revisa dependencias de backend, frontend y GitHub
+Actions. Las actualizaciones se agrupan por ecosistema, se etiquetan y se
+asignan al responsable del mantenimiento con prefijos de commit semánticos.

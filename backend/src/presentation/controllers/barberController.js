@@ -1,4 +1,4 @@
-﻿import { asyncHandler } from '../middleware/index.js';
+import { asyncHandler } from '../middleware/index.js';
 import { deleteFromCloudinary } from '../middleware/upload.js';
 import { AppError, User, Barber, Appointment, logger } from '../../barrel.js';
 import { now } from '../../shared/utils/dateUtils.js';
@@ -44,7 +44,7 @@ export const editBarberProfile = asyncHandler(async (req, res) => {
 
 // @desc    Obtener todos los barberos
 // @route   GET /api/barbers
-// @access  P�blico
+// @access  Público
 export const getBarbers = asyncHandler(async (req, res) => {
   const result = await barberService.getBarbers();
   
@@ -101,7 +101,7 @@ export const getBarberByUserId = asyncHandler(async (req, res) => {
       user: req.params.userId,
       specialty: 'Barbero General', // Valor por defecto
       experience: 0,
-      description: '', // Se puede actualizar despu�s
+      description: '', // Se puede actualizar después
       isActive: true,
       schedule: {
         monday: { start: '09:00', end: '17:00', available: true },
@@ -114,7 +114,7 @@ export const getBarberByUserId = asyncHandler(async (req, res) => {
       }
     });
 
-    // Poblamos los campos despu�s de crear
+    // Poblamos los campos después de crear
     barber = await Barber.findById(barber._id)
       .populate('user', 'name email phone photo role')
       .populate('services', 'name price duration');
@@ -143,7 +143,7 @@ export const getBarberByUserId = asyncHandler(async (req, res) => {
 
 // @desc    Obtener un barbero por ID
 // @route   GET /api/barbers/:id
-// @access  P�blico
+// @access  Público
 export const getBarber = asyncHandler(async (req, res) => {
   // Debug: // Debug: console.log('Buscando barbero con ID:', req.params.id);
   
@@ -172,7 +172,7 @@ export const getBarber = asyncHandler(async (req, res) => {
 
 // @desc    Obtener disponibilidad de un barbero
 // @route   GET /api/barbers/:id/availability
-// @access  P�blico
+// @access  Público
 export const getBarberAvailability = asyncHandler(async (req, res) => {
   const { date } = req.query;
   const barberId = req.params.id;
@@ -183,7 +183,7 @@ export const getBarberAvailability = asyncHandler(async (req, res) => {
 
   const targetDate = new Date(date);
   if (isNaN(targetDate.getTime())) {
-    throw new AppError('Fecha inv�lida', 400);
+    throw new AppError('Fecha inválida', 400);
   }
 
   const barber = await Barber.findById(barberId);
@@ -376,7 +376,7 @@ export const deleteBarber = asyncHandler(async (req, res) => {
   });
 });
 
-// @desc    Obtener estad�sticas de un barbero
+// @desc    Obtener estadísticas de un barbero
 // @route   GET /api/barbers/:id/stats
 // @access  Privado/Admin o el mismo barbero
 export const getBarberStats = asyncHandler(async (req, res) => {
@@ -388,7 +388,7 @@ export const getBarberStats = asyncHandler(async (req, res) => {
   }
 
   if (req.user.role !== 'admin' && barber.user.toString() !== req.user._id.toString()) {
-    throw new AppError('No tienes permisos para ver estas estad�sticas', 403);
+    throw new AppError('No tienes permisos para ver estas estadísticas', 403);
   }
 
   const today = now();
@@ -548,7 +548,7 @@ export const updateMainBarberStatus = asyncHandler(async (req, res) => {
     isMainBarber: barber.isMainBarber 
   });
 
-  // 🧹 LIMPIAR CACHÉ DE BARBEROS de forma específica y rápida
+  // LIMPIAR CACHÉ DE BARBEROS de forma específica y rápida
   try {
     // Importar el servicio de caché de forma dinámica
     const cacheService = (await import('../../core/application/usecases/CacheUseCases.js')).default;

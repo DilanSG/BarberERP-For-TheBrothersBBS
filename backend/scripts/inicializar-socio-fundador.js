@@ -46,9 +46,9 @@ class SocioFounderInitializer {
   async connectDB() {
     try {
       await mongoose.connect(process.env.MONGODB_URI);
-      console.log(`${colors.green}✅ Conectado a MongoDB${colors.reset}`);
+      console.log(`${colors.green}Conectado a MongoDB${colors.reset}`);
     } catch (error) {
-      console.error(`${colors.red}❌ Error conectando a MongoDB:${colors.reset}`, error.message);
+      console.error(`${colors.red}Error conectando a MongoDB:${colors.reset}`, error.message);
       process.exit(1);
     }
   }
@@ -61,12 +61,12 @@ class SocioFounderInitializer {
     }).populate('userId', 'name email');
 
     if (fundadorExistente) {
-      console.log(`${colors.yellow}⚠️  Ya existe un socio fundador:${colors.reset}`);
+      console.log(`${colors.yellow}Ya existe un socio fundador:${colors.reset}`);
       console.log(`   Nombre: ${colors.cyan}${fundadorExistente.nombre}${colors.reset}`);
       console.log(`   Email: ${colors.cyan}${fundadorExistente.email}${colors.reset}`);
       console.log(`   Porcentaje: ${colors.cyan}${fundadorExistente.porcentaje}%${colors.reset}`);
       
-      console.log(`\n${colors.yellow}⚠️  NOTA: El fundador actual será convertido a socio regular sin porcentaje.${colors.reset}`);
+      console.log(`\n${colors.yellow}NOTA: El fundador actual será convertido a socio regular sin porcentaje.${colors.reset}`);
       const continuar = await this.pregunta(`\n¿Desea reemplazar el fundador existente? (${colors.red}s/N${colors.reset}): `);
       
       if (continuar.toLowerCase() !== 's' && continuar.toLowerCase() !== 'si') {
@@ -78,7 +78,7 @@ class SocioFounderInitializer {
       fundadorExistente.tipoSocio = 'socio';
       fundadorExistente.porcentaje = 0;
       await fundadorExistente.save();
-      console.log(`${colors.green}✅ Fundador anterior convertido a socio regular sin porcentaje${colors.reset}`);
+      console.log(`${colors.green}Fundador anterior convertido a socio regular sin porcentaje${colors.reset}`);
     }
 
     return true;
@@ -93,35 +93,35 @@ class SocioFounderInitializer {
       }).select('name email createdAt').sort({ createdAt: 1 });
 
       if (admins.length === 0) {
-        console.log(`${colors.red}❌ No hay usuarios admin en la base de datos${colors.reset}`);
-        console.log(`${colors.yellow}💡 Primero debe crear al menos un usuario admin${colors.reset}`);
+        console.log(`${colors.red}No hay usuarios admin en la base de datos${colors.reset}`);
+        console.log(`${colors.yellow}Primero debe crear al menos un usuario admin${colors.reset}`);
         return null;
       }
 
       return admins;
     } catch (error) {
-      console.error(`${colors.red}❌ Error obteniendo admins:${colors.reset}`, error.message);
+      console.error(`${colors.red}Error obteniendo admins:${colors.reset}`, error.message);
       return null;
     }
   }
 
   // Mostrar lista de admins y permitir selección
   async seleccionarAdmin(admins) {
-    console.log(`\n${colors.bright}📋 ADMINISTRADORES DISPONIBLES:${colors.reset}`);
+    console.log(`\n${colors.bright}ADMINISTRADORES DISPONIBLES:${colors.reset}`);
     console.log(`${colors.blue}${'='.repeat(80)}${colors.reset}`);
 
     admins.forEach((admin, index) => {
       const fechaCreacion = new Date(admin.createdAt).toLocaleDateString('es-CO');
       console.log(`${colors.cyan}[${index + 1}]${colors.reset} ${colors.bright}${admin.name}${colors.reset}`);
-      console.log(`    📧 ${admin.email}`);
-      console.log(`    📅 Creado: ${fechaCreacion}`);
+      console.log(`    ${admin.email}`);
+      console.log(`    Creado: ${fechaCreacion}`);
       console.log('');
     });
 
     console.log(`${colors.blue}${'='.repeat(80)}${colors.reset}`);
 
     while (true) {
-      const seleccion = await this.pregunta(`\n${colors.yellow}👤 Seleccione el admin que será socio fundador [1-${admins.length}] o 'q' para salir: ${colors.reset}`);
+      const seleccion = await this.pregunta(`\n${colors.yellow}Seleccione el admin que será socio fundador [1-${admins.length}] o 'q' para salir: ${colors.reset}`);
       
       if (seleccion.toLowerCase() === 'q') {
         return null;
@@ -133,7 +133,7 @@ class SocioFounderInitializer {
         const adminSeleccionado = admins[index];
         
         // Confirmar selección
-        console.log(`\n${colors.green}✨ ADMIN SELECCIONADO:${colors.reset}`);
+        console.log(`\n${colors.green}ADMIN SELECCIONADO:${colors.reset}`);
         console.log(`   Nombre: ${colors.cyan}${adminSeleccionado.name}${colors.reset}`);
         console.log(`   Email: ${colors.cyan}${adminSeleccionado.email}${colors.reset}`);
         
@@ -143,7 +143,7 @@ class SocioFounderInitializer {
           return adminSeleccionado;
         }
       } else {
-        console.log(`${colors.red}❌ Selección inválida. Ingrese un número entre 1 y ${admins.length}${colors.reset}`);
+        console.log(`${colors.red}Selección inválida. Ingrese un número entre 1 y ${admins.length}${colors.reset}`);
       }
     }
   }
@@ -151,23 +151,23 @@ class SocioFounderInitializer {
   // Solicitar porcentaje de propiedad
   async solicitarPorcentaje() {
     while (true) {
-      const porcentajeStr = await this.pregunta(`\n${colors.yellow}💰 Ingrese el porcentaje de propiedad del fundador (1-100): ${colors.reset}`);
+      const porcentajeStr = await this.pregunta(`\n${colors.yellow}Ingrese el porcentaje de propiedad del fundador (1-100): ${colors.reset}`);
       const porcentaje = parseFloat(porcentajeStr);
 
       if (!isNaN(porcentaje) && porcentaje > 0 && porcentaje <= 100) {
         return porcentaje;
       }
 
-      console.log(`${colors.red}❌ Ingrese un porcentaje válido entre 1 y 100${colors.reset}`);
+      console.log(`${colors.red}Ingrese un porcentaje válido entre 1 y 100${colors.reset}`);
     }
   }
 
   // Solicitar datos adicionales opcionales
   async solicitarDatosAdicionales() {
-    console.log(`\n${colors.blue}📝 DATOS ADICIONALES (OPCIONAL):${colors.reset}`);
+    console.log(`\n${colors.blue}DATOS ADICIONALES (OPCIONAL):${colors.reset}`);
     
-    const telefono = await this.pregunta(`📱 Teléfono: ${colors.reset}`);
-    const notas = await this.pregunta(`📋 Notas: ${colors.reset}`);
+    const telefono = await this.pregunta(`Teléfono: ${colors.reset}`);
+    const notas = await this.pregunta(`Notas: ${colors.reset}`);
 
     return {
       telefono: telefono.trim() || undefined,
@@ -178,7 +178,7 @@ class SocioFounderInitializer {
   // Crear el socio fundador
   async crearSocioFundador(admin, porcentaje, datosAdicionales) {
     try {
-      console.log(`\n${colors.blue}🔄 Creando socio fundador...${colors.reset}`);
+      console.log(`\n${colors.blue}Creando socio fundador...${colors.reset}`);
 
       const socio = await Socio.create({
         userId: admin._id,
@@ -194,7 +194,7 @@ class SocioFounderInitializer {
 
       await socio.populate('userId', 'name email role');
 
-      console.log(`\n${colors.green}🎉 ¡SOCIO FUNDADOR CREADO EXITOSAMENTE!${colors.reset}`);
+      console.log(`\n${colors.green}¡SOCIO FUNDADOR CREADO EXITOSAMENTE!${colors.reset}`);
       console.log(`${colors.blue}${'='.repeat(50)}${colors.reset}`);
       console.log(`${colors.bright}Nombre:${colors.reset} ${socio.nombre}`);
       console.log(`${colors.bright}Email:${colors.reset} ${socio.email}`);
@@ -207,7 +207,7 @@ class SocioFounderInitializer {
       return socio;
 
     } catch (error) {
-      console.error(`${colors.red}❌ Error creando socio fundador:${colors.reset}`, error.message);
+      console.error(`${colors.red}Error creando socio fundador:${colors.reset}`, error.message);
       throw error;
     }
   }
@@ -230,7 +230,7 @@ class SocioFounderInitializer {
   // Función principal
   async ejecutar() {
     try {
-      console.log(`${colors.bright}${colors.magenta}🚀 INICIALIZADOR DE SOCIO FUNDADOR${colors.reset}`);
+      console.log(`${colors.bright}${colors.magenta}INICIALIZADOR DE SOCIO FUNDADOR${colors.reset}`);
       console.log(`${colors.blue}${'='.repeat(80)}${colors.reset}`);
       console.log(`${colors.yellow}Este script permite seleccionar un admin existente como socio fundador.${colors.reset}`);
       console.log(`${colors.yellow}Esta es la única forma autorizada de crear un socio fundador.${colors.reset}\n`);
@@ -267,7 +267,7 @@ class SocioFounderInitializer {
       const datosAdicionales = await this.solicitarDatosAdicionales();
 
       // Mostrar resumen y confirmar
-      console.log(`\n${colors.blue}📋 RESUMEN DE LA OPERACIÓN:${colors.reset}`);
+      console.log(`\n${colors.blue}RESUMEN DE LA OPERACIÓN:${colors.reset}`);
       console.log(`${colors.blue}${'='.repeat(40)}${colors.reset}`);
       console.log(`Admin: ${colors.cyan}${adminSeleccionado.name}${colors.reset}`);
       console.log(`Email: ${colors.cyan}${adminSeleccionado.email}${colors.reset}`);
@@ -286,13 +286,13 @@ class SocioFounderInitializer {
       // Crear socio fundador
       await this.crearSocioFundador(adminSeleccionado, porcentaje, datosAdicionales);
 
-      console.log(`\n${colors.green}✅ El socio fundador puede ahora asignar subroles de socio a otros admins.${colors.reset}`);
+      console.log(`\n${colors.green}El socio fundador puede ahora asignar subroles de socio a otros admins.${colors.reset}`);
 
     } catch (error) {
-      console.error(`${colors.red}💥 Error durante la ejecución:${colors.reset}`, error.message);
+      console.error(`${colors.red}Error durante la ejecución:${colors.reset}`, error.message);
     } finally {
       await this.cleanup();
-      console.log(`\n${colors.blue}👋 ¡Hasta luego!${colors.reset}`);
+      console.log(`\n${colors.blue}¡Hasta luego!${colors.reset}`);
     }
   }
 }

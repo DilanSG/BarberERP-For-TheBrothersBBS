@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   ShoppingCart, 
   Scissors, 
@@ -95,8 +95,8 @@ const BarberSales = () => {
     return cash?.backendId || 'efectivo';
   };
 
-  // IDs válidos de métodos de pago (id/backendId + alias efectivo↔cash)
-  // Conjunto de ids válidos de métodos de pago, incluyendo el alias efectivo↔cash.
+ // IDs válidos de métodos de pago (id/backendId + alias efectivo a cash)
+ // Conjunto de ids válidos de métodos de pago, incluyendo el alias efectivo a cash.
   const getValidPaymentMethodIds = () => {
     const ids = new Set();
     allPaymentMethods.forEach((method) => {
@@ -126,11 +126,11 @@ const BarberSales = () => {
   // Determina el barbero de la venta: el seleccionado si es admin o el perfil
   // asociado al usuario cuando es barbero.
   const getBarberId = () => {
-    logger.debug('🔍 Datos del usuario:', user);
-    logger.debug('🔍 Role:', user.role);
-    logger.debug('🔍 user._id:', user._id);
-    logger.debug('🔍 user.barberId:', user.barberId);
-    logger.debug('🔍 selectedBarberId:', selectedBarberId);
+    logger.debug('Datos del usuario:', user);
+    logger.debug('Role:', user.role);
+    logger.debug('user._id:', user._id);
+    logger.debug('user.barberId:', user.barberId);
+    logger.debug('selectedBarberId:', selectedBarberId);
     
     // Si el usuario es admin, usar el barbero seleccionado
     if (user.role === 'admin') {
@@ -301,7 +301,7 @@ const BarberSales = () => {
 
   // Limpiar/normalizar carrito solo cuando cambien los métodos de pago disponibles
   // - Elimina items con métodos realmente inválidos
-  // - Normaliza alias de efectivo ('efectivo' ↔ 'cash') al backendId canónico
+ // - Normaliza alias de efectivo ('efectivo' a 'cash') al backendId canónico
   // Cuando cambian los métodos de pago disponibles, limpia del carrito los ítems
   // con métodos inválidos y normaliza el alias de efectivo al id canónico del backend.
   useEffect(() => {
@@ -330,7 +330,7 @@ const BarberSales = () => {
       });
 
       if (changed) {
-        console.log('🧹 Normalizando items del carrito según métodos de pago válidos');
+        console.log('Normalizando items del carrito según métodos de pago válidos');
         setCart(normalized.filter(Boolean));
       }
     }
@@ -615,9 +615,9 @@ const BarberSales = () => {
       // Usar los mismos métodos de pago válidos que en el useEffect de limpieza
       const validPaymentMethods = getValidPaymentMethodIds();
       
-      console.log('🔄 Iniciando validación de carrito antes de procesar venta');
-      console.log('📦 Items en carrito:', cart.length);
-      console.log('💳 Métodos de pago válidos:', validPaymentMethods);
+      console.log('Iniciando validación de carrito antes de procesar venta');
+      console.log('Items en carrito:', cart.length);
+      console.log('Métodos de pago válidos:', validPaymentMethods);
       
       const invalidItems = cart.filter(item => 
         !item.type || 
@@ -634,8 +634,8 @@ const BarberSales = () => {
       // Ante ítems inválidos: se detallan, se eliminan del carrito y se aborta la venta.
       if (invalidItems.length > 0) {
         console.error('Items inválidos en el carrito:', invalidItems);
-        console.log('📋 Métodos de pago válidos disponibles:', validPaymentMethods);
-        console.log('🔍 Total de métodos configurados:', allPaymentMethods);
+        console.log('Métodos de pago válidos disponibles:', validPaymentMethods);
+        console.log('Total de métodos configurados:', allPaymentMethods);
         
         // Log detallado para debugging
         invalidItems.forEach(item => {
@@ -673,14 +673,14 @@ const BarberSales = () => {
         return;
       }
 
-      console.log('✅ Validación de carrito exitosa - Todos los items son válidos');
-      console.log('📤 Procediendo a enviar carrito al backend...');
+      console.log('Validación de carrito exitosa - Todos los items son válidos');
+      console.log('Procediendo a enviar carrito al backend...');
 
       // Enviar todo el carrito con métodos de pago a la nueva API
       // Extraer clientData preferentemente del nivel de carrito (si existe), si no tomar del primer item
       const clientDataFromCart = cartClientData || cart.find(item => item.clientData)?.clientData || null;
       
-      logger.debug('🔍 Verificando clientData en el carrito:', {
+      logger.debug('Verificando clientData en el carrito:', {
         hayClientData: !!clientDataFromCart,
         clientDataJSON: JSON.stringify(clientDataFromCart),
         itemsConClientData: cart.filter(item => item.clientData).length,

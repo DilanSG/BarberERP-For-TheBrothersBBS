@@ -190,7 +190,7 @@ export const debugTime = (label = 'Debug Time') => {
   const utcNow = new Date();
   const colombiaNow = now();
   
-  console.log(`\n🕐 ${label}`);
+  console.log(`\n${label}`);
   console.log(`UTC:      ${utcNow.toISOString()} (${utcNow.toLocaleString()})`);
   console.log(`Colombia: ${colombiaNow.toISOString()} (${formatFriendly(colombiaNow)})`);
   console.log(`Hoy (CO): ${today()}\n`);

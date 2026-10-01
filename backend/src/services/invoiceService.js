@@ -11,18 +11,18 @@ import { logger } from '../shared/utils/logger.js';
 // @returns {string} HTML de la factura
 export const generateInvoiceHTML = (invoiceData) => {
   try {
-    logger.info('🔵 INICIO generateInvoiceHTML', { 
+    logger.info('INICIO generateInvoiceHTML', { 
       receivedData: typeof invoiceData,
       keys: Object.keys(invoiceData || {})
     });
 
     const business = getBusinessInfo();
     
-    logger.info('🟡 Business info obtenida', { businessName: business.name });
+    logger.info('Business info obtenida', { businessName: business.name });
     
     const { invoice, sale, customer, barber, items, totals } = invoiceData;
 
-    logger.info('🟢 Desestructuración completada');
+    logger.info('Desestructuración completada');
     logger.info('Invoice:', invoice);
     logger.info('Sale:', sale);
     logger.info('Customer:', customer);

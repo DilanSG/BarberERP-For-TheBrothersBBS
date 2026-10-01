@@ -1,4 +1,4 @@
-﻿// Hooks de PWA: registra el Service Worker, gestiona instalación/actualizaciones,
+// Hooks de PWA: registra el Service Worker, gestiona instalación/actualizaciones,
 // estado online/offline, caché offline, compartir y utilidades del navegador.
 import { useEffect, useState, useCallback } from 'react';
 
@@ -27,27 +27,27 @@ export const usePWA = () => {
   const registerServiceWorker = async () => {
     try {
       setSWStatus('registering');
-      logger.debug('🔧 PWA: Registering Service Worker...');
+      logger.debug('PWA: Registering Service Worker...');
 
       const registration = await navigator.serviceWorker.register('/sw.js', {
         scope: '/'
       });
 
-      logger.debug('✅ PWA: Service Worker registered successfully');
+      logger.debug('PWA: Service Worker registered successfully');
       setSWStatus('registered');
 
       // Verificar actualizaciones
       registration.addEventListener('updatefound', () => {
         const newWorker = registration.installing;
-        logger.debug('🔄 PWA: New Service Worker found, installing...');
+        logger.debug('PWA: New Service Worker found, installing...');
 
         newWorker.addEventListener('statechange', () => {
           if (newWorker.state === 'installed') {
             if (navigator.serviceWorker.controller) {
-              logger.debug('🆕 PWA: New content is available, refresh to update');
+              logger.debug('PWA: New content is available, refresh to update');
               setSWUpdateAvailable(true);
             } else {
-              logger.debug('✅ PWA: Content is cached for offline use');
+              logger.debug('PWA: Content is cached for offline use');
             }
           }
         });
@@ -55,12 +55,12 @@ export const usePWA = () => {
 
       // Escuchar cambios de estado
       navigator.serviceWorker.addEventListener('controllerchange', () => {
-        logger.debug('🔄 PWA: Service Worker controller changed, reloading...');
+        logger.debug('PWA: Service Worker controller changed, reloading...');
         window.location.reload();
       });
 
     } catch (error) {
-      console.error('❌ PWA: Service Worker registration failed:', error);
+      console.error('PWA: Service Worker registration failed:', error);
       setSWStatus('error');
     }
   };
@@ -81,14 +81,14 @@ export const usePWA = () => {
   // Manejar instalación de PWA
   useEffect(() => {
     const handleBeforeInstallPrompt = (e) => {
-      logger.debug('📱 PWA: Install prompt triggered');
+      logger.debug('PWA: Install prompt triggered');
       e.preventDefault();
       setInstallPrompt(e);
       setIsInstallable(true);
     };
 
     const handleAppInstalled = () => {
-      logger.debug('✅ PWA: App was installed successfully');
+      logger.debug('PWA: App was installed successfully');
       setIsInstalled(true);
       setIsInstallable(false);
       setInstallPrompt(null);
@@ -113,10 +113,10 @@ export const usePWA = () => {
     if (!installPrompt) return false;
 
     try {
-      logger.debug('📱 PWA: Showing install prompt...');
+      logger.debug('PWA: Showing install prompt...');
       const result = await installPrompt.prompt();
       
-      logger.debug('📱 PWA: Install prompt result:', result.outcome);
+      logger.debug('PWA: Install prompt result:', result.outcome);
       
       if (result.outcome === 'accepted') {
         setIsInstallable(false);
@@ -126,7 +126,7 @@ export const usePWA = () => {
       
       return false;
     } catch (error) {
-      console.error('❌ PWA: Install failed:', error);
+      console.error('PWA: Install failed:', error);
       return false;
     }
   }, [installPrompt]);
@@ -134,12 +134,12 @@ export const usePWA = () => {
   // Manejar cambios de conexión
   useEffect(() => {
     const handleOnline = () => {
-      logger.debug('🌐 PWA: Connection restored');
+      logger.debug('PWA: Connection restored');
       setIsOnline(true);
     };
 
     const handleOffline = () => {
-      logger.debug('📵 PWA: Connection lost');
+      logger.debug('PWA: Connection lost');
       setIsOnline(false);
     };
 
@@ -186,7 +186,7 @@ export const usePWA = () => {
           const messageChannel = new MessageChannel();
           messageChannel.port1.onmessage = (event) => {
             if (event.data.type === 'CACHE_CLEARED') {
-              logger.debug('🗑️ PWA: Cache cleared successfully');
+              logger.debug('PWA: Cache cleared successfully');
               setCacheInfo(null);
               resolve(event.data.success);
             }
@@ -222,18 +222,18 @@ export const usePWA = () => {
             const response = await fetch(url);
             if (response.ok) {
               await cache.put(url, response);
-              // logger.debug(`📦 PWA: Preloaded content for: ${url}`);
+              // logger.debug(`PWA: Preloaded content for: ${url}`);
             }
           } catch (error) {
-            console.warn(`⚠️ PWA: Failed to preload: ${url}`, error);
+            console.warn(`PWA: Failed to preload: ${url}`, error);
           }
         });
 
         await Promise.all(preloadPromises);
-        // logger.debug('✅ PWA: Content preloading completed');
+        // logger.debug('PWA: Content preloading completed');
         return true;
       } catch (error) {
-        console.error('❌ PWA: Preloading failed:', error);
+        console.error('PWA: Preloading failed:', error);
         return false;
       }
     }
@@ -258,11 +258,11 @@ export const usePWA = () => {
     if ('share' in navigator) {
       try {
         await navigator.share(data);
-        logger.debug('📤 PWA: Content shared successfully');
+        logger.debug('PWA: Content shared successfully');
         return true;
       } catch (error) {
         if (error.name !== 'AbortError') {
-          console.error('❌ PWA: Share failed:', error);
+          console.error('PWA: Share failed:', error);
         }
         return false;
       }
@@ -275,10 +275,10 @@ export const usePWA = () => {
     if ('clipboard' in navigator) {
       try {
         await navigator.clipboard.writeText(text);
-        logger.debug('📋 PWA: Copied to clipboard');
+        logger.debug('PWA: Copied to clipboard');
         return true;
       } catch (error) {
-        console.error('❌ PWA: Clipboard copy failed:', error);
+        console.error('PWA: Clipboard copy failed:', error);
         return false;
       }
     }
@@ -336,7 +336,7 @@ export const usePushNotifications = () => {
       setPermission(result);
       return result === 'granted';
     } catch (error) {
-      console.error('❌ PWA: Notification permission failed:', error);
+      console.error('PWA: Notification permission failed:', error);
       return false;
     }
   }, [isSupported]);
@@ -354,10 +354,10 @@ export const usePushNotifications = () => {
       });
 
       setSubscription(sub);
-      logger.debug('✅ PWA: Subscribed to push notifications');
+      logger.debug('PWA: Subscribed to push notifications');
       return sub;
     } catch (error) {
-      console.error('❌ PWA: Push subscription failed:', error);
+      console.error('PWA: Push subscription failed:', error);
       return null;
     }
   }, [isSupported, permission]);

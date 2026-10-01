@@ -20,11 +20,11 @@ import { useBodyScrollLock } from '@hooks/useBodyScrollLock';
 // - brand    → premium (roles, socios, fundadores)
 //
 // Uso:
-//   <Modal isOpen={open} onClose={close} color="red" title="Gestionar Ventas"
-//          subtitle="Reembolsos y anulaciones" icon={Minus} size="4xl"
-//          footer={<Botones />}>
-//     ...contenido...
-//   </Modal>
+// <Modal isOpen={open} onClose={close} color="red" title="Gestionar Ventas"
+// subtitle="Reembolsos y anulaciones" icon={Minus} size="4xl"
+// footer={<Botones />}>
+// ...contenido...
+// </Modal>
 
 // Tamaños predefinidos del panel (ancho máximo).
 const SIZES = {

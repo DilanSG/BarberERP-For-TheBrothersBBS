@@ -120,7 +120,7 @@ const AppointmentsBreakdownModal = ({ isOpen, onClose, revenueData, dashboardDat
     if (isOpen) {
       fetchAppointments();
     }
-  }, [isOpen, dateRange, dashboardData]); // ✅ Agregar dashboardData como dependencia
+  }, [isOpen, dateRange, dashboardData]); // Agregar dashboardData como dependencia
 
   // Refiltra la lista cada vez que cambian las citas o el método elegido.
   useEffect(() => {
@@ -152,11 +152,11 @@ const AppointmentsBreakdownModal = ({ isOpen, onClose, revenueData, dashboardDat
         setAvailablePaymentMethods(methods);
       } else {
         const errorText = await response.text();
-        console.error('❌ Failed to fetch appointments:', response.status, response.statusText);
-        console.error('❌ Error response:', errorText);
+        console.error('Failed to fetch appointments:', response.status, response.statusText);
+        console.error('Error response:', errorText);
       }
     } catch (error) {
-      console.error('❌ Error fetching appointments:', error);
+      console.error('Error fetching appointments:', error);
     } finally {
       setLoading(false);
     }

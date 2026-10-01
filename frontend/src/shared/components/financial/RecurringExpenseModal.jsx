@@ -232,7 +232,7 @@ export const RecurringExpenseModal = ({
       };
       const normalizedPaymentMethod = paymentMethodMap[pmLower] || formData.paymentMethod;
 
-      console.log('💾 Guardando gasto recurrente normalizado:', {
+      console.log('Guardando gasto recurrente normalizado:', {
         original: formData.recurringConfig,
         normalized: normalizedConfig,
         completeData: {

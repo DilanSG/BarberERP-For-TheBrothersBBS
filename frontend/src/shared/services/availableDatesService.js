@@ -1,4 +1,4 @@
-﻿// Servicio unificado para obtener fechas disponibles
+// Servicio unificado para obtener fechas disponibles
 import { salesService } from './salesService';
 import { appointmentsService } from './appointmentsService';
 
@@ -24,11 +24,11 @@ export class AvailableDatesService {
   // Devuelve un array de fechas 'YYYY-MM-DD' ordenado de más reciente a más antiguo.
   // Usa caché si sigue vigente; si las fuentes fallan, cae al fallback de 90 días.
   async getAllAvailableDates() {
-    debugLog('📅 Obteniendo fechas disponibles de todas las fuentes...');
+    debugLog('Obteniendo fechas disponibles de todas las fuentes...');
     
     // Verificar cache
     if (this.isCacheValid()) {
-      debugLog('✅ Usando fechas desde cache');
+      debugLog('Usando fechas desde cache');
       return Array.from(this.dateCache.values()).flat().filter((date, index, arr) => arr.indexOf(date) === index).sort((a, b) => new Date(b) - new Date(a));
     }
 
@@ -37,7 +37,7 @@ export class AvailableDatesService {
 
       // 1. Obtener fechas de ventas
       try {
-        debugLog('🛒 Cargando fechas de ventas...');
+        debugLog('Cargando fechas de ventas...');
         const salesResponse = await salesService.getAvailableDates();
         if (salesResponse?.success && Array.isArray(salesResponse.data)) {
           salesResponse.data.forEach(date => {
@@ -46,28 +46,28 @@ export class AvailableDatesService {
             }
           });
           this.dateCache.set('sales', salesResponse.data);
-          debugLog(`✅ ${salesResponse.data.length} fechas de ventas cargadas`);
+          debugLog(`${salesResponse.data.length} fechas de ventas cargadas`);
         }
       } catch (err) {
-        console.warn('⚠️ Error cargando fechas de ventas:', err.message);
+        console.warn('Error cargando fechas de ventas:', err.message);
         this.dateCache.set('sales', []);
       }
 
       // 2. Obtener fechas de citas (requiere barberId, así que usamos enfoque diferente)
       try {
-        debugLog('📅 Cargando fechas de citas...');
+        debugLog('Cargando fechas de citas...');
         // Como getAvailableDates de appointments requiere barberId, 
         // usaremos un enfoque alternativo o lo omitiremos por ahora
-        debugLog('ℹ️ Fechas de citas omitidas - endpoint requiere barberId específico');
+        debugLog('Fechas de citas omitidas - endpoint requiere barberId específico');
         this.dateCache.set('appointments', []);
       } catch (err) {
-        console.warn('⚠️ Error cargando fechas de citas (puede que no exista el endpoint):', err.message);
+        console.warn('Error cargando fechas de citas (puede que no exista el endpoint):', err.message);
         this.dateCache.set('appointments', []);
       }
 
       // 3. Como fallback, obtener fechas de los últimos 90 días de datos existentes
       if (allDates.size === 0) {
-        debugLog('📈 Generando fechas fallback de los últimos 90 días...');
+        debugLog('Generando fechas fallback de los últimos 90 días...');
         const fallbackDates = this.generateFallbackDates();
         fallbackDates.forEach(date => allDates.add(date));
       }
@@ -78,12 +78,12 @@ export class AvailableDatesService {
         .sort((a, b) => new Date(b) - new Date(a));
 
       this.lastCacheUpdate = Date.now();
-      debugLog(`✅ Total de fechas disponibles: ${sortedDates.length}`);
-      debugLog('📊 Primeras 5 fechas:', sortedDates.slice(0, 5));
+      debugLog(`Total de fechas disponibles: ${sortedDates.length}`);
+      debugLog('Primeras 5 fechas:', sortedDates.slice(0, 5));
       
       return sortedDates;
     } catch (error) {
-      console.error('❌ Error obteniendo fechas disponibles:', error);
+      console.error('Error obteniendo fechas disponibles:', error);
       return this.generateFallbackDates();
     }
   }
@@ -91,7 +91,7 @@ export class AvailableDatesService {
   // Obtener fechas disponibles para un barbero específico
   // De momento, si no hay endpoint por barbero, reutiliza las fechas generales.
   async getBarberAvailableDates(barberId) {
-    debugLog(`👤 Obteniendo fechas disponibles para barbero: ${barberId}`);
+    debugLog(`Obteniendo fechas disponibles para barbero: ${barberId}`);
     
     const cacheKey = `barber_${barberId}`;
     if (this.dateCache.has(cacheKey) && this.isCacheValid()) {
@@ -107,7 +107,7 @@ export class AvailableDatesService {
         // const barberSalesResponse = await salesService.getBarberAvailableDates(barberId);
         // const barberAppointmentsResponse = await appointmentsService.getBarberAvailableDates(barberId);
       } catch (err) {
-        console.warn(`⚠️ Error obteniendo fechas específicas del barbero ${barberId}:`, err.message);
+        console.warn(`Error obteniendo fechas específicas del barbero ${barberId}:`, err.message);
       }
 
       // Si no hay fechas específicas, usar las fechas generales
@@ -119,10 +119,10 @@ export class AvailableDatesService {
       const sortedDates = Array.from(allDates).sort((a, b) => new Date(b) - new Date(a));
       this.dateCache.set(cacheKey, sortedDates);
       
-      debugLog(`✅ ${sortedDates.length} fechas disponibles para barbero ${barberId}`);
+      debugLog(`${sortedDates.length} fechas disponibles para barbero ${barberId}`);
       return sortedDates;
     } catch (error) {
-      console.error(`❌ Error obteniendo fechas para barbero ${barberId}:`, error);
+      console.error(`Error obteniendo fechas para barbero ${barberId}:`, error);
       return this.generateFallbackDates();
     }
   }
@@ -157,7 +157,7 @@ export class AvailableDatesService {
   // Generar fechas de fallback (últimos 90 días)
   // Solo incluye de lunes a sábado (domingo cerrado).
   generateFallbackDates() {
-    debugLog('🔄 Generando fechas de fallback...');
+    debugLog('Generando fechas de fallback...');
     const dates = [];
     const today = new Date();
     
@@ -171,7 +171,7 @@ export class AvailableDatesService {
       }
     }
     
-    debugLog(`📅 ${dates.length} fechas de fallback generadas`);
+    debugLog(`${dates.length} fechas de fallback generadas`);
     return dates;
   }
 
@@ -183,7 +183,7 @@ export class AvailableDatesService {
 
   // Limpiar cache
   clearCache() {
-    debugLog('🧹 Limpiando cache de fechas disponibles');
+    debugLog('Limpiando cache de fechas disponibles');
     this.dateCache.clear();
     this.lastCacheUpdate = null;
   }

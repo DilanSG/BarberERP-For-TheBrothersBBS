@@ -50,7 +50,7 @@ class ReportValidator {
   async validate() {
     try {
       await mongoose.connect(process.env.MONGODB_URI);
-      log('✅ Conectado a MongoDB para validación de reportes', colors.green);
+      log('Conectado a MongoDB para validación de reportes', colors.green);
 
       await this.validateDataIntegrity();
       await this.generateBasicReports();
@@ -61,20 +61,20 @@ class ReportValidator {
       await mongoose.disconnect();
       
       if (this.errors.length === 0) {
-        log('\n🎉 ¡Todos los reportes funcionan correctamente!', colors.green);
+        log('\n¡Todos los reportes funcionan correctamente!', colors.green);
       } else {
-        log(`\n⚠️ Se encontraron ${this.errors.length} errores en los reportes`, colors.red);
+        log(`\nSe encontraron ${this.errors.length} errores en los reportes`, colors.red);
       }
 
     } catch (error) {
-      log(`❌ Error durante la validación: ${error.message}`, colors.red);
+      log(`Error durante la validación: ${error.message}`, colors.red);
       console.error(error);
       process.exit(1);
     }
   }
 
   async validateDataIntegrity() {
-    log('\n🔍 Validando integridad de datos...', colors.cyan);
+    log('\nValidando integridad de datos...', colors.cyan);
     
     try {
       // Contar registros totales
@@ -88,7 +88,7 @@ class ReportValidator {
         reviews: await Review.countDocuments()
       };
 
-      log(`   📊 Registros encontrados:`);
+      log(`   Registros encontrados:`);
       Object.entries(counts).forEach(([key, count]) => {
         log(`      • ${key}: ${count}`);
       });
@@ -143,7 +143,7 @@ class ReportValidator {
         this.errors.push(`${appointmentsWithInvalidRefs.length} citas con referencias inválidas`);
       }
 
-      log(`   ✅ Integridad de datos validada`);
+      log(`   Integridad de datos validada`);
       
     } catch (error) {
       this.errors.push(`Error validando integridad: ${error.message}`);
@@ -151,7 +151,7 @@ class ReportValidator {
   }
 
   async generateBasicReports() {
-    log('\n📈 Generando reportes básicos...', colors.cyan);
+    log('\nGenerando reportes básicos...', colors.cyan);
     
     try {
       // 1. Reporte de citas por estado
@@ -166,7 +166,7 @@ class ReportValidator {
       ]);
 
       this.reports.appointmentsByStatus = appointmentsByStatus;
-      log(`   📋 Citas por estado:`);
+      log(`   Citas por estado:`);
       appointmentsByStatus.forEach(item => {
         log(`      • ${item._id}: ${item.count} citas ($${item.totalRevenue.toLocaleString()})`);
       });
@@ -191,7 +191,7 @@ class ReportValidator {
       ]);
 
       this.reports.salesByBarber = salesByBarber;
-      log(`   💰 Ventas por barbero:`);
+      log(`   Ventas por barbero:`);
       salesByBarber.forEach(item => {
         log(`      • ${item.barberName}: ${item.totalSales} ventas ($${item.totalRevenue.toLocaleString()})`);
       });
@@ -232,7 +232,7 @@ class ReportValidator {
       });
 
       this.reports.paymentMethods = combinedPayments;
-      log(`   💳 Métodos de pago:`);
+      log(`   Métodos de pago:`);
       Object.entries(combinedPayments).forEach(([method, data]) => {
         log(`      • ${method}: ${data.count} transacciones ($${data.revenue.toLocaleString()})`);
       });
@@ -243,7 +243,7 @@ class ReportValidator {
   }
 
   async generateAdvancedReports() {
-    log('\n📊 Generando reportes avanzados...', colors.cyan);
+    log('\nGenerando reportes avanzados...', colors.cyan);
     
     try {
       // 1. Reporte temporal (por mes)
@@ -272,7 +272,7 @@ class ReportValidator {
       ]);
 
       this.reports.monthlyReport = monthlyReport;
-      log(`   📅 Reporte mensual:`);
+      log(`   Reporte mensual:`);
       monthlyReport.forEach(item => {
         const monthName = new Date(item._id.year, item._id.month - 1).toLocaleDateString('es-ES', { month: 'long', year: 'numeric' });
         log(`      • ${monthName}: ${item.appointments} citas (${item.completed} completadas) - $${item.revenue.toLocaleString()}`);
@@ -334,7 +334,7 @@ class ReportValidator {
       ]);
 
       this.reports.barberPerformance = barberPerformance;
-      log(`   👨‍💼 Performance de barberos:`);
+      log(`   Performance de barberos:`);
       barberPerformance.forEach(barber => {
         log(`      • ${barber.barberName}:`);
         log(`        - Citas: ${barber.totalAppointments} (${barber.completedAppointments} completadas)`);
@@ -369,7 +369,7 @@ class ReportValidator {
       ]);
 
       this.reports.popularServices = popularServices;
-      log(`   ✂️ Servicios más populares:`);
+      log(`   Servicios más populares:`);
       popularServices.forEach(service => {
         log(`      • ${service.serviceName}: ${service.bookings} reservas (${service.completed} completadas) - $${service.revenue.toLocaleString()}`);
       });
@@ -380,7 +380,7 @@ class ReportValidator {
   }
 
   async validateBusinessLogic() {
-    log('\n🔧 Validando lógica de negocio...', colors.cyan);
+    log('\nValidando lógica de negocio...', colors.cyan);
     
     try {
       // 1. Validar que no hay citas duplicadas en mismo horario para mismo barbero
@@ -474,7 +474,7 @@ class ReportValidator {
         this.errors.push(`${invalidReviews.length} reseñas asociadas a citas no completadas`);
       }
 
-      log(`   ✅ Validación de lógica de negocio completada`);
+      log(`   Validación de lógica de negocio completada`);
 
     } catch (error) {
       this.errors.push(`Error validando lógica de negocio: ${error.message}`);
@@ -482,7 +482,7 @@ class ReportValidator {
   }
 
   async displayValidationResults() {
-    log('\n📋 RESULTADOS DE VALIDACIÓN', colors.magenta);
+    log('\nRESULTADOS DE VALIDACIÓN', colors.magenta);
     log('═'.repeat(60), colors.magenta);
     
     // Resumen general
@@ -506,29 +506,29 @@ class ReportValidator {
 
     summary.totalRevenue = (revenueResults[0][0]?.total || 0) + (revenueResults[1][0]?.total || 0);
 
-    log(`📊 RESUMEN GENERAL:`, colors.blue);
+    log(`RESUMEN GENERAL:`, colors.blue);
     log(`   • Total citas: ${summary.totalAppointments}`);
     log(`   • Total ventas: ${summary.totalSales}`);
     log(`   • Total reseñas: ${summary.totalReviews}`);
     log(`   • Ingresos totales: $${summary.totalRevenue.toLocaleString()}`);
 
     // Estado de validación
-    log(`\n🔍 ESTADO DE VALIDACIÓN:`, colors.yellow);
+    log(`\nESTADO DE VALIDACIÓN:`, colors.yellow);
     log(`   • Errores encontrados: ${this.errors.length}`, this.errors.length > 0 ? colors.red : colors.green);
     log(`   • Advertencias: ${this.warnings.length}`, this.warnings.length > 0 ? colors.yellow : colors.green);
 
     if (this.errors.length > 0) {
-      log(`\n❌ ERRORES:`, colors.red);
+      log(`\nERRORES:`, colors.red);
       this.errors.forEach(error => log(`   • ${error}`, colors.red));
     }
 
     if (this.warnings.length > 0) {
-      log(`\n⚠️ ADVERTENCIAS:`, colors.yellow);
+      log(`\nADVERTENCIAS:`, colors.yellow);
       this.warnings.forEach(warning => log(`   • ${warning}`, colors.yellow));
     }
 
     // Reportes de muestra
-    log(`\n📈 DATOS DE MUESTRA PARA FRONTEND:`, colors.cyan);
+    log(`\nDATOS DE MUESTRA PARA FRONTEND:`, colors.cyan);
     
     if (this.reports.barberPerformance && this.reports.barberPerformance.length > 0) {
       const topBarber = this.reports.barberPerformance[0];
@@ -541,36 +541,36 @@ class ReportValidator {
 
     if (this.reports.popularServices && this.reports.popularServices.length > 0) {
       const topService = this.reports.popularServices[0];
-      log(`   ✂️ Servicio más popular: ${topService.serviceName}`);
+      log(`   Servicio más popular: ${topService.serviceName}`);
       log(`      - Reservas: ${topService.bookings}`);
       log(`      - Ingresos: $${topService.revenue.toLocaleString()}`);
     }
 
     if (this.reports.monthlyReport && this.reports.monthlyReport.length > 0) {
-      log(`   📅 Datos mensuales disponibles: ${this.reports.monthlyReport.length} meses`);
+      log(`   Datos mensuales disponibles: ${this.reports.monthlyReport.length} meses`);
       const totalMonthlyRevenue = this.reports.monthlyReport.reduce((sum, month) => sum + month.revenue, 0);
       log(`      - Promedio mensual: $${(totalMonthlyRevenue / this.reports.monthlyReport.length).toLocaleString()}`);
     }
 
     // Recomendaciones finales
-    log(`\n🎯 RECOMENDACIONES:`, colors.green);
+    log(`\nRECOMENDACIONES:`, colors.green);
     
     if (this.errors.length === 0) {
-      log(`   ✅ Los datos están listos para producción`);
-      log(`   ✅ Todos los reportes funcionan correctamente`);
-      log(`   ✅ La integridad de datos es válida`);
+      log(`   Los datos están listos para producción`);
+      log(`   Todos los reportes funcionan correctamente`);
+      log(`   La integridad de datos es válida`);
     } else {
-      log(`   ⚠️ Corregir errores antes de usar en producción`);
+      log(`   Corregir errores antes de usar en producción`);
     }
 
-    log(`   📊 Datos disponibles para:`);
+    log(`   Datos disponibles para:`);
     log(`      - Dashboard administrativo`);
     log(`      - Reportes de barberos`);
     log(`      - Análisis de ventas`);
     log(`      - Métricas de rendimiento`);
     log(`      - Reportes financieros`);
 
-    log(`\n🚀 ¡Sistema listo para demostración completa!`, colors.green);
+    log(`\n¡Sistema listo para demostración completa!`, colors.green);
   }
 }
 

@@ -74,21 +74,21 @@ export const ExpensesBreakdownModal = ({
   const isGeneralFilter = dateRange?.startDate === '2020-01-01' && 
                          new Date(dateRange?.endDate).getFullYear() >= 2025;
   
-  console.log('🔍 DEBUG Modal - Filter Type:', isGeneralFilter ? 'GENERAL' : 'SPECIFIC');
-  console.log('📅 Date Range:', dateRange);
+  console.log('DEBUG Modal - Filter Type:', isGeneralFilter ? 'GENERAL' : 'SPECIFIC');
+  console.log('Date Range:', dateRange);
   // Filter logic check
   console.log('  - startDate === "2020-01-01":', dateRange?.startDate === '2020-01-01');
   console.log('  - endDate year >= 2025:', new Date(dateRange?.endDate).getFullYear() >= 2025);
   console.log('  - isGeneralFilter result:', isGeneralFilter);
-  console.log('📅 Date Range:', dateRange);
-  console.log('📊 Summary data:', summary);
-  console.log('💳 Expenses array length:', expenses?.length || 0);
-  console.log('🔄 Recurring expenses array length:', recurringExpenses?.length || 0);
-  console.log('📊 Financial data (complete):', data); // Ver todos los datos disponibles
+  console.log('Date Range:', dateRange);
+  console.log('Summary data:', summary);
+  console.log('Expenses array length:', expenses?.length || 0);
+  console.log('Recurring expenses array length:', recurringExpenses?.length || 0);
+  console.log('Financial data (complete):', data); // Ver todos los datos disponibles
   
   // DEBUG: Ver detalles de filtros específicos
   if (!isGeneralFilter) {
-    console.log('🎯 FILTRO ESPECÍFICO DETECTADO:');
+    console.log('FILTRO ESPECÍFICO DETECTADO:');
     console.log('  - Start Date:', dateRange?.startDate);
     console.log('  - End Date:', dateRange?.endDate);
     console.log('  - Preset:', dateRange?.preset);
@@ -108,7 +108,7 @@ export const ExpensesBreakdownModal = ({
     // ========================================
     // MODO GENERAL: Mostrando totales reales del backend
     
-    // ✅ MODO GENERAL: Usar misma lógica que las tarjetas exitosas
+    // MODO GENERAL: Usar misma lógica que las tarjetas exitosas
     // Gastos únicos del período.
     const allOneTimeExpenses = (expenses || []).filter(expense => expense.type === 'one-time');
     
@@ -191,7 +191,7 @@ export const ExpensesBreakdownModal = ({
     // ========================================
     // MODO ESPECÍFICO: Usar total recurrente autorizado del summary (evitar sobre proyección)
     // ========================================
-    console.log('🎯 MODO ESPECÍFICO: Usando total recurrente del summary para evitar inflación');
+    console.log('MODO ESPECÍFICO: Usando total recurrente del summary para evitar inflación');
 
     const pureOneTimeExpenses = (expenses || []).filter(expense => expense.type === 'one-time');
     let recurringTemplates = Array.isArray(recurringExpenses) && recurringExpenses.length > 0
@@ -202,7 +202,7 @@ export const ExpensesBreakdownModal = ({
     // No hay templates recurrentes explícitos
     }
 
-    // ✅ CALCULAR GASTOS RECURRENTES CORRECTAMENTE
+    // CALCULAR GASTOS RECURRENTES CORRECTAMENTE
     // En lugar de usar summary del backend (que da valores diarios), calcular mensual local
     finalOneTimeTotal = pureOneTimeExpenses.reduce((sum, e) => sum + (e.amount || 0), 0);
     
@@ -215,7 +215,7 @@ export const ExpensesBreakdownModal = ({
     
     finalRecurringTotal = activeRecurringExpenses.reduce((sum, exp) => {
       try {
-        // ✅ USAR SIEMPRE CÁLCULO MENSUAL como en las tarjetas
+        // USAR SIEMPRE CÁLCULO MENSUAL como en las tarjetas
         return sum + RecurringExpenseCalculator.calculateMonthlyAmount(exp);
       } catch (e) {
         console.warn('Error calculando recurrente en modal', exp.description, e.message);
@@ -223,7 +223,7 @@ export const ExpensesBreakdownModal = ({
       }
     }, 0);
 
-    console.log('✅ Totales calculados localmente:', {
+    console.log('Totales calculados localmente:', {
       finalOneTimeTotal,
       finalRecurringTotal,
       message: 'Usando cálculo mensual local como las tarjetas'
@@ -252,7 +252,7 @@ export const ExpensesBreakdownModal = ({
     });
     // Si hay templates recurrentes, usar los valores mensuales calculados directamente
     if (finalRecurringTotal > 0 && activeRecurringExpenses.length > 0) {
-      console.log('📐 Distribuyendo gastos recurrentes (valores mensuales):', { 
+      console.log('Distribuyendo gastos recurrentes (valores mensuales):', { 
         activeCount: activeRecurringExpenses.length, 
         finalRecurringTotal 
       });
@@ -269,7 +269,7 @@ export const ExpensesBreakdownModal = ({
           };
         }
         
-        // ✅ Usar el valor mensual calculado directamente
+        // Usar el valor mensual calculado directamente
         const monthlyAmount = RecurringExpenseCalculator.calculateMonthlyAmount(template);
         expensesByCategory[category].total += monthlyAmount;
         expensesByCategory[category].recurringTotal += monthlyAmount;
@@ -307,7 +307,7 @@ export const ExpensesBreakdownModal = ({
   // Calcular el total real basado en lo que calculó el modal
   // Total calculado del modal (único + recurrente).
   const calculatedTotal = finalOneTimeTotal + finalRecurringTotal;
-  console.log(`💰 RESUMEN FINAL:`);
+  console.log(`RESUMEN FINAL:`);
   console.log(`  - One-time: $${finalOneTimeTotal.toLocaleString()}`);
   console.log(`  - Recurring: $${finalRecurringTotal.toLocaleString()}`);
   console.log(`  - Total calculado: $${calculatedTotal.toLocaleString()}`);
@@ -420,7 +420,7 @@ export const ExpensesBreakdownModal = ({
                       </div>
                       <div>
                         <h4 className="font-medium text-amber-200 text-sm sm:text-base">
-                          {getCategoryLabel(categoryData.category)} {/* ✅ Usar función centralizada */}
+                          {getCategoryLabel(categoryData.category)} {/* Usar función centralizada */}
                         </h4>
                         <p className="text-xs text-gray-400">
                           {categoryData.count} gasto{categoryData.count !== 1 ? 's' : ''}

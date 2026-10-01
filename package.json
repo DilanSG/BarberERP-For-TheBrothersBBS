@@ -1,22 +1,21 @@
 {
   "name": "barbererp",
   "version": "1.0.0",
-  "description": "BarberERP — ERP de gestión integral para barbería (The Brothers Barber Shop). Backend Node.js/Express + frontend React.",
+  "description": "BarberERP - ERP de gestión integral para barbería (The Brothers Barber Shop). Backend Node.js/Express + frontend React.",
   "type": "module",
   "main": "backend/src/index.js",
   "scripts": {
     "dev": "concurrently \"npm:dev:backend\" \"npm:dev:frontend\"",
-    "dev:frontend": "cd frontend && npm run dev",
-    "dev:backend": "cd backend && npm run dev",
-    "build": "cd frontend && npm ci && npm run build",
+    "dev:backend": "npm --prefix backend run dev",
+    "dev:frontend": "npm --prefix frontend run dev",
+    "build": "npm --prefix frontend run build",
     "install:all": "npm --prefix backend install && npm --prefix frontend install",
-    "setup:dev": "cp backend/.env.example backend/.env 2>/dev/null; cp frontend/.env.example frontend/.env.development 2>/dev/null; echo ' Envs de desarrollo copiados - edita backend/.env con tus credenciales'",
-    "setup:prod": "cp backend/.env.production.example backend/.env 2>/dev/null; cp frontend/.env.production frontend/.env 2>/dev/null; echo ' Envs de producción copiados'",
-    "setup:network": "echo ' setup:network deprecado - configura VITE_API_URL manualmente en frontend/.env.development'",
-    "fix:frontend": "npm --prefix frontend ci",
-    "diagnose": "node --check backend/src/index.js && echo ' Backend syntax OK' && cd frontend && npx vite --version >/dev/null 2>&1 && echo ' Frontend vite OK' || echo ' Frontend check pendiente'",
-    "validate:ci": "npm --prefix backend run lint 2>&1 | head -50; echo '--- frontend: sin linter configurado ---'",
-    "pre-push": "npm run validate:ci"
+    "setup:dev": "cp backend/.env.example backend/.env 2>/dev/null; cp frontend/.env.example frontend/.env.local 2>/dev/null; echo 'Entornos de desarrollo copiados. Edita backend/.env y frontend/.env.local con tus credenciales.'",
+    "setup:prod": "cp backend/.env.production.example backend/.env 2>/dev/null; echo 'Entorno de producción copiado en backend/.env'",
+    "lint:backend": "npm --prefix backend run lint",
+    "test:backend": "npm --prefix backend run test:unit",
+    "test:backend:coverage": "npm --prefix backend run test:coverage",
+    "validate": "npm run lint:backend && npm run test:backend && npm run build"
   },
   "keywords": [
     "barbererp",
@@ -46,21 +45,17 @@
   "private": true,
   "repository": {
     "type": "git",
-    "url": "https://github.com/DilanSG/TheBrothersBarberShop.git"
+    "url": "https://github.com/DilanSG/BarberERP-For-TheBrothersBBS.git"
   },
   "bugs": {
-    "url": "https://github.com/DilanSG/TheBrothersBarberShop/issues"
+    "url": "https://github.com/DilanSG/BarberERP-For-TheBrothersBBS/issues"
   },
-  "homepage": "https://github.com/DilanSG/TheBrothersBarberShop#readme",
+  "homepage": "https://github.com/DilanSG/BarberERP-For-TheBrothersBBS#readme",
   "devDependencies": {
-    "concurrently": "^8.2.2",
-    "pkg": "^5.8.1"
+    "concurrently": "^8.2.2"
   },
   "engines": {
-    "node": ">=16.0.0",
-    "npm": ">=8.0.0"
-  },
-  "dependencies": {
-    "execa": "^5.1.1"
+    "node": ">=20.0.0",
+    "npm": ">=9.0.0"
   }
 }

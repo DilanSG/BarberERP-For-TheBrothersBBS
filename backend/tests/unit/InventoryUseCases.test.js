@@ -1,418 +1,201 @@
 /**
- * Tests Unitarios para InventoryUseCases
- * Valida gestión de stock, productos y alertas
+ * Pruebas unitarias de InventoryUseCases.
+ * Se inyecta un repositorio de inventario simulado para validar los casos de
+ * uso sin conexión a MongoDB.
  */
 
 import InventoryUseCases from '../../src/core/application/usecases/InventoryUseCases.js';
-import Inventory from '../../src/core/domain/entities/Inventory.js';
-import Sale from '../../src/core/domain/entities/Sale.js';
+import { jest } from '@jest/globals';
+import { Inventory } from '../../src/barrel.js';
 
-// Mocks
-jest.mock('../../src/core/domain/entities/Inventory.js');
-jest.mock('../../src/core/domain/entities/Sale.js');
+const createUseCase = (repositoryOverrides = {}) => {
+  const useCase = new InventoryUseCases();
+  useCase.inventoryRepository = {
+    findAll: jest.fn(),
+    findById: jest.fn(),
+    create: jest.fn(),
+    update: jest.fn(),
+    delete: jest.fn(),
+    ...repositoryOverrides
+  };
+  return useCase;
+};
 
 describe('InventoryUseCases', () => {
   beforeEach(() => {
     jest.clearAllMocks();
   });
 
-  describe('createProduct', () => {
-    it('debería crear producto correctamente', async () => {
-      const productData = {
-        name: 'Gel Fijador',
-        category: 'styling',
-        price: 15000,
-        cost: 8000,
-        stock: 20,
-        minStock: 5,
-        barcode: '7891234567890'
+  describe('getInventory', () => {
+    it('normaliza la respuesta del repositorio con paginación', async () => {
+      const products = [{ _id: 'p1', name: 'Gel' }];
+      const repository = {
+        findAll: jest.fn().mockResolvedValue({
+          products,
+          total: 1,
+          page: 1,
+          totalPages: 1
+        })
       };
+      const useCase = createUseCase(repository);
 
-      const mockProduct = {
-        _id: 'product123',
-        ...productData,
-        save: jest.fn().mockResolvedValue(true)
-      };
+      const result = await useCase.getInventory({}, { page: 1, limit: 50 });
 
-      Inventory.findOne = jest.fn().mockResolvedValue(null);
-      Inventory.mockImplementation(() => mockProduct);
-
-      const result = await InventoryUseCases.createProduct(productData);
-
-      expect(Inventory.findOne).toHaveBeenCalledWith({ barcode: productData.barcode });
-      expect(mockInventory.save).toHaveBeenCalled();
-      expect(result).toHaveProperty('_id', 'product123');
-      expect(result).toHaveProperty('name', 'Gel Fijador');
+      expect(repository.findAll).toHaveBeenCalledWith({
+        filters: {},
+        limit: 50,
+        page: 1,
+        sort: { name: 1 }
+      });
+      expect(result).toEqual({
+        data: products,
+        total: 1,
+        pagination: { page: 1, limit: 50, totalPages: 1 }
+      });
     });
 
-    it('debería rechazar producto con código de barras duplicado', async () => {
-      const productData = {
-        name: 'Gel Fijador',
-        barcode: '7891234567890'
+    it('convierte errores del repositorio en un error de aplicación', async () => {
+      const repository = {
+        findAll: jest.fn().mockRejectedValue(new Error('fallo de conexión'))
       };
+      const useCase = createUseCase(repository);
 
-      const existingProduct = {
-        _id: 'existing123',
-        barcode: '7891234567890'
-      };
+      await expect(useCase.getInventory()).rejects.toThrow('Error al obtener inventario');
+    });
+  });
 
-      Inventory.findOne = jest.fn().mockResolvedValue(existingProduct);
+  describe('getInventoryItemById', () => {
+    it('devuelve el item solicitado', async () => {
+      const item = { _id: 'p1', name: 'Gel', stock: 10 };
+      const useCase = createUseCase({ findById: jest.fn().mockResolvedValue(item) });
 
-      await expect(InventoryUseCases.createProduct(productData)).rejects.toThrow('Código de barras ya existe');
+      await expect(useCase.getInventoryItemById('p1')).resolves.toBe(item);
     });
 
-    it('debería validar stock mínimo mayor a cero', async () => {
-      const productData = {
-        name: 'Gel Fijador',
-        stock: 20,
-        minStock: -5 // Inválido
-      };
+    it('lanza 404 si el item no existe', async () => {
+      const useCase = createUseCase({ findById: jest.fn().mockResolvedValue(null) });
 
-      await expect(InventoryUseCases.createProduct(productData)).rejects.toThrow('Stock mínimo debe ser mayor a 0');
+      await expect(useCase.getInventoryItemById('no-existe'))
+        .rejects.toThrow('Item de inventario no encontrado');
+    });
+  });
+
+  describe('createInventoryItem', () => {
+    it('registra el usuario que crea el item', async () => {
+      const created = { _id: 'p1', name: 'Gel', createdBy: 'admin1' };
+      const repository = { create: jest.fn().mockResolvedValue(created) };
+      const useCase = createUseCase(repository);
+
+      const result = await useCase.createInventoryItem({ name: 'Gel' }, { _id: 'admin1' });
+
+      expect(repository.create).toHaveBeenCalledWith({ name: 'Gel', createdBy: 'admin1' });
+      expect(result).toBe(created);
+    });
+  });
+
+  describe('updateInventoryItem y deleteInventoryItem', () => {
+    it('delega la actualización en el repositorio', async () => {
+      const updated = { _id: 'p1', name: 'Gel Actualizado' };
+      const repository = { update: jest.fn().mockResolvedValue(updated) };
+      const useCase = createUseCase(repository);
+
+      const result = await useCase.updateInventoryItem('p1', { name: 'Gel Actualizado' }, null);
+
+      expect(repository.update).toHaveBeenCalledWith('p1', { name: 'Gel Actualizado' });
+      expect(result).toBe(updated);
     });
 
-    it('debería calcular margen de ganancia automáticamente', async () => {
-      const productData = {
-        name: 'Gel Fijador',
-        price: 15000,
-        cost: 8000,
-        stock: 20,
-        minStock: 5
-      };
+    it('delega la eliminación en el repositorio', async () => {
+      const repository = { delete: jest.fn().mockResolvedValue(true) };
+      const useCase = createUseCase(repository);
 
-      const mockProduct = {
-        _id: 'product123',
-        ...productData,
-        profitMargin: 0,
-        save: jest.fn().mockResolvedValue(true)
-      };
-
-      Inventory.findOne = jest.fn().mockResolvedValue(null);
-      Inventory.mockImplementation(() => mockProduct);
-
-      await InventoryUseCases.createProduct(productData);
-
-      // Margen = ((15000 - 8000) / 8000) * 100 = 87.5%
-      expect(mockInventory.profitMargin).toBeCloseTo(87.5, 1);
+      await expect(useCase.deleteInventoryItem('p1', null)).resolves.toBe(true);
+      expect(repository.delete).toHaveBeenCalledWith('p1');
     });
   });
 
   describe('updateStock', () => {
-    it('debería actualizar stock correctamente', async () => {
-      const productId = 'product123';
-      const stockChange = 10;
+    it('incrementa stock, contador de entradas y registra el movimiento', async () => {
+      const item = { _id: 'p1', name: 'Gel', stock: 10 };
+      const repository = { findById: jest.fn().mockResolvedValue(item) };
+      const useCase = createUseCase(repository);
+      const updated = { ...item, stock: 15 };
+      Inventory.findByIdAndUpdate = jest.fn().mockResolvedValue(updated);
 
-      const mockProduct = {
-        _id: productId,
-        name: 'Gel Fijador',
-        stock: 20,
-        minStock: 5,
-        save: jest.fn().mockResolvedValue(true)
-      };
+      const result = await useCase.updateStock('p1', 5, { _id: 'admin1' }, 'Reposición');
 
-      Inventory.findById = jest.fn().mockResolvedValue(mockProduct);
-
-      const result = await InventoryUseCases.updateStock(productId, stockChange);
-
-      expect(mockInventory.stock).toBe(30); // 20 + 10
-      expect(mockInventory.save).toHaveBeenCalled();
-      expect(result).toHaveProperty('stock', 30);
+      expect(Inventory.findByIdAndUpdate).toHaveBeenCalledTimes(1);
+      const [id, update, options] = Inventory.findByIdAndUpdate.mock.calls[0];
+      expect(id).toBe('p1');
+      expect(update.$inc).toMatchObject({ stock: 5, entries: 5 });
+      expect(update.$inc.exits).toBeUndefined();
+      expect(update.$push.movements).toMatchObject({
+        type: 'add',
+        quantity: 5,
+        previousStock: 10,
+        newStock: 15,
+        reason: 'Reposición'
+      });
+      expect(options).toEqual({ new: true, runValidators: true });
+      expect(result).toBe(updated);
     });
 
-    it('debería disminuir stock correctamente', async () => {
-      const productId = 'product123';
-      const stockChange = -5;
-
-      const mockProduct = {
-        _id: productId,
-        name: 'Gel Fijador',
-        stock: 20,
-        minStock: 5,
-        save: jest.fn().mockResolvedValue(true)
+    it('rechaza un ajuste que dejaría el stock en negativo', async () => {
+      const repository = {
+        findById: jest.fn().mockResolvedValue({ _id: 'p1', stock: 3 })
       };
+      const useCase = createUseCase(repository);
 
-      Inventory.findById = jest.fn().mockResolvedValue(mockProduct);
-
-      const result = await InventoryUseCases.updateStock(productId, stockChange);
-
-      expect(mockInventory.stock).toBe(15); // 20 - 5
-      expect(result).toHaveProperty('stock', 15);
-    });
-
-    it('debería rechazar stock negativo', async () => {
-      const productId = 'product123';
-      const stockChange = -25; // Mayor que stock actual
-
-      const mockProduct = {
-        _id: productId,
-        name: 'Gel Fijador',
-        stock: 20
-      };
-
-      Inventory.findById = jest.fn().mockResolvedValue(mockProduct);
-
-      await expect(InventoryUseCases.updateStock(productId, stockChange))
-        .rejects.toThrow('Stock insuficiente');
-    });
-
-    it('debería generar alerta cuando stock cae debajo del mínimo', async () => {
-      const productId = 'product123';
-      const stockChange = -16; // Dejará en 4, debajo del mínimo (5)
-
-      const mockProduct = {
-        _id: productId,
-        name: 'Gel Fijador',
-        stock: 20,
-        minStock: 5,
-        lowStockAlert: false,
-        save: jest.fn().mockResolvedValue(true)
-      };
-
-      Inventory.findById = jest.fn().mockResolvedValue(mockProduct);
-
-      const result = await InventoryUseCases.updateStock(productId, stockChange);
-
-      expect(mockInventory.stock).toBe(4);
-      expect(mockInventory.lowStockAlert).toBe(true);
-      expect(result).toHaveProperty('alert', true);
+      await expect(useCase.updateStock('p1', -5, null))
+        .rejects.toThrow('El stock no puede ser negativo');
     });
   });
 
-  describe('getLowStockProducts', () => {
-    it('debería retornar productos con stock bajo', async () => {
-      const mockProducts = [
-        { _id: 'p1', name: 'Gel', stock: 3, minStock: 5 },
-        { _id: 'p2', name: 'Cera', stock: 2, minStock: 5 }
-      ];
-
-      Inventory.find = jest.fn().mockReturnValue({
-        sort: jest.fn().mockResolvedValue(mockProducts)
-      });
-
-      const result = await InventoryUseCases.getLowStockProducts();
-
-      expect(Inventory.find).toHaveBeenCalledWith({
-        $expr: { $lt: ['$stock', '$minStock'] },
-        isActive: true
-      });
-      expect(result).toHaveLength(2);
-      expect(result[0]).toHaveProperty('name', 'Gel');
-    });
-
-    it('debería ordenar por urgencia (menor stock primero)', async () => {
-      const mockProducts = [
-        { _id: 'p1', name: 'Cera', stock: 1, minStock: 5 },
-        { _id: 'p2', name: 'Gel', stock: 3, minStock: 5 }
-      ];
-
-      Inventory.find = jest.fn().mockReturnValue({
-        sort: jest.fn().mockResolvedValue(mockProducts)
-      });
-
-      const result = await InventoryUseCases.getLowStockProducts();
-
-      expect(result[0].stock).toBeLessThan(result[1].stock);
-    });
-  });
-
-  describe('getProductMovements', () => {
-    it('debería obtener historial de movimientos de un producto', async () => {
-      const productId = 'product123';
-      const filters = {
-        startDate: new Date('2025-01-01'),
-        endDate: new Date('2025-12-31')
+  describe('getLowStockItems', () => {
+    it('consulta los items con stock menor o igual al mínimo', async () => {
+      const products = [{ _id: 'p1', name: 'Gel', stock: 2, minStock: 5 }];
+      const repository = {
+        findAll: jest.fn().mockResolvedValue({ products, total: 1 })
       };
+      const useCase = createUseCase(repository);
 
-      const mockSales = [
-        {
-          _id: 'sale1',
-          date: new Date('2025-06-15'),
-          products: [{ product: productId, quantity: 2 }]
-        },
-        {
-          _id: 'sale2',
-          date: new Date('2025-07-20'),
-          products: [{ product: productId, quantity: 3 }]
-        }
-      ];
+      const result = await useCase.getLowStockItems();
 
-      Sale.find = jest.fn().mockReturnValue({
-        populate: jest.fn().mockReturnValue({
-          sort: jest.fn().mockResolvedValue(mockSales)
-        })
+      expect(repository.findAll).toHaveBeenCalledWith({
+        filters: { $expr: { $lte: ['$stock', '$minStock'] } },
+        sort: { stock: 1 },
+        limit: 1000,
+        page: 1
       });
-
-      const result = await InventoryUseCases.getProductMovements(productId, filters);
-
-      expect(Sale.find).toHaveBeenCalledWith({
-        'products.product': productId,
-        date: { $gte: filters.startDate, $lte: filters.endDate }
-      });
-      expect(result).toHaveLength(2);
-    });
-
-    it('debería calcular total vendido del producto', async () => {
-      const productId = 'product123';
-
-      const mockSales = [
-        { products: [{ product: productId, quantity: 2 }] },
-        { products: [{ product: productId, quantity: 3 }] },
-        { products: [{ product: productId, quantity: 5 }] }
-      ];
-
-      Sale.find = jest.fn().mockReturnValue({
-        populate: jest.fn().mockReturnValue({
-          sort: jest.fn().mockResolvedValue(mockSales)
-        })
-      });
-
-      const result = await InventoryUseCases.getProductMovements(productId);
-      const totalSold = result.reduce((sum, sale) => {
-        const productInSale = sale.products.find(p => p.product === productId);
-        return sum + (productInSale?.quantity || 0);
-      }, 0);
-
-      expect(totalSold).toBe(10); // 2 + 3 + 5
+      expect(result).toEqual(products);
     });
   });
 
-  describe('bulkUpdatePrices', () => {
-    it('debería actualizar precios en masa con porcentaje', async () => {
-      const updates = {
+  describe('_buildInventoryQuery', () => {
+    it('construye filtros permitidos, búsqueda y stock bajo', () => {
+      const useCase = createUseCase();
+
+      const query = useCase._buildInventoryQuery({
         category: 'styling',
-        percentageIncrease: 10 // 10% aumento
-      };
+        isActive: true,
+        search: 'gel',
+        lowStock: true,
+        supplier: 'Proveedor'
+      });
 
-      const mockProducts = [
-        { _id: 'p1', name: 'Gel', price: 10000, cost: 5000, save: jest.fn() },
-        { _id: 'p2', name: 'Cera', price: 15000, cost: 8000, save: jest.fn() }
-      ];
-
-      Inventory.find = jest.fn().mockResolvedValue(mockProducts);
-
-      await InventoryUseCases.bulkUpdatePrices(updates);
-
-      expect(mockProducts[0].price).toBe(11000); // 10000 + 10%
-      expect(mockProducts[1].price).toBe(16500); // 15000 + 10%
-      expect(mockProducts[0].save).toHaveBeenCalled();
-      expect(mockProducts[1].save).toHaveBeenCalled();
+      expect(query.category).toBe('styling');
+      expect(query.isActive).toBe(true);
+      expect(query.supplier).toBe('Proveedor');
+      expect(query.$or).toHaveLength(3);
+      expect(query.$expr).toEqual({ $lte: ['$stock', '$minStock'] });
     });
 
-    it('debería recalcular márgenes después de actualizar precios', async () => {
-      const updates = {
-        category: 'styling',
-        percentageIncrease: 20
-      };
+    it('ignora filtros no permitidos', () => {
+      const useCase = createUseCase();
 
-      const mockProducts = [
-        { _id: 'p1', price: 10000, cost: 5000, profitMargin: 100, save: jest.fn() }
-      ];
+      const query = useCase._buildInventoryQuery({ precio: 1000 });
 
-      Inventory.find = jest.fn().mockResolvedValue(mockProducts);
-
-      await InventoryUseCases.bulkUpdatePrices(updates);
-
-      // Nuevo precio: 12000, Costo: 5000
-      // Margen = ((12000 - 5000) / 5000) * 100 = 140%
-      expect(mockProducts[0].profitMargin).toBeCloseTo(140, 1);
-    });
-  });
-
-  describe('validateStock', () => {
-    it('debería validar stock suficiente para venta', async () => {
-      const items = [
-        { productId: 'p1', quantity: 5 },
-        { productId: 'p2', quantity: 3 }
-      ];
-
-      const mockProducts = [
-        { _id: 'p1', name: 'Gel', stock: 10 },
-        { _id: 'p2', name: 'Cera', stock: 5 }
-      ];
-
-      Inventory.findById = jest.fn()
-        .mockResolvedValueOnce(mockProducts[0])
-        .mockResolvedValueOnce(mockProducts[1]);
-
-      const result = await InventoryUseCases.validateStock(items);
-
-      expect(result.isValid).toBe(true);
-      expect(result.errors).toHaveLength(0);
-    });
-
-    it('debería detectar stock insuficiente', async () => {
-      const items = [
-        { productId: 'p1', quantity: 15 }, // Stock insuficiente
-        { productId: 'p2', quantity: 3 }
-      ];
-
-      const mockProducts = [
-        { _id: 'p1', name: 'Gel', stock: 10 },
-        { _id: 'p2', name: 'Cera', stock: 5 }
-      ];
-
-      Inventory.findById = jest.fn()
-        .mockResolvedValueOnce(mockProducts[0])
-        .mockResolvedValueOnce(mockProducts[1]);
-
-      const result = await InventoryUseCases.validateStock(items);
-
-      expect(result.isValid).toBe(false);
-      expect(result.errors).toHaveLength(1);
-      expect(result.errors[0]).toContain('Gel');
-      expect(result.errors[0]).toContain('Stock insuficiente');
-    });
-
-    it('debería rechazar productos inactivos', async () => {
-      const items = [
-        { productId: 'p1', quantity: 5 }
-      ];
-
-      const mockProduct = {
-        _id: 'p1',
-        name: 'Gel',
-        stock: 10,
-        isActive: false
-      };
-
-      Inventory.findById = jest.fn().mockResolvedValue(mockProduct);
-
-      const result = await InventoryUseCases.validateStock(items);
-
-      expect(result.isValid).toBe(false);
-      expect(result.errors).toHaveLength(1);
-      expect(result.errors[0]).toContain('no está disponible');
-    });
-  });
-
-  describe('getInventoryValue', () => {
-    it('debería calcular valor total del inventario', async () => {
-      const mockProducts = [
-        { _id: 'p1', name: 'Gel', stock: 10, cost: 5000 },
-        { _id: 'p2', name: 'Cera', stock: 5, cost: 8000 },
-        { _id: 'p3', name: 'Shampoo', stock: 15, cost: 12000 }
-      ];
-
-      Inventory.find = jest.fn().mockResolvedValue(mockProducts);
-
-      const result = await InventoryUseCases.getInventoryValue();
-
-      // (10 * 5000) + (5 * 8000) + (15 * 12000) = 270000
-      expect(result.totalValue).toBe(270000);
-      expect(result.totalProducts).toBe(3);
-      expect(result.totalUnits).toBe(30);
-    });
-
-    it('debería filtrar productos inactivos', async () => {
-      const mockProducts = [
-        { _id: 'p1', stock: 10, cost: 5000, isActive: true }
-      ];
-
-      Inventory.find = jest.fn().mockResolvedValue(mockProducts);
-
-      await InventoryUseCases.getInventoryValue();
-
-      expect(Inventory.find).toHaveBeenCalledWith({ isActive: true });
+      expect(query).toEqual({});
     });
   });
 });

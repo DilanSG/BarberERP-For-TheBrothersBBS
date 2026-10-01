@@ -59,7 +59,7 @@ class DataAnalyzer {
   async analyze() {
     try {
       await mongoose.connect(process.env.MONGODB_URI);
-      log('✅ Conectado a MongoDB para análisis', colors.green);
+      log('Conectado a MongoDB para análisis', colors.green);
 
       await this.loadData();
       await this.analyzeUsers();
@@ -70,16 +70,16 @@ class DataAnalyzer {
       await this.displayReport();
 
       await mongoose.disconnect();
-      log('\n✅ Análisis completado exitosamente', colors.green);
+      log('\nAnálisis completado exitosamente', colors.green);
 
     } catch (error) {
-      log(`❌ Error durante el análisis: ${error.message}`, colors.red);
+      log(`Error durante el análisis: ${error.message}`, colors.red);
       process.exit(1);
     }
   }
 
   async loadData() {
-    log('\n📊 Cargando datos existentes...', colors.cyan);
+    log('\nCargando datos existentes...', colors.cyan);
     
     this.users = await User.find({ 
       role: 'user', 
@@ -98,14 +98,14 @@ class DataAnalyzer {
       stock: { $gt: 0 } 
     }).lean();
 
-    log(`📋 Usuarios encontrados: ${this.users.length}`, colors.blue);
-    log(`💼 Barberos encontrados: ${this.barbers.length}`, colors.blue);
-    log(`✂️ Servicios encontrados: ${this.services.length}`, colors.blue);
-    log(`📦 Productos en stock: ${this.products.length}`, colors.blue);
+    log(`Usuarios encontrados: ${this.users.length}`, colors.blue);
+    log(`Barberos encontrados: ${this.barbers.length}`, colors.blue);
+    log(`Servicios encontrados: ${this.services.length}`, colors.blue);
+    log(`Productos en stock: ${this.products.length}`, colors.blue);
   }
 
   async analyzeUsers() {
-    log('\n👥 Analizando usuarios...', colors.cyan);
+    log('\nAnalizando usuarios...', colors.cyan);
     
     this.analysisReport.users = {
       total: this.users.length,
@@ -128,7 +128,7 @@ class DataAnalyzer {
   }
 
   async analyzeBarbers() {
-    log('\n💼 Analizando barberos...', colors.cyan);
+    log('\nAnalizando barberos...', colors.cyan);
     
     this.analysisReport.barbers = {
       total: this.barbers.length,
@@ -169,7 +169,7 @@ class DataAnalyzer {
   }
 
   async analyzeServices() {
-    log('\n✂️ Analizando servicios...', colors.cyan);
+    log('\nAnalizando servicios...', colors.cyan);
     
     this.analysisReport.services = {
       total: this.services.length,
@@ -220,7 +220,7 @@ class DataAnalyzer {
   }
 
   async analyzeProducts() {
-    log('\n📦 Analizando productos...', colors.cyan);
+    log('\nAnalizando productos...', colors.cyan);
     
     this.analysisReport.products = {
       total: this.products.length,
@@ -291,7 +291,7 @@ class DataAnalyzer {
   }
 
   async generateRecommendations() {
-    log('\n💡 Generando recomendaciones de población...', colors.cyan);
+    log('\nGenerando recomendaciones de población...', colors.cyan);
     
     const period = 60; // 2 meses = 60 días
     const workingDays = 50; // Aproximadamente (excluyendo algunos domingos)
@@ -351,47 +351,47 @@ class DataAnalyzer {
   }
 
   async displayReport() {
-    log('\n📋 REPORTE COMPLETO DE ANÁLISIS', colors.magenta);
+    log('\nREPORTE COMPLETO DE ANÁLISIS', colors.magenta);
     log('═'.repeat(50), colors.magenta);
     
-    log('\n👥 USUARIOS:', colors.yellow);
+    log('\nUSUARIOS:', colors.yellow);
     this.analysisReport.users.list.forEach(u => {
       log(`   • ${u.name} (${u.email}) - Tel: ${u.phone}`);
     });
 
-    log('\n💼 BARBEROS:', colors.yellow);
+    log('\nBARBEROS:', colors.yellow);
     this.analysisReport.barbers.list.forEach(b => {
       log(`   • ${b.name} - ${b.specialty} (${b.experience} años exp.)`);
     });
 
-    log('\n✂️ SERVICIOS:', colors.yellow);
+    log('\nSERVICIOS:', colors.yellow);
     this.analysisReport.services.list.forEach(s => {
       log(`   • ${s.name} - $${s.price} (${s.duration}min) [${s.category}]`);
     });
 
-    log('\n📦 TOP 10 PRODUCTOS MÁS VENDIBLES:', colors.yellow);
+    log('\nTOP 10 PRODUCTOS MÁS VENDIBLES:', colors.yellow);
     this.analysisReport.products.topSellers.slice(0, 10).forEach(p => {
       log(`   • ${p.name} - $${p.price} (Stock: ${p.stock})`);
     });
 
-    log('\n💡 PLAN DE POBLACIÓN RECOMENDADO:', colors.green);
+    log('\nPLAN DE POBLACIÓN RECOMENDADO:', colors.green);
     const rec = this.analysisReport.recommendations;
-    log(`   📅 Período: 2 meses (${this.startDate.toLocaleDateString()} - ${this.endDate.toLocaleDateString()})`);
-    log(`   📋 Citas totales: ${rec.appointments.total}`);
+    log(`   Período: 2 meses (${this.startDate.toLocaleDateString()} - ${this.endDate.toLocaleDateString()})`);
+    log(`   Citas totales: ${rec.appointments.total}`);
     log(`      - Completadas: ${Math.floor(rec.appointments.total * rec.appointments.distribution.completed)}`);
     log(`      - Canceladas: ${Math.floor(rec.appointments.total * rec.appointments.distribution.cancelled)}`);
     log(`      - No show: ${Math.floor(rec.appointments.total * rec.appointments.distribution.no_show)}`);
-    log(`   💰 Ventas productos: ${rec.sales.productSales}`);
-    log(`   🚶 Servicios walk-in: ${rec.sales.walkInServices}`);
-    log(`   ⭐ Reseñas: ${rec.reviews.total}`);
+    log(`   Ventas productos: ${rec.sales.productSales}`);
+    log(`   Servicios walk-in: ${rec.sales.walkInServices}`);
+    log(`   Reseñas: ${rec.reviews.total}`);
     
-    log('\n📊 MÉTODOS DE PAGO SUGERIDOS:', colors.blue);
+    log('\nMÉTODOS DE PAGO SUGERIDOS:', colors.blue);
     Object.entries(rec.paymentMethods).forEach(([method, percentage]) => {
       log(`   • ${method}: ${(percentage * 100).toFixed(1)}%`);
     });
 
-    log('\n✅ Los datos están listos para la población automática', colors.green);
-    log('🚀 Ejecuta el siguiente script: node scripts/2-create-realistic-data.js', colors.cyan);
+    log('\nLos datos están listos para la población automática', colors.green);
+    log('Ejecuta el siguiente script: node scripts/2-create-realistic-data.js', colors.cyan);
   }
 }
 

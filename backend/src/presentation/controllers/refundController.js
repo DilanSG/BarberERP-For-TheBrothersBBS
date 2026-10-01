@@ -22,7 +22,7 @@ export const processRefund = asyncHandler(async (req, res) => {
     throw new AppError('Código de verificación de administrador requerido', 400);
   }
 
-  logger.info('🔄 Solicitud de reembolso recibida', {
+  logger.info('Solicitud de reembolso recibida', {
     saleId,
     reason: reason.substring(0, 100),
     userId,
@@ -78,7 +78,7 @@ export const getRefundedSales = asyncHandler(async (req, res) => {
     filters.barberId = barberId;
   }
 
-  logger.info('📋 Consultando ventas reembolsadas', {
+  logger.info('Consultando ventas reembolsadas', {
     filters,
     requestedBy: req.user.email,
     userRole: req.user.role
@@ -101,7 +101,7 @@ export const getRefundedSales = asyncHandler(async (req, res) => {
 export const getRefundsSummary = asyncHandler(async (req, res) => {
   const { startDate, endDate } = req.query;
 
-  logger.info('📊 Consultando resumen de reembolsos', {
+  logger.info('Consultando resumen de reembolsos', {
     startDate,
     endDate,
     requestedBy: req.user.email
@@ -126,7 +126,7 @@ export const getVerificationCode = asyncHandler(async (req, res) => {
 
   const codeInfo = RefundService.getCurrentVerificationCode();
 
-  logger.info('🔑 Código de verificación solicitado', {
+  logger.info('Código de verificación solicitado', {
     requestedBy: req.user.email,
     timeUntilNext: `${Math.ceil(codeInfo.timeUntilNext / 60000)} minutos`
   });
@@ -156,7 +156,7 @@ export const getMySalesForRefund = asyncHandler(async (req, res) => {
 
   const userId = new mongoose.Types.ObjectId(req.user.id);
 
-  logger.info('🛒 Consultando ventas del barbero para reembolso', {
+  logger.info('Consultando ventas del barbero para reembolso', {
     userId,
     userEmail: req.user.email
   });
@@ -298,7 +298,7 @@ export const deleteRefund = asyncHandler(async (req, res) => {
   const userId = req.user.id;
   const userEmail = req.user.email;
 
-  logger.info('🗑️ Solicitud de eliminación de reembolso', {
+  logger.info('Solicitud de eliminación de reembolso', {
     saleId,
     adminUserId: userId,
     adminEmail: userEmail
@@ -329,7 +329,7 @@ export const permanentDeleteRefund = asyncHandler(async (req, res) => {
   const userId = req.user.id;
   const userEmail = req.user.email;
 
-  logger.info('🗑️ Solicitud de eliminación permanente de reembolso', {
+  logger.info('Solicitud de eliminación permanente de reembolso', {
     saleId,
     adminUserId: userId,
     adminEmail: userEmail

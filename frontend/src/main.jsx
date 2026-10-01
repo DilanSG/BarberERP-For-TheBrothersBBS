@@ -14,7 +14,7 @@ import { AuthProvider } from './shared/contexts/AuthContext.jsx';
 import { NotificationProvider } from './shared/contexts/NotificationContext.jsx';
 import { ThemeProvider } from './shared/contexts/ThemeContext.jsx';
 
-// 🐛 Configurar Sentry para error tracking (Vercel)
+// Configurar Sentry para error tracking (Vercel)
 const sentryDsn = import.meta.env.VITE_SENTRY_DSN_FRONTEND;
 // Validar que el DSN sea real (evita inicializar con placeholders tipo "your-sentry-dsn")
 const isRealSentryDsn = Boolean(sentryDsn) && /^https:\/\/[0-9a-f]+@[^/]+\/\d+$/i.test(sentryDsn);
@@ -47,9 +47,9 @@ if (isRealSentryDsn) {
       return event;
     },
   });
-  console.log('✅ Sentry inicializado en frontend (Vercel)');
+  console.log('Sentry inicializado en frontend (Vercel)');
 } else {
-  console.log('ℹ️  Sentry deshabilitado (VITE_SENTRY_DSN_FRONTEND no configurado o es placeholder)');
+  console.log(' Sentry deshabilitado (VITE_SENTRY_DSN_FRONTEND no configurado o es placeholder)');
 }
 
 // Obtener la base URL del entorno o usar un valor por defecto

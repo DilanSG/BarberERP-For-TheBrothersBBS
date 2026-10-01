@@ -1,4 +1,4 @@
-﻿// tests/unit/simple.test.js - Basic test to verify Jest works
+// tests/unit/simple.test.js - Basic test to verify Jest works
 describe("Basic Tests", () => {
   test("should pass basic test", () => {
     expect(1 + 1).toBe(2);

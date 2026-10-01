@@ -1,4 +1,4 @@
-﻿import { logger } from "../../../shared/utils/logger.js";
+import { logger } from "../../../shared/utils/logger.js";
 import NodeCache from "node-cache";
 
 // Servicio de caché en memoria para los reportes de ventas.

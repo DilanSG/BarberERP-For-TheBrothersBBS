@@ -37,7 +37,7 @@ export const getMonthlyRecurringTotal = (recurringExpenses = []) => {
 // Estrategia de prorrateo:
 // a) Rango específico (día/semana/mes): (monto mensual / 30) × días del período.
 // b) Filtro general con >30 días de datos: monto mensual × meses transcurridos
-//    desde el dato más antiguo; si no hay fecha, estima meses = ceil(días/15).
+// desde el dato más antiguo; si no hay fecha, estima meses = ceil(días/15).
 // c) Con pocos datos (<30 días): se cuenta un solo mes completo.
 export const getRecurringTotalForPeriod = ({ monthlyTotal, dateRange, daysWithData = 0, oldestDataDate = null }) => {
   if (!monthlyTotal) return { total: 0, calculation: 'none' };

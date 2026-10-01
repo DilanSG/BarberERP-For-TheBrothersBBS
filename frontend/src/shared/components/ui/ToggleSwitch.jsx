@@ -5,14 +5,14 @@ import React from 'react';
 // movimiento con un borde/glow del color elegido.
 //
 // Uso:
-//   <ToggleSwitch
-//     checked={form.isActive}
-//     onChange={(checked) => setForm(prev => ({ ...prev, isActive: checked }))}
-//     label="Servicio activo"
-//     description="Visible para reservar"
-//     icon={Scissors}
-//     color="blue" | "emerald" | "amber" | "red" | "brand"
-//   />
+// <ToggleSwitch
+// checked={form.isActive}
+// onChange={(checked) => setForm(prev => ({ ...prev, isActive: checked }))}
+// label="Servicio activo"
+// description="Visible para reservar"
+// icon={Scissors}
+// color="blue" | "emerald" | "amber" | "red" | "brand"
+// />
 //
 // Props: checked/onChange (controlado), label/description/icon, color, disabled, id.
 // Accesibilidad: label envuelve un <input type="checkbox"> real (sr-only) y los

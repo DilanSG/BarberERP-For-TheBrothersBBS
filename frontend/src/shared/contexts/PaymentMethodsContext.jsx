@@ -37,7 +37,7 @@ export const DEFAULT_CASH_METHOD = {
   icon: Banknote,
 };
 
-// Paleta (nombre ↔ hex) para normalizar lo que llega del backend
+// Paleta (nombre a hex) para normalizar lo que llega del backend
 const hexToColorName = (hex) => {
   if (!hex) return 'gray';
   const found = Object.entries(PAYMENT_METHOD_PALETTE).find(

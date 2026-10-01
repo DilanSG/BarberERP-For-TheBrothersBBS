@@ -7,7 +7,7 @@ export class InitializePaymentMethods {
   // de métodos de sistema. No sobrescribe métodos ya creados.
   static async execute() {
     try {
-      logger.info('🔄 Inicializando métodos de pago del sistema...');
+      logger.info('Inicializando métodos de pago del sistema...');
       
       // Único método predeterminado del sistema: efectivo.
       // El resto de métodos son dinámicos y los crea el administrador.
@@ -33,11 +33,11 @@ export class InitializePaymentMethods {
       }
 
       const count = await PaymentMethod.countDocuments({ isSystem: true });
-      logger.info(`✅ Métodos de pago del sistema inicializados: ${count}`);
+      logger.info(`Métodos de pago del sistema inicializados: ${count}`);
       
       return { success: true, count };
     } catch (error) {
-      logger.error('❌ Error inicializando métodos de pago:', error);
+      logger.error('Error inicializando métodos de pago:', error);
       throw new AppError('Error inicializando métodos de pago', 500);
     }
   }
@@ -64,7 +64,7 @@ export class GetPaymentMethods {
         isSystem: method.isSystem
       }));
     } catch (error) {
-      logger.error('❌ Error obteniendo métodos de pago:', error);
+      logger.error('Error obteniendo métodos de pago:', error);
       throw new AppError('Error obteniendo métodos de pago', 500);
     }
   }
@@ -75,7 +75,7 @@ export class GetPaymentMethods {
 export class CreatePaymentMethod {
   static async execute({ backendId, name, description, color, category }) {
     try {
-      logger.info(`🆕 Creando método de pago: ${backendId}`);
+      logger.info(`Creando método de pago: ${backendId}`);
       
       // Verificar que no exista
       const existing = await PaymentMethod.findOne({ backendId });
@@ -95,10 +95,10 @@ export class CreatePaymentMethod {
       
       await method.save();
       
-      logger.info(`✅ Método de pago creado: ${method.backendId}`);
+      logger.info(`Método de pago creado: ${method.backendId}`);
       return method.toFrontendFormat();
     } catch (error) {
-      logger.error('❌ Error creando método de pago:', error);
+      logger.error('Error creando método de pago:', error);
       if (error.code === 11000) {
         throw new AppError('El método de pago ya existe', 400);
       }
@@ -113,7 +113,7 @@ export class CreatePaymentMethod {
 export class UpdatePaymentMethod {
   static async execute(backendId, updateData) {
     try {
-      logger.info(`✏️ Actualizando método de pago: ${backendId}`);
+      logger.info(`Actualizando método de pago: ${backendId}`);
       
       const method = await PaymentMethod.findOne({ backendId });
       if (!method) {
@@ -125,10 +125,10 @@ export class UpdatePaymentMethod {
       Object.assign(method, safeUpdate);
       await method.save();
       
-      logger.info(`✅ Método de pago actualizado: ${method.backendId}`);
+      logger.info(`Método de pago actualizado: ${method.backendId}`);
       return method.toFrontendFormat();
     } catch (error) {
-      logger.error('❌ Error actualizando método de pago:', error);
+      logger.error('Error actualizando método de pago:', error);
       throw new AppError('Error actualizando método de pago', 500);
     }
   }
@@ -140,7 +140,7 @@ export class UpdatePaymentMethod {
 export class DeletePaymentMethod {
   static async execute(backendId, forceDelete = false) {
     try {
-      logger.info(`🗑️ Eliminando método de pago: ${backendId}`);
+      logger.info(`Eliminando método de pago: ${backendId}`);
       
       const method = await PaymentMethod.findOne({ backendId });
       if (!method) {
@@ -169,11 +169,11 @@ export class DeletePaymentMethod {
       }
       
       await PaymentMethod.deleteOne({ backendId });
-      logger.info(`🗑️ Método de pago eliminado permanentemente: ${backendId}`);
+      logger.info(`Método de pago eliminado permanentemente: ${backendId}`);
       return { deleted: true };
 
     } catch (error) {
-      logger.error('❌ Error eliminando método de pago:', error);
+      logger.error('Error eliminando método de pago:', error);
       throw error instanceof AppError ? error : new AppError('Error eliminando método de pago', 500);
     }
   }
@@ -186,7 +186,7 @@ export class DeletePaymentMethod {
 export class NormalizeExistingPaymentMethods {
   static async execute() {
     try {
-      logger.info('🔄 Normalizando métodos de pago existentes...');
+      logger.info('Normalizando métodos de pago existentes...');
       
       // Obtener todos los métodos únicos de todas las colecciones
       const [salesMethods, expensesMethods, appointmentsMethods] = await Promise.all([
@@ -198,7 +198,7 @@ export class NormalizeExistingPaymentMethods {
       const allMethods = [...new Set([...salesMethods, ...expensesMethods, ...appointmentsMethods])]
         .filter(method => method && method !== 'null');
       
-      logger.info(`📊 Métodos únicos encontrados: ${allMethods.join(', ')}`);
+      logger.info(`Métodos únicos encontrados: ${allMethods.join(', ')}`);
       
       let normalizedCount = 0;
       
@@ -206,7 +206,7 @@ export class NormalizeExistingPaymentMethods {
         const normalizedMethod = await PaymentMethod.normalizePaymentMethod(method);
         
         if (method !== normalizedMethod) {
-          logger.info(`🔄 Normalizando: ${method} → ${normalizedMethod}`);
+          logger.info(`Normalizando: ${method} → ${normalizedMethod}`);
           
           // Actualizar en todas las colecciones
           await Promise.all([
@@ -244,11 +244,11 @@ export class NormalizeExistingPaymentMethods {
         )
       ]);
       
-      logger.info(`✅ Normalización completada. ${normalizedCount} métodos normalizados`);
+      logger.info(`Normalización completada. ${normalizedCount} métodos normalizados`);
       
       return { normalizedCount, totalMethods: allMethods.length };
     } catch (error) {
-      logger.error('❌ Error en normalización:', error);
+      logger.error('Error en normalización:', error);
       throw new AppError('Error normalizando métodos de pago', 500);
     }
   }
@@ -267,7 +267,7 @@ export class ValidatePaymentMethod {
       const method = await PaymentMethod.findByIdOrAlias(paymentMethod);
       return !!method;
     } catch (error) {
-      logger.error('❌ Error validando método de pago:', error);
+      logger.error('Error validando método de pago:', error);
       return false;
     }
   }

@@ -1,4 +1,4 @@
-﻿import React, { useEffect } from 'react';
+import React, { useEffect } from 'react';
 import logger from '@utils/logger';
 import Modal from '@components/ui/Modal';
 import {
@@ -31,13 +31,13 @@ const formatDateSafe = (dateString) => {
 
 // Modal para detalles de ventas con información detallada por producto y día
 export const DetailedSalesModal = ({ isOpen, onClose, salesData, barberName, dateRange, loading, error }) => {
-  // ✅ HOOKS SIEMPRE PRIMERO - antes de cualquier early return
+  // HOOKS SIEMPRE PRIMERO - antes de cualquier early return
   // Logs de depuración para verificar la forma real de salesData (array de días)
   useEffect(() => {
     if (salesData) {
-      logger.debug('🔍 MODAL DEBUG - salesData recibida:', salesData);
-      logger.debug('🔍 MODAL DEBUG - primer día:', salesData[0]);
-      logger.debug('🔍 MODAL DEBUG - estructura esperada vs real:', {
+      logger.debug('MODAL DEBUG - salesData recibida:', salesData);
+      logger.debug('MODAL DEBUG - primer día:', salesData[0]);
+      logger.debug('MODAL DEBUG - estructura esperada vs real:', {
         esperado: 'Array de días con { date, sales[], totalAmount, totalProducts }',
         real: typeof salesData,
         length: salesData?.length,
@@ -51,7 +51,7 @@ export const DetailedSalesModal = ({ isOpen, onClose, salesData, barberName, dat
 
   
 
-  // ✅ Helper para formatear el rango de fechas del modal
+  // Helper para formatear el rango de fechas del modal
   const formatModalDateRange = () => {
     if (!dateRange) return 'Período seleccionado';
     
@@ -86,7 +86,7 @@ export const DetailedSalesModal = ({ isOpen, onClose, salesData, barberName, dat
   const totalAmount = salesData?.reduce((sum, day) => sum + (day.totalAmount || 0), 0) || 0;
   const totalProducts = salesData?.reduce((sum, day) => sum + (day.totalProducts || 0), 0) || 0;
 
-  logger.debug('🔍 MODAL TOTALES CALCULADOS:', {
+  logger.debug('MODAL TOTALES CALCULADOS:', {
     totalAmount,
     totalProducts,
     salesDataLength: salesData?.length,
@@ -234,13 +234,13 @@ export const DetailedSalesModal = ({ isOpen, onClose, salesData, barberName, dat
 
 // Modal para detalles de citas completadas
 export const DetailedAppointmentsModal = ({ isOpen, onClose, appointmentsData, barberName, dateRange, loading, error }) => {
-  // ✅ HOOKS SIEMPRE PRIMERO - antes de cualquier early return
+  // HOOKS SIEMPRE PRIMERO - antes de cualquier early return
   // Logs de depuración para verificar la forma real de appointmentsData
   useEffect(() => {
     if (appointmentsData) {
-      logger.debug('🔍 MODAL CITAS DEBUG - appointmentsData recibida:', appointmentsData);
-      logger.debug('🔍 MODAL CITAS DEBUG - primer día:', appointmentsData[0]);
-      logger.debug('🔍 MODAL CITAS DEBUG - estructura esperada vs real:', {
+      logger.debug('MODAL CITAS DEBUG - appointmentsData recibida:', appointmentsData);
+      logger.debug('MODAL CITAS DEBUG - primer día:', appointmentsData[0]);
+      logger.debug('MODAL CITAS DEBUG - estructura esperada vs real:', {
         esperado: 'Array de días con { date, appointments[], totalRevenue, totalAppointments }',
         real: typeof appointmentsData,
         length: appointmentsData?.length,
@@ -254,7 +254,7 @@ export const DetailedAppointmentsModal = ({ isOpen, onClose, appointmentsData, b
 
   
 
-  // ✅ Helper para formatear el rango de fechas del modal
+  // Helper para formatear el rango de fechas del modal
   const formatModalDateRange = () => {
     if (!dateRange) return 'Período seleccionado';
     
@@ -291,7 +291,7 @@ export const DetailedAppointmentsModal = ({ isOpen, onClose, appointmentsData, b
     sum + (day.appointments?.reduce((daySum, apt) => daySum + (apt.service?.price || 0), 0) || 0), 0
   ) || 0;
 
-  logger.debug('🔍 MODAL CITAS TOTALES CALCULADOS:', {
+  logger.debug('MODAL CITAS TOTALES CALCULADOS:', {
     totalAppointments,
     totalRevenue,
     appointmentsDataLength: appointmentsData?.length,
@@ -433,13 +433,13 @@ export const DetailedAppointmentsModal = ({ isOpen, onClose, appointmentsData, b
 
 // Modal para detalles de cortes (servicios walk-in) con hora de realización
 export const DetailedCutsModal = ({ isOpen, onClose, cutsData, barberName, dateRange, loading, error }) => {
-  // ✅ HOOKS SIEMPRE PRIMERO - antes de cualquier early return
+  // HOOKS SIEMPRE PRIMERO - antes de cualquier early return
   // Early return DESPUÉS de los hooks
   if (!isOpen) return null;
 
   
 
-  // ✅ Helper para formatear el rango de fechas del modal
+  // Helper para formatear el rango de fechas del modal
   const formatModalDateRange = () => {
     if (!dateRange) return 'Período seleccionado';
     

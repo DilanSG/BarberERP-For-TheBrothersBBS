@@ -1,5 +1,5 @@
 // InventoryUseCases - Casos de uso para gestión de inventario
-// ✅ MIGRACIÓN COMPLETA A REPOSITORY PATTERN
+// MIGRACIÓN COMPLETA A REPOSITORY PATTERN
 //
 // Gestión integral de inventario con Repository Pattern
 
@@ -23,7 +23,7 @@ class InventoryUseCases {
     return new InventoryUseCases();
   }
 
-  // Obtener inventario completo (✅ MIGRADO)
+  // Obtener inventario completo (MIGRADO)
   // Aplica filtros y paginación sobre el repositorio (orden por nombre) y
   // normaliza la respuesta a { data, total, pagination } con valores por defecto.
   async getInventory(filters = {}, pagination = {}) {
@@ -59,7 +59,7 @@ class InventoryUseCases {
     }
   }
 
-  // Obtener item de inventario por ID (✅ MIGRADO)
+  // Obtener item de inventario por ID (MIGRADO)
   // Lanza 404 si el repositorio no lo encuentra.
   async getInventoryItemById(id) {
     try {
@@ -79,7 +79,7 @@ class InventoryUseCases {
     }
   }
 
-  // Crear nuevo item de inventario (✅ MIGRADO)
+  // Crear nuevo item de inventario (MIGRADO)
   // Agrega createdBy del usuario autenticado antes de persistir.
   async createInventoryItem(itemData, user) {
     try {
@@ -102,7 +102,7 @@ class InventoryUseCases {
     }
   }
 
-  // Actualizar item de inventario (✅ MIGRADO)
+  // Actualizar item de inventario (MIGRADO)
   // Delega la actualización parcial al repositorio.
   async updateInventoryItem(id, updateData, user) {
     try {
@@ -119,7 +119,7 @@ class InventoryUseCases {
     }
   }
 
-  // Eliminar item de inventario (✅ MIGRADO)
+  // Eliminar item de inventario (MIGRADO)
   // Delega el borrado al repositorio.
   async deleteInventoryItem(id, user) {
     try {
@@ -136,7 +136,7 @@ class InventoryUseCases {
     }
   }
 
-  // Actualizar stock de item (✅ MIGRADO)
+  // Actualizar stock de item (MIGRADO)
   // quantity positivo agrega y negativo quita. Verifica que el nuevo stock no
   // quede negativo y actualiza atómicamente stock + contadores entries/exits +
   // un movimiento en el historial embebido. Retorna el item actualizado.
@@ -195,7 +195,7 @@ class InventoryUseCases {
     }
   }
 
-  // Obtener items con stock bajo (✅ MIGRADO)
+  // Obtener items con stock bajo (MIGRADO)
   // Usa $expr stock <= minStock, ordena de menor a mayor y limita a 1000.
   async getLowStockItems() {
     try {
@@ -395,7 +395,7 @@ class InventoryUseCases {
   }
 
   // ========================================================================
-  // MÉTODOS COMPLEJOS SIN MIGRAR (⏳)
+  // MÉTODOS COMPLEJOS SIN MIGRAR ()
   // Mantenidos por complejidad específica
   // ========================================================================
 

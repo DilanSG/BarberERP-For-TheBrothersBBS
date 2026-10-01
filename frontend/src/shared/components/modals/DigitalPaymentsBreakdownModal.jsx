@@ -83,7 +83,7 @@ const DigitalPaymentsBreakdownModal = ({ isOpen, onClose, revenueData, dashboard
     if (isOpen) {
       loadDigitalSales();
     }
-  }, [isOpen, dateRange, dashboardData]); // ✅ Agregar dashboardData como dependencia
+  }, [isOpen, dateRange, dashboardData]); // Agregar dashboardData como dependencia
 
   // Análisis de tipos cuando se cargan las transacciones
   // Análisis silencioso de transacciones digitales
@@ -129,24 +129,24 @@ const DigitalPaymentsBreakdownModal = ({ isOpen, onClose, revenueData, dashboard
         // Métodos de pago digitales (no efectivo) - Solo métodos autorizados
         const digitalMethods = ['nequi', 'daviplata', 'bancolombia', 'nu', 'tarjeta', 'card', 'transfer', 'transferencia'];
         
-        // ✅ Filtrar usando EXACTAMENTE la misma lógica del backend
+        // Filtrar usando EXACTAMENTE la misma lógica del backend
         // Sales: status: 'completed' + métodos digitales
         const digitalSalesFiltered = allSales.filter(sale => 
-          sale.status === 'completed' && // ✅ MISMO FILTRO DEL BACKEND
+          sale.status === 'completed' && // MISMO FILTRO DEL BACKEND
           digitalMethods.includes(sale.paymentMethod?.toLowerCase())
         );
         
         // Appointments: status: 'completed' + métodos digitales
         const digitalAppointments = completedAppointments.filter(apt => 
-          apt.status === 'completed' && // ✅ MISMO FILTRO DEL BACKEND
+          apt.status === 'completed' && // MISMO FILTRO DEL BACKEND
           digitalMethods.includes(apt.paymentMethod?.toLowerCase())
         );
         
-        // ✅ Convertir citas a formato de venta (igual estructura que ventas)
+        // Convertir citas a formato de venta (igual estructura que ventas)
         // Adapta las citas al formato de venta para unificar la lista.
         const appointmentsAsSales = digitalAppointments.map(apt => ({
             _id: apt._id,
-            type: 'appointment', // ✅ Usar tipo específico para citas
+            type: 'appointment', // Usar tipo específico para citas
             paymentMethod: apt.paymentMethod,
             totalAmount: apt.price,
             total: apt.price,
@@ -154,16 +154,16 @@ const DigitalPaymentsBreakdownModal = ({ isOpen, onClose, revenueData, dashboard
             serviceId: apt.service?._id,
             barberId: apt.barber?._id,
             createdAt: apt.date || apt.createdAt,
-            // ✅ Campos para identificación
+            // Campos para identificación
             isFromAppointment: true,
             originalAppointment: apt
           }));
         
         // Une ventas y citas evitando duplicados, priorizando las citas convertidas.
-        // ✅ Combinar evitando duplicados por ID
+        // Combinar evitando duplicados por ID
         const allDigitalTransactions = [...digitalSalesFiltered, ...appointmentsAsSales];
         
-        // ✅ ELIMINAR DUPLICADOS - Priorizar citas convertidas sobre ventas originales
+        // ELIMINAR DUPLICADOS - Priorizar citas convertidas sobre ventas originales
         const uniqueTransactions = [];
         const seenIds = new Set();
         
@@ -187,7 +187,7 @@ const DigitalPaymentsBreakdownModal = ({ isOpen, onClose, revenueData, dashboard
         setDigitalSales(uniqueTransactions);
       }
     } catch (error) {
-      console.error('❌ Error al cargar transacciones digitales:', error);
+      console.error('Error al cargar transacciones digitales:', error);
     } finally {
       setLoading(false);
     }
@@ -206,7 +206,7 @@ const DigitalPaymentsBreakdownModal = ({ isOpen, onClose, revenueData, dashboard
 
   // Determina el tipo de la transacción (cita, producto o corte).
   const getSaleTypeInfo = (sale) => {
-    // ✅ PRIMERO verificar si es cita (tiene prioridad absoluta)
+    // PRIMERO verificar si es cita (tiene prioridad absoluta)
     if (sale.isFromAppointment || sale.type === 'appointment') {
       return saleTypes.find(t => t.id === 'cita');
     } 

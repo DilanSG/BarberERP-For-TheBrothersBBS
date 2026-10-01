@@ -138,11 +138,11 @@ async function seed() {
     logger.info(`Barbero2: ${barbersData[1].email} / barber123`);
     logger.info(`Barbero3: ${barbersData[2].email} / barber123`);
     logger.info('='.repeat(50));
-    console.log('\n✅ Seed completado. Verifica los logs para credenciales.\n');
+    console.log('\nSeed completado. Verifica los logs para credenciales.\n');
 
   } catch (error) {
     logger.error('Error en seed:', error);
-    console.error('❌ Error:', error.message);
+    console.error('Error:', error.message);
   } finally {
     await mongoose.disconnect();
     logger.info('Desconectado de MongoDB');

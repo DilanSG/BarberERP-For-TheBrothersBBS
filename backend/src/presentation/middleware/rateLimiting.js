@@ -1,4 +1,4 @@
-// 🚦 Rate Limiting Configuration
+// Rate Limiting Configuration
 // Configuración de límites de tasa personalizados por tipo de endpoint
 //
 // IMPORTANTE: Previene abuso de API y ataques DoS
@@ -29,7 +29,7 @@ const skipSuccessfulRequests = (req, res) => {
   return req.path === '/api/health' && res.statusCode < 400;
 };
 
-// 🔐 AUTH ENDPOINTS (Login, Register, Password Reset)
+// AUTH ENDPOINTS (Login, Register, Password Reset)
 // Límite: 5 intentos por 15 minutos
 // Razón: Prevenir ataques de fuerza bruta
 export const authLimiter = rateLimit({
@@ -47,7 +47,7 @@ export const authLimiter = rateLimit({
   }
 });
 
-// 📊 DATA ENDPOINTS (CRUD operations)
+// DATA ENDPOINTS (CRUD operations)
 // Límite: 100 requests por minuto
 // Razón: Balance entre UX y protección
 export const apiLimiter = rateLimit({
@@ -60,7 +60,7 @@ export const apiLimiter = rateLimit({
   skip: skipSuccessfulRequests
 });
 
-// 🌐 PUBLIC ENDPOINTS (Health, Status, Public Data)
+// PUBLIC ENDPOINTS (Health, Status, Public Data)
 // Límite: 200 requests por minuto
 // Razón: Endpoints públicos, menos restricción
 export const publicLimiter = rateLimit({
@@ -72,7 +72,7 @@ export const publicLimiter = rateLimit({
   handler: rateLimitHandler
 });
 
-// 💰 PAYMENT ENDPOINTS (Ventas, Transacciones)
+// PAYMENT ENDPOINTS (Ventas, Transacciones)
 // Límite: 20 requests por minuto
 // Razón: Operaciones críticas, mayor seguridad
 export const paymentLimiter = rateLimit({
@@ -89,7 +89,7 @@ export const paymentLimiter = rateLimit({
   }
 });
 
-// 📤 UPLOAD ENDPOINTS (Imágenes, Archivos)
+// UPLOAD ENDPOINTS (Imágenes, Archivos)
 // Límite: 10 uploads por hora
 // Razón: Prevenir abuso de almacenamiento
 export const uploadLimiter = rateLimit({
@@ -101,7 +101,7 @@ export const uploadLimiter = rateLimit({
   handler: rateLimitHandler
 });
 
-// 📧 EMAIL ENDPOINTS (Notificaciones, Recuperación)
+// EMAIL ENDPOINTS (Notificaciones, Recuperación)
 // Límite: 3 emails por hora
 // Razón: Prevenir spam
 export const emailLimiter = rateLimit({
@@ -118,7 +118,7 @@ export const emailLimiter = rateLimit({
   }
 });
 
-// 📈 REPORT ENDPOINTS (Reportes pesados)
+// REPORT ENDPOINTS (Reportes pesados)
 // Límite: 30 requests por hora
 // Razón: Queries costosas, proteger DB
 export const reportLimiter = rateLimit({
@@ -130,7 +130,7 @@ export const reportLimiter = rateLimit({
   handler: rateLimitHandler
 });
 
-// 🔍 SEARCH ENDPOINTS (Búsquedas)
+// SEARCH ENDPOINTS (Búsquedas)
 // Límite: 50 requests por minuto
 // Razón: Balance entre UX y carga DB
 export const searchLimiter = rateLimit({
@@ -142,7 +142,7 @@ export const searchLimiter = rateLimit({
   handler: rateLimitHandler
 });
 
-// 🚀 Rate limiter dinámico basado en rol de usuario
+// Rate limiter dinámico basado en rol de usuario
 // Usuarios premium/admin tienen límites más altos
 export const dynamicLimiter = (options = {}) => {
   return rateLimit({

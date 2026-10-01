@@ -58,7 +58,7 @@ const calculateCorrectDailyExpenses = (expenses, recurringExpenses, startDate, e
   const oneTimeExpenses = expenses || [];
   const oneTimeTotal = oneTimeExpenses.reduce((sum, exp) => sum + (parseFloat(exp.amount) || 0), 0);
 
-  // ✅ USAR GASTOS RECURRENTES LOCALES SIEMPRE
+  // USAR GASTOS RECURRENTES LOCALES SIEMPRE
   let recurringMonthlyTotal = 0;
   if (recurringExpenses && recurringExpenses.length > 0) {
     const activeRecurringExpenses = recurringExpenses.filter(exp => (exp._isActive !== undefined
@@ -192,14 +192,14 @@ const Reports = () => {
     toggleRecurringStatus
   } = useRecurringExpenses();
 
-  // 🚨 Sanitization: Crear una versión saneada de los gastos recurrentes para evitar crashes.
+  // Sanitization: Crear una versión saneada de los gastos recurrentes para evitar crashes.
   const sanitizedRecurringExpenses = useMemo(() => {
     if (!Array.isArray(recurringExpenses)) return [];
     
     const originalCount = recurringExpenses.length;
     const sanitized = recurringExpenses.filter(e => {
       if (!e || typeof e !== 'object') {
-        console.warn('🧹 Reports.jsx: Filtrado un elemento no-objeto de recurringExpenses.', e);
+        console.warn('Reports.jsx: Filtrado un elemento no-objeto de recurringExpenses.', e);
         return false;
       }
       // Puedes añadir más validaciones si es necesario
@@ -207,7 +207,7 @@ const Reports = () => {
     });
 
     if (sanitized.length < originalCount) {
-      console.log(`🧹 Reports.jsx: Se filtraron ${originalCount - sanitized.length} elementos inválidos de 'recurringExpenses'.`);
+      console.log(`Reports.jsx: Se filtraron ${originalCount - sanitized.length} elementos inválidos de 'recurringExpenses'.`);
     }
     
     return sanitized;
@@ -239,7 +239,7 @@ const Reports = () => {
       const value = item.value || item.category || item.key || item._id || 'unknown';
       return {
         value,
-        label: getCategoryLabel(value), // ✅ Usar función de traducción
+        label: getCategoryLabel(value), // Usar función de traducción
         total: item.total || item.totalAmount || item.amount || 0
       };
     });
@@ -251,7 +251,7 @@ const Reports = () => {
     // Si tenemos un objeto con montos, convertirlo a array con value/label traducidos
     const fromSummary = Object.keys(pmObj).map(k => ({ 
       value: k, 
-      label: getPaymentMethodLabel(k), // ✅ Usar función de traducción
+      label: getPaymentMethodLabel(k), // Usar función de traducción
       amount: pmObj[k] 
     }));
     return fromSummary;
@@ -345,22 +345,22 @@ const Reports = () => {
   // Definir safeBasicMetrics después de las funciones para evitar errores de inicialización
   const safeBasicMetrics = {
     totalRevenue: financialData?.summary?.totalRevenue || 0,
-    totalExpenses: getTotalExpensesStats().total, // ✅ Usar mismo cálculo que las tarjetas exitosas
-    netProfit: (financialData?.summary?.totalRevenue || 0) - getTotalExpensesStats().total // ✅ Recalcular netProfit con gastos correctos
+    totalExpenses: getTotalExpensesStats().total, // Usar mismo cálculo que las tarjetas exitosas
+    netProfit: (financialData?.summary?.totalRevenue || 0) - getTotalExpensesStats().total // Recalcular netProfit con gastos correctos
   };
 
   // ===== Nuevos datos para gráficos de barras (Análisis) =====
   const categoryChartData = useMemo(() => {
     const expenses = financialData?.expenses || [];
     
-    // ✅ INCLUIR GASTOS RECURRENTES: Combinar gastos únicos + recurrentes
+    // INCLUIR GASTOS RECURRENTES: Combinar gastos únicos + recurrentes
     const totals = expenses.reduce((acc, e) => {
       const key = e.category || 'other';
       acc[key] = (acc[key] || 0) + (e.amount || 0);
       return acc;
     }, {});
     
-    // ✅ AGREGAR GASTOS RECURRENTES SI EXISTEN
+    // AGREGAR GASTOS RECURRENTES SI EXISTEN
     if (sanitizedRecurringExpenses && sanitizedRecurringExpenses.length > 0) {
       const activeRecurringExpenses = sanitizedRecurringExpenses.filter(exp => (exp._isActive !== undefined
         ? exp._isActive
@@ -397,7 +397,7 @@ const Reports = () => {
     return Object.entries(totals)
       .map(([key, value]) => ({
         key,
-        label: getCategoryLabel(key), // ✅ Usar función de traducción
+        label: getCategoryLabel(key), // Usar función de traducción
         value
       }))
       .sort((a,b) => b.value - a.value)
@@ -411,7 +411,7 @@ const Reports = () => {
     if (entries.length > 0) {
       return entries.map(([method, amount]) => ({
           key: method,
-          label: getPaymentMethodLabel(method), // ✅ Usar función de traducción
+          label: getPaymentMethodLabel(method), // Usar función de traducción
           value: amount
         })).sort((a,b) => b.value - a.value);
     }
@@ -424,10 +424,10 @@ const Reports = () => {
     }, {});
     return Object.entries(counts).map(([key, value]) => ({
       key,
-      label: getPaymentMethodLabel(key), // ✅ Usar función de traducción
+      label: getPaymentMethodLabel(key), // Usar función de traducción
       value
     })).sort((a,b) => b.value - a.value);
-  }, [financialData]); // ✅ Removida dependencia de safePaymentMethods
+  }, [financialData]); // Removida dependencia de safePaymentMethods
 
   // Datos para el gráfico de ingresos por tipo (cortes, productos y citas)
   const revenueTypeChartData = useMemo(() => {
@@ -713,8 +713,8 @@ const Reports = () => {
                 ...financialData,
                 summary: {
                   ...financialData?.summary,
-                  totalExpenses: getTotalExpensesStats().total, // ✅ Usar cálculo correcto
-                  netProfit: (financialData?.summary?.totalRevenue || 0) - getTotalExpensesStats().total // ✅ Recalcular netProfit
+                  totalExpenses: getTotalExpensesStats().total, // Usar cálculo correcto
+                  netProfit: (financialData?.summary?.totalRevenue || 0) - getTotalExpensesStats().total // Recalcular netProfit
                 }
               }}
               calculations={calculations}
@@ -1029,7 +1029,7 @@ const Reports = () => {
                 </div>
                 <p className="text-xl sm:text-2xl font-bold text-red-400">
                   {(() => {
-                    // ✅ CÁLCULO CORRECTO: Considerar gastos recurrentes por su frecuencia real
+                    // CÁLCULO CORRECTO: Considerar gastos recurrentes por su frecuencia real
                     const calculation = calculateCorrectDailyExpenses(
                       financialData?.expenses || [], 
                       sanitizedRecurringExpenses || [], 
@@ -1137,7 +1137,7 @@ const Reports = () => {
               <div className="bg-amber-500/10 border border-amber-500/20 rounded-lg p-4 text-xs">
                 <p className="text-amber-300 font-medium mb-1">Proyección</p>
                 <p className="text-gray-300">Gasto mensual estimado: {(() => {
-                  // ✅ CÁLCULO CORRECTO: Proyección mensual basada en frecuencias reales
+                  // CÁLCULO CORRECTO: Proyección mensual basada en frecuencias reales
                   const calculation = calculateCorrectDailyExpenses(
                     financialData?.expenses || [], 
                     sanitizedRecurringExpenses || [], 

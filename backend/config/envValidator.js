@@ -114,7 +114,7 @@ export const validateEnvironment = () => {
   const warnings = [];
   const defaults = [];
 
-  logger.info('🔍 Validando variables de entorno...');
+  logger.info('Validando variables de entorno...');
 
   // Validar cada variable
   Object.entries(requiredEnvVars).forEach(([name, config]) => {
@@ -146,30 +146,30 @@ export const validateEnvironment = () => {
 
     productionChecks.forEach(check => {
       if (check.condition) {
-        warnings.push(`⚠️  PRODUCCIÓN: ${check.message}`);
+        warnings.push(` PRODUCCIÓN: ${check.message}`);
       }
     });
   }
 
   // Mostrar resultados
   if (defaults.length > 0) {
-    logger.info('📝 Variables usando valores por defecto:');
+    logger.info('Variables usando valores por defecto:');
     defaults.forEach(def => logger.info(`   ${def}`));
   }
 
   if (warnings.length > 0) {
-    logger.warn('⚠️  Advertencias de configuración:');
+    logger.warn(' Advertencias de configuración:');
     warnings.forEach(warning => logger.warn(`   ${warning}`));
   }
 
   if (errors.length > 0) {
-    logger.error('❌ Errores de configuración:');
+    logger.error('Errores de configuración:');
     errors.forEach(error => logger.error(`   ${error}`));
-    logger.error('🚫 La aplicación no puede iniciarse con errores de configuración');
+    logger.error('La aplicación no puede iniciarse con errores de configuración');
     process.exit(1);
   }
 
-  logger.info('✅ Validación de variables de entorno completada');
+  logger.info('Validación de variables de entorno completada');
   return true;
 };
 

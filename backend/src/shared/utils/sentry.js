@@ -1,4 +1,4 @@
-// 🐛 Sentry Configuration (Backend - Render)
+// Sentry Configuration (Backend - Render)
 // Error tracking y performance monitoring para producción
 //
 // IMPORTANTE: Configurar SENTRY_DSN_BACKEND en Render Dashboard

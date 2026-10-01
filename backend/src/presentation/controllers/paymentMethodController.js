@@ -1,4 +1,4 @@
-﻿import { PaymentMethod, AppError, logger } from '../../barrel.js';
+import { PaymentMethod, AppError, logger } from '../../barrel.js';
 import { 
   GetPaymentMethods, 
   CreatePaymentMethod, 
@@ -44,7 +44,7 @@ export const createPaymentMethod = asyncHandler(async (req, res) => {
     category
   });
   
-  logger.info(`✅ Método de pago creado por ${req.user.email}: ${method.backendId}`);
+  logger.info(`Método de pago creado por ${req.user.email}: ${method.backendId}`);
   
   res.status(201).json({
     success: true,
@@ -64,7 +64,7 @@ export const updatePaymentMethod = asyncHandler(async (req, res) => {
   
   const method = await UpdatePaymentMethod.execute(backendId, updateData);
   
-  logger.info(`✅ Método de pago actualizado por ${req.user.email}: ${method.backendId}`);
+  logger.info(`Método de pago actualizado por ${req.user.email}: ${method.backendId}`);
   
   res.status(200).json({
     success: true,
@@ -85,7 +85,7 @@ export const deletePaymentMethod = asyncHandler(async (req, res) => {
   const result = await DeletePaymentMethod.execute(backendId, force === 'true');
   
   const action = result.deleted ? 'eliminado' : 'desactivado';
-  logger.info(`✅ Método de pago ${action} por ${req.user.email}: ${backendId}`);
+  logger.info(`Método de pago ${action} por ${req.user.email}: ${backendId}`);
   
   res.status(200).json({
     success: true,
@@ -102,7 +102,7 @@ export const deletePaymentMethod = asyncHandler(async (req, res) => {
 export const initializePaymentMethods = asyncHandler(async (req, res) => {
   const result = await InitializePaymentMethods.execute();
   
-  logger.info(`✅ Métodos de pago inicializados por ${req.user.email}`);
+  logger.info(`Métodos de pago inicializados por ${req.user.email}`);
   
   res.status(200).json({
     success: true,
@@ -119,7 +119,7 @@ export const initializePaymentMethods = asyncHandler(async (req, res) => {
 export const normalizePaymentMethods = asyncHandler(async (req, res) => {
   const result = await NormalizeExistingPaymentMethods.execute();
   
-  logger.info(`✅ Métodos de pago normalizados por ${req.user.email}`);
+  logger.info(`Métodos de pago normalizados por ${req.user.email}`);
   
   res.status(200).json({
     success: true,
@@ -131,8 +131,8 @@ export const normalizePaymentMethods = asyncHandler(async (req, res) => {
 // MÉTODO LEGACY - Mantener por compatibilidad pero marcar como deprecated
 export const getPaymentMethodsLegacy = async (req, res) => {
   try {
-    logger.debug('⚠️ USANDO MÉTODO LEGACY - Considera migrar al nuevo sistema');
-    logger.debug('🔍 Obteniendo métodos de pago desde BD...');
+    logger.debug('USANDO MÉTODO LEGACY - Considera migrar al nuevo sistema');
+    logger.debug('Obteniendo métodos de pago desde BD...');
     
     // Obtener métodos únicos de todas las colecciones
     const Sale = (await import('../../core/domain/entities/Sale.js')).default;
@@ -145,7 +145,7 @@ export const getPaymentMethodsLegacy = async (req, res) => {
       Appointment.distinct('paymentMethod', { paymentMethod: { $exists: true, $ne: null } })
     ]);
 
-    logger.debug('📊 Métodos obtenidos por fuente:', {
+    logger.debug('Métodos obtenidos por fuente:', {
       sales: salesMethods,
       expenses: expensesMethods,
       appointments: appointmentsMethods
@@ -182,7 +182,7 @@ export const getPaymentMethodsLegacy = async (req, res) => {
       }
     });
 
-    logger.debug('🔄 Métodos normalizados:', Object.fromEntries(normalizedMethods));
+    logger.debug('Métodos normalizados:', Object.fromEntries(normalizedMethods));
 
     // Mapear a estructura esperada por el frontend
     const paymentMethodsData = Array.from(normalizedMethods.entries())
@@ -234,7 +234,7 @@ export const getPaymentMethodsLegacy = async (req, res) => {
       })
       .sort((a, b) => a.name.localeCompare(b.name)); // Ordenar alfabéticamente
 
-    logger.debug('✅ Métodos de pago finales enviados:', paymentMethodsData);
+    logger.debug('Métodos de pago finales enviados:', paymentMethodsData);
 
     res.status(200).json({
       success: true,
@@ -243,7 +243,7 @@ export const getPaymentMethodsLegacy = async (req, res) => {
     });
 
   } catch (error) {
-    logger.error('❌ Error al obtener métodos de pago:', error);
+    logger.error('Error al obtener métodos de pago:', error);
     throw new AppError('Error al obtener métodos de pago', 500);
   }
 };

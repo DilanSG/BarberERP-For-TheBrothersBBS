@@ -33,7 +33,7 @@ import Barber from '../src/core/domain/entities/Barber.js';
 const loadLogoBase64 = () => {
   const logoPath = path.join(__dirname, '../../frontend/public/images/logo 1.png');
   if (!fs.existsSync(logoPath)) {
-    log('   ⚠️ Logo no encontrado, se omitira profilePicture', colors.yellow);
+    log('   Logo no encontrado, se omitira profilePicture', colors.yellow);
     return null;
   }
   const fileBuffer = fs.readFileSync(logoPath);
@@ -144,17 +144,17 @@ const BARBERS_DATA = [
 ];
 
 const PAYMENT_METHODS = [
-  { backendId: 'cash', name: 'Efectivo', description: 'Pago en efectivo', color: '#10b981', emoji: '💵', category: 'cash', isSystem: true, displayOrder: 1, aliases: ['efectivo'] },
-  { backendId: 'tarjeta', name: 'Tarjeta', description: 'Tarjeta debito/credito', color: '#3b82f6', emoji: '💳', category: 'card', isSystem: true, displayOrder: 2, aliases: ['debit', 'credit', 'card'] },
-  { backendId: 'nequi', name: 'Nequi', description: 'Pago por Nequi', color: '#8b5cf6', emoji: '📱', category: 'digital', isSystem: true, displayOrder: 3, aliases: [] },
-  { backendId: 'daviplata', name: 'Daviplata', description: 'Pago por Daviplata', color: '#ef4444', emoji: '📱', category: 'digital', isSystem: true, displayOrder: 4, aliases: [] },
-  { backendId: 'bancolombia', name: 'Bancolombia', description: 'Transferencia Bancolombia', color: '#f59e0b', emoji: '🏛️', category: 'transfer', isSystem: true, displayOrder: 5, aliases: ['transfer'] },
-  { backendId: 'nu', name: 'Nu', description: 'Tarjeta Nu', color: '#8b5cf6', emoji: '💳', category: 'card', isSystem: true, displayOrder: 6, aliases: [] },
-  { backendId: 'digital', name: 'Pago Digital', description: 'Otros metodos digitales', color: '#06b6d4', emoji: '💻', category: 'digital', isSystem: true, displayOrder: 7, aliases: [] },
+  { backendId: 'cash', name: 'Efectivo', description: 'Pago en efectivo', color: '#10b981', emoji: '', category: 'cash', isSystem: true, displayOrder: 1, aliases: ['efectivo'] },
+  { backendId: 'tarjeta', name: 'Tarjeta', description: 'Tarjeta debito/credito', color: '#3b82f6', emoji: '', category: 'card', isSystem: true, displayOrder: 2, aliases: ['debit', 'credit', 'card'] },
+  { backendId: 'nequi', name: 'Nequi', description: 'Pago por Nequi', color: '#8b5cf6', emoji: '', category: 'digital', isSystem: true, displayOrder: 3, aliases: [] },
+  { backendId: 'daviplata', name: 'Daviplata', description: 'Pago por Daviplata', color: '#ef4444', emoji: '', category: 'digital', isSystem: true, displayOrder: 4, aliases: [] },
+  { backendId: 'bancolombia', name: 'Bancolombia', description: 'Transferencia Bancolombia', color: '#f59e0b', emoji: '', category: 'transfer', isSystem: true, displayOrder: 5, aliases: ['transfer'] },
+  { backendId: 'nu', name: 'Nu', description: 'Tarjeta Nu', color: '#8b5cf6', emoji: '', category: 'card', isSystem: true, displayOrder: 6, aliases: [] },
+  { backendId: 'digital', name: 'Pago Digital', description: 'Otros metodos digitales', color: '#06b6d4', emoji: '', category: 'digital', isSystem: true, displayOrder: 7, aliases: [] },
 ];
 
 async function ensurePaymentMethods() {
-  log('\n💳 Metodos de pago...', colors.cyan);
+  log('\nMetodos de pago...', colors.cyan);
   let created = 0, existed = 0;
   for (const pm of PAYMENT_METHODS) {
     const res = await PaymentMethod.findOneAndUpdate(
@@ -171,12 +171,12 @@ async function ensurePaymentMethods() {
     }
   }
   const count = await PaymentMethod.countDocuments({});
-  log(`   ✅ ${count} metodos de pago (sistema: ${PAYMENT_METHODS.length})`, colors.green);
+  log(`   ${count} metodos de pago (sistema: ${PAYMENT_METHODS.length})`, colors.green);
   return count;
 }
 
 async function ensureServices() {
-  log('\n✂️  Servicios base...', colors.cyan);
+  log('\n Servicios base...', colors.cyan);
   let created = 0, updated = 0;
   for (const s of SERVICES) {
     const existing = await Service.findOne({ name: s.name });
@@ -189,7 +189,7 @@ async function ensureServices() {
       existing.showInHome = s.showInHome;
       await existing.save();
       updated++;
-      log(`   ↔ ${s.name} ya existia - actualizado`, colors.gray);
+      log(`   ${s.name} ya existia - actualizado`, colors.gray);
     } else {
       await Service.create(s);
       created++;
@@ -197,12 +197,12 @@ async function ensureServices() {
     }
   }
   const count = await Service.countDocuments({ isActive: true });
-  log(`   ✅ ${created} creados, ${updated} actualizados. Total activos: ${count}`, colors.green);
+  log(`   ${created} creados, ${updated} actualizados. Total activos: ${count}`, colors.green);
   return count;
 }
 
 async function ensureAdmin() {
-  log('\n👤 Admin...', colors.cyan);
+  log('\nAdmin...', colors.cyan);
   log(`   Email: ${ADMIN.email}`, colors.gray);
 
   // Cargar logo como profilePicture
@@ -225,23 +225,23 @@ async function ensureAdmin() {
     if (isFresh) {
       admin.password = ADMIN.password;
       needsSave = true;
-      log(`   🔑 Password reseteado a: ${ADMIN.password}`, colors.yellow);
+      log(`   Password reseteado a: ${ADMIN.password}`, colors.yellow);
     }
     if (needsSave) {
       await admin.save();
-      log(`   ↔ Admin existente actualizado: ${admin.email}`, colors.yellow);
+      log(`   Admin existente actualizado: ${admin.email}`, colors.yellow);
     } else {
-      log(`   ↔ Admin ya existia: ${admin.email} (password sin cambios)`, colors.gray);
-      log(`   ℹ️  Si olvidaste el password usa: npm run seed:init:fresh`, colors.gray);
+      log(`   Admin ya existia: ${admin.email} (password sin cambios)`, colors.gray);
+      log(`    Si olvidaste el password usa: npm run seed:init:fresh`, colors.gray);
     }
     // Si no es fresh pero queremos garantizar que el password del seed funcione, verificar
     if (!isFresh) {
       const freshCheck = await User.findOne({ email: ADMIN.email }).select('+password');
       const ok = await freshCheck.comparePassword(ADMIN.password).catch(() => false);
       if (!ok) {
-        log(`   ⚠️  El password actual NO es "${ADMIN.password}". Usa --fresh para resetear.`, colors.yellow);
+        log(`    El password actual NO es "${ADMIN.password}". Usa --fresh para resetear.`, colors.yellow);
       } else {
-        log(`   ✅ Password verificado: ${ADMIN.password}`, colors.green);
+        log(`   Password verificado: ${ADMIN.password}`, colors.green);
       }
     }
     return admin;
@@ -257,13 +257,13 @@ async function ensureAdmin() {
     profilePicture: logoBase64,
   });
   await admin.save();
-  log(`   ✅ Admin creado: ${admin.email}`, colors.green);
-  log(`   🔑 Password: ${ADMIN.password}`, colors.green);
+  log(`   Admin creado: ${admin.email}`, colors.green);
+  log(`   Password: ${ADMIN.password}`, colors.green);
   return admin;
 }
 
 async function ensureBarbers() {
-  log('\n💈 Barberos...', colors.cyan);
+  log('\nBarberos...', colors.cyan);
   let created = 0, existed = 0;
 
   // Obtener servicios activos para vincular
@@ -302,7 +302,7 @@ async function ensureBarbers() {
       }
       if (needsSave) {
         await barberUser.save();
-        log(`   ↔ ${b.user.email} actualizado`, colors.gray);
+        log(`   ${b.user.email} actualizado`, colors.gray);
       }
       existed++;
     }
@@ -339,26 +339,26 @@ async function ensureBarbers() {
       barber.description = b.description;
       barber.isMainBarber = b.isMainBarber;
       await barber.save();
-      log(`   ↔ ${b.user.name} ya existia - servicios actualizados`, colors.gray);
+      log(`   ${b.user.name} ya existia - servicios actualizados`, colors.gray);
     }
   }
 
   const count = await Barber.countDocuments({ isActive: true });
-  log(`   ✅ ${created} creados, ${existed} existentes. Total activos: ${count}`, colors.green);
+  log(`   ${created} creados, ${existed} existentes. Total activos: ${count}`, colors.green);
   return count;
 }
 
 async function ensureSocioFundador(admin) {
-  log('\n🤝 Socio fundador...', colors.cyan);
+  log('\nSocio fundador...', colors.cyan);
   const existing = await Socio.findOne({ tipoSocio: 'fundador', isActive: true });
   if (existing) {
-    log(`   ↔ Fundador ya existe: ${existing.nombre} (${existing.porcentaje}%) - ${existing.email}`, colors.gray);
+    log(`   Fundador ya existe: ${existing.nombre} (${existing.porcentaje}%) - ${existing.email}`, colors.gray);
     return existing;
   }
   // Verificar que no exceda 100% (deberia ser 0 si es primero)
   const total = await Socio.getTotalPorcentajeAsignado().catch(() => 0);
   if (total >= 100) {
-    log(`   ⚠️  No se puede crear fundador: total asignado ${total}%`, colors.yellow);
+    log(`    No se puede crear fundador: total asignado ${total}%`, colors.yellow);
     return null;
   }
   try {
@@ -371,35 +371,35 @@ async function ensureSocioFundador(admin) {
       creadoPor: admin._id,
       isActive: true,
     });
-    log(`   ✅ Socio fundador creado: ${socio.nombre} - 100%`, colors.green);
+    log(`   Socio fundador creado: ${socio.nombre} - 100%`, colors.green);
     return socio;
   } catch (e) {
-    log(`   ⚠️  No se pudo crear socio fundador: ${e.message}`, colors.yellow);
+    log(`    No se pudo crear socio fundador: ${e.message}`, colors.yellow);
     return null;
   }
 }
 
 async function main() {
   const t0 = Date.now();
-  log('🚀 SEED INICIAL - The Brothers Barber Shop', colors.magenta);
+  log('SEED INICIAL - The Brothers Barber Shop', colors.magenta);
   log('═'.repeat(60), colors.magenta);
-  if (isFresh) log('⚠️  Modo --fresh: se borrarán y recrearán datos base', colors.yellow);
-  log(`📡 MONGODB_URI: ${process.env.MONGODB_URI ? process.env.MONGODB_URI.replace(/:([^@]+)@/, ':***@') : 'NO DEFINIDA'}`, colors.gray);
+  if (isFresh) log(' Modo --fresh: se borrarán y recrearán datos base', colors.yellow);
+  log(`MONGODB_URI: ${process.env.MONGODB_URI ? process.env.MONGODB_URI.replace(/:([^@]+)@/, ':***@') : 'NO DEFINIDA'}`, colors.gray);
 
   if (!process.env.MONGODB_URI) {
-    log('❌ MONGODB_URI no definida en .env', colors.red);
+    log('MONGODB_URI no definida en .env', colors.red);
     process.exit(1);
   }
   if (!process.env.JWT_SECRET || process.env.JWT_SECRET.length < 10) {
-    log('⚠️  JWT_SECRET muy corto o no definido - revisa .env', colors.yellow);
+    log(' JWT_SECRET muy corto o no definido - revisa .env', colors.yellow);
   }
 
   try {
     await mongoose.connect(process.env.MONGODB_URI);
-    log('✅ Conectado a MongoDB', colors.green);
+    log('Conectado a MongoDB', colors.green);
 
     if (isFresh) {
-      log('\n🧹 Limpiando colecciones base (--fresh)...', colors.yellow);
+      log('\nLimpiando colecciones base (--fresh)...', colors.yellow);
       await Promise.all([
         Service.deleteMany({}),
         PaymentMethod.deleteMany({}),
@@ -407,7 +407,7 @@ async function main() {
         User.deleteMany({ email: { $in: [ADMIN.email, ...BARBERS_DATA.map(b => b.user.email)] } }),
         Socio.deleteMany({ email: ADMIN.email }),
       ]);
-      log('   ✅ Limpieza base completada', colors.green);
+      log('   Limpieza base completada', colors.green);
     }
 
     await ensurePaymentMethods();
@@ -426,39 +426,39 @@ async function main() {
       Socio.countDocuments({ isActive: true }),
     ]);
 
-    log('\n📊 RESUMEN', colors.magenta);
+    log('\nRESUMEN', colors.magenta);
     log('─'.repeat(40), colors.magenta);
-    log(`👥 Usuarios totales: ${users} (admins: ${admins})`, colors.cyan);
-    log(`💈 Barberos activos: ${barbersCount}`, colors.cyan);
-    log(`✂️  Servicios activos: ${services}`, colors.cyan);
-    log(`💳 Metodos de pago: ${pms}`, colors.cyan);
-    log(`🤝 Socios: ${socios}`, colors.cyan);
+    log(`Usuarios totales: ${users} (admins: ${admins})`, colors.cyan);
+    log(`Barberos activos: ${barbersCount}`, colors.cyan);
+    log(` Servicios activos: ${services}`, colors.cyan);
+    log(`Metodos de pago: ${pms}`, colors.cyan);
+    log(`Socios: ${socios}`, colors.cyan);
 
-    log('\n🔐 CREDENCIALES', colors.green);
+    log('\nCREDENCIALES', colors.green);
     log('─'.repeat(40), colors.green);
     log(`   Admin:     ${ADMIN.email} / ${ADMIN.password}`, colors.green);
     log(`   Barbero 1: luis@thebrothers.com / Barber123!`, colors.green);
     log(`   Barbero 2: andres@thebrothers.com / Barber123!`, colors.green);
     log(`   Barbero 3: miguel@thebrothers.com / Barber123!`, colors.green);
 
-    log('\n🌐 Login:', colors.cyan);
+    log('\nLogin:', colors.cyan);
     log(`   Frontend: http://localhost:5173/login`, colors.cyan);
     log(`   API:      http://localhost:5000/api/v1/auth/login`, colors.cyan);
 
-    log('\n💡 Siguiente pasos:', colors.yellow);
+    log('\nSiguiente pasos:', colors.yellow);
     log('   1. npm run dev  (levanta backend + frontend)', colors.yellow);
     log('   2. Login con el admin o un barbero', colors.yellow);
     log('   3. Opcional: npm run seed:inventory para cargar productos', colors.yellow);
 
     const dt = ((Date.now() - t0) / 1000).toFixed(1);
-    log(`\n✅ Seed completado en ${dt}s`, colors.green);
+    log(`\nSeed completado en ${dt}s`, colors.green);
   } catch (e) {
-    log(`\n❌ Error: ${e.message}`, colors.red);
+    log(`\nError: ${e.message}`, colors.red);
     console.error(e);
     process.exit(1);
   } finally {
     await mongoose.disconnect().catch(() => {});
-    log('👋 Desconectado', colors.gray);
+    log('Desconectado', colors.gray);
   }
 }
 

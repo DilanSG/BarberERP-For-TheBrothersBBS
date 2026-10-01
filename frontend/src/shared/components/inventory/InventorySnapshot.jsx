@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Camera, Save, TrendingUp, TrendingDown, Minus } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useNotification } from '../../contexts/NotificationContext';
@@ -69,7 +69,7 @@ const InventorySnapshot = ({
   // inicial y entradas/salidas/ventas vuelven a 0 (actualiza producto por producto).
   const resetInventoryAfterSnapshot = async () => {
     try {
-      logger.debug('🔄 Reiniciando inventario después del snapshot...');
+      logger.debug('Reiniciando inventario después del snapshot...');
       // Mapear los datos originales del inventario para asegurar todos los campos obligatorios
       const resetData = snapshotData.items.map(item => {
         // Buscar el producto original en el inventario por _id
@@ -94,7 +94,7 @@ const InventorySnapshot = ({
         };
       }).filter(Boolean);
 
-      logger.debug('📦 Datos para reiniciar inventario:', resetData);
+      logger.debug('Datos para reiniciar inventario:', resetData);
 
       // Llamar al servicio para actualizar todos los productos
       for (const item of resetData) {
@@ -115,10 +115,10 @@ const InventorySnapshot = ({
         });
       }
 
-      logger.debug('✅ Inventario reiniciado exitosamente');
+      logger.debug('Inventario reiniciado exitosamente');
       
     } catch (error) {
-      console.error('❌ Error al reiniciar inventario:', error);
+      console.error('Error al reiniciar inventario:', error);
       showError('Error al reiniciar el inventario: ' + error.message);
       throw error; // Re-lanzar para que el caller pueda manejar el error
     }
@@ -135,13 +135,13 @@ const InventorySnapshot = ({
         return;
       }
 
-      logger.debug('📸 Guardando snapshot de inventario:', snapshotData);
+      logger.debug('Guardando snapshot de inventario:', snapshotData);
 
       // 1. Primero guardar el snapshot
       const response = await inventorySnapshotService.createSnapshot(snapshotData);
 
       if (response.success) {
-        logger.debug('✅ Snapshot guardado, ahora reiniciando inventario...');
+        logger.debug('Snapshot guardado, ahora reiniciando inventario...');
         
         // 2. Después reiniciar el inventario
         await resetInventoryAfterSnapshot();
@@ -153,7 +153,7 @@ const InventorySnapshot = ({
       }
 
     } catch (error) {
-      console.error('❌ Error al guardar snapshot o reiniciar inventario:', error);
+      console.error('Error al guardar snapshot o reiniciar inventario:', error);
       showError(error.message || 'Error al guardar el snapshot de inventario');
     } finally {
       setSaving(false);

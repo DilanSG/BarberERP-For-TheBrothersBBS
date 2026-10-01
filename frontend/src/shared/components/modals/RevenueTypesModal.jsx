@@ -12,8 +12,8 @@ const RevenueTypesModal = ({ isOpen, onClose, revenueData, dateRange, formatCurr
 
   // Debug temporal para verificar estructura de datos
   // Registros temporales de depuración de la estructura de datos recibida.
-  console.log('🔍 [RevenueTypesModal] revenueData:', revenueData);
-  console.log('🔍 [RevenueTypesModal] revenueData.byType:', revenueData.byType);
+  console.log('[RevenueTypesModal] revenueData:', revenueData);
+  console.log('[RevenueTypesModal] revenueData.byType:', revenueData.byType);
 
   // Usar la función de formateo externa si se proporciona, sino usar la local
   const formatCurrencyToUse = externalFormatCurrency || formatCurrency;

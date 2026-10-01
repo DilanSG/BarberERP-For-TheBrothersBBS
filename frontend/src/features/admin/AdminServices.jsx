@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '@contexts/AuthContext';
 import { useNotification } from '@contexts/NotificationContext';
 import { PageContainer } from '@components/layout/PageContainer';
@@ -67,7 +67,7 @@ const AdminServices = () => {
   // forceRefresh se usa para bypass del caché tras cambiar la selección
   const fetchBarbers = async (forceRefresh = false) => {
     try {
-      logger.debug('🔍 [AdminServices] Iniciando fetchBarbers...', forceRefresh ? '(FORCE REFRESH)' : '');
+      logger.debug('[AdminServices] Iniciando fetchBarbers...', forceRefresh ? '(FORCE REFRESH)' : '');
       const startTime = Date.now();
       
       // Si forceRefresh es true, agregar timestamp para bypass del caché
@@ -78,7 +78,7 @@ const AdminServices = () => {
         // VALIDACIÓN DEFENSIVA: Garantizar que sea array
         const barbersData = Array.isArray(response.data) ? response.data : [];
         const endTime = Date.now();
-        logger.debug(`📦 [AdminServices] Datos recibidos en ${endTime - startTime}ms:`, barbersData.length, 'barberos');
+        logger.debug(`[AdminServices] Datos recibidos en ${endTime - startTime}ms:`, barbersData.length, 'barberos');
         
         // Los barberos ya vienen filtrados y ordenados desde el backend optimizado
         const activeBarbers = barbersData.filter(barber => {
@@ -86,25 +86,25 @@ const AdminServices = () => {
                  barber.user.role === 'barber' && 
                  (barber.user.isActive !== false) && 
                  (barber.isActive !== false);
-          logger.debug(`👤 [AdminServices] ${barber.user?.name}: isActive=${isActive}, isMainBarber=${barber.isMainBarber}`);
+          logger.debug(`[AdminServices] ${barber.user?.name}: isActive=${isActive}, isMainBarber=${barber.isMainBarber}`);
           return isActive;
         });
 
-        logger.debug('✅ [AdminServices] Barberos activos:', activeBarbers.length);
+        logger.debug('[AdminServices] Barberos activos:', activeBarbers.length);
 
         // Identificar los barberos marcados como principales (isMainBarber: true)
         const currentMainBarbers = activeBarbers.filter(barber => barber.isMainBarber === true);
-        logger.debug('🎯 [AdminServices] Barberos principales encontrados:', currentMainBarbers.length);
-        logger.debug('🎯 [AdminServices] Lista de principales:', currentMainBarbers.map(b => b.user?.name));
+        logger.debug('[AdminServices] Barberos principales encontrados:', currentMainBarbers.length);
+        logger.debug('[AdminServices] Lista de principales:', currentMainBarbers.map(b => b.user?.name));
         
-        // ⚡ ACTUALIZACIÓN ATÓMICA DEL ESTADO
+        // ACTUALIZACIÓN ATÓMICA DEL ESTADO
         setBarbers(activeBarbers);
         setMainBarbers(currentMainBarbers);
         
-        logger.debug('💾 [AdminServices] Estado actualizado exitosamente');
+        logger.debug('[AdminServices] Estado actualizado exitosamente');
       }
     } catch (error) {
-      console.error('❌ [AdminServices] Error fetching barbers:', error);
+      console.error('[AdminServices] Error fetching barbers:', error);
       // No mostrar error aquí, los barberos son opcionales
     }
   };
@@ -136,7 +136,7 @@ const AdminServices = () => {
     const newStatus = !currentStatus;
     
     try {
-      // 🚀 OPTIMISTIC UPDATE - Actualizar UI inmediatamente
+      // OPTIMISTIC UPDATE - Actualizar UI inmediatamente
       const updatedServices = services.map(service =>
         service._id === serviceId
           ? { ...service, showInHome: newStatus }
@@ -159,7 +159,7 @@ const AdminServices = () => {
         throw new Error('Response was not successful');
       }
     } catch (error) {
-      // ❌ REVERTIR OPTIMISTIC UPDATE
+      // REVERTIR OPTIMISTIC UPDATE
       console.error('Error updating service:', error);
       showError(error.response?.data?.message || 'Error al actualizar el servicio');
       
@@ -271,21 +271,21 @@ const AdminServices = () => {
   // Optimistic update con reversión si el backend falla y re-sincronización final.
   const handleBarberSelect = async (barber) => {
     try {
-      logger.debug('🎯 [AdminServices] handleBarberSelect called for:', barber.user?.name);
-      logger.debug('🎯 [AdminServices] Current isMainBarber:', barber.isMainBarber, typeof barber.isMainBarber);
+      logger.debug('[AdminServices] handleBarberSelect called for:', barber.user?.name);
+      logger.debug('[AdminServices] Current isMainBarber:', barber.isMainBarber, typeof barber.isMainBarber);
       
       const isCurrentlyMain = barber.isMainBarber === true;
       const willBeMain = !isCurrentlyMain;
-      logger.debug('🎯 [AdminServices] isCurrentlyMain:', isCurrentlyMain, '-> willBeMain:', willBeMain);
+      logger.debug('[AdminServices] isCurrentlyMain:', isCurrentlyMain, '-> willBeMain:', willBeMain);
       
       // Si quiere marcar como principal y ya hay 3, mostrar error inmediatamente
       if (willBeMain && mainBarbers.length >= 3) {
-        logger.debug('❌ [AdminServices] Max 3 barberos alcanzado');
+        logger.debug('[AdminServices] Max 3 barberos alcanzado');
         showError('Solo puedes seleccionar máximo 3 barberos principales');
         return;
       }
 
-      // 🚀 OPTIMISTIC UPDATE - Actualizar UI inmediatamente
+      // OPTIMISTIC UPDATE - Actualizar UI inmediatamente
       setBarbers(prevBarbers => 
         prevBarbers.map(b => 
           b._id === barber._id 
@@ -301,20 +301,20 @@ const AdminServices = () => {
         setMainBarbers(prev => prev.filter(mb => mb._id !== barber._id));
       }
 
-      // 🌐 LLAMADA AL BACKEND
-      logger.debug('📡 [AdminServices] Calling updateMainBarberStatus...');
+      // LLAMADA AL BACKEND
+      logger.debug('[AdminServices] Calling updateMainBarberStatus...');
       const response = await barberService.updateMainBarberStatus(barber._id, willBeMain);
-      logger.debug('📡 [AdminServices] Response:', response);
+      logger.debug('[AdminServices] Response:', response);
 
       if (response.success) {
-        logger.debug('✅ [AdminServices] Backend actualizado exitosamente');
+        logger.debug('[AdminServices] Backend actualizado exitosamente');
         showSuccess(response.message || `Barbero ${willBeMain ? 'agregado a' : 'removido de'} barberos principales`);
         
-        // 🔄 SINCRONIZAR CON BACKEND para confirmar estado real
+        // SINCRONIZAR CON BACKEND para confirmar estado real
         await fetchBarbers(true);
       } else {
-        // ❌ REVERTIR OPTIMISTIC UPDATE
-        logger.debug('❌ [AdminServices] Revirtiendo cambios optimistas...');
+        // REVERTIR OPTIMISTIC UPDATE
+        logger.debug('[AdminServices] Revirtiendo cambios optimistas...');
         setBarbers(prevBarbers => 
           prevBarbers.map(b => 
             b._id === barber._id 
@@ -332,8 +332,8 @@ const AdminServices = () => {
         showError('Error al actualizar el estado del barbero');
       }
     } catch (error) {
-      // ❌ REVERTIR OPTIMISTIC UPDATE EN CASO DE ERROR
-      logger.debug('❌ [AdminServices] Revirtiendo cambios por error...');
+      // REVERTIR OPTIMISTIC UPDATE EN CASO DE ERROR
+      logger.debug('[AdminServices] Revirtiendo cambios por error...');
       setBarbers(prevBarbers => 
         prevBarbers.map(b => 
           b._id === barber._id 
@@ -345,7 +345,7 @@ const AdminServices = () => {
       // Restaurar mainBarbers también
       await fetchBarbers(true);
       
-      console.error('❌ [AdminServices] Error updating main barber status:', error);
+      console.error('[AdminServices] Error updating main barber status:', error);
       showError(error.response?.data?.message || 'Error al actualizar el estado del barbero');
     }
   };

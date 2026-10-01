@@ -1,4 +1,4 @@
-﻿// Servicio de caché local en memoria con TTL para optimizar requests.
+// Servicio de caché local en memoria con TTL para optimizar requests.
 // Evita peticiones redundantes al servidor durante cambios de filtros.
 import logger from '../utils/logger';
 
@@ -49,7 +49,7 @@ class CacheService {
       expires: Date.now() + this.ttl
     });
 
-    logger.debug(`💾 Cache SET: ${key} (${this.cache.size}/${this.maxSize})`);
+    logger.debug(`Cache SET: ${key} (${this.cache.size}/${this.maxSize})`);
   }
 
   // Obtener datos del cache si no han expirado (null en MISS o expirado)
@@ -57,17 +57,17 @@ class CacheService {
     const item = this.cache.get(key);
     
     if (!item) {
-      logger.debug(`❌ Cache MISS: ${key}`);
+      logger.debug(`Cache MISS: ${key}`);
       return null;
     }
 
     if (Date.now() > item.expires) {
       this.cache.delete(key);
-      logger.debug(`⏰ Cache EXPIRED: ${key}`);
+      logger.debug(`Cache EXPIRED: ${key}`);
       return null;
     }
 
-    logger.debug(`✅ Cache HIT: ${key}`);
+    logger.debug(`Cache HIT: ${key}`);
     return item.data;
   }
 
@@ -93,7 +93,7 @@ class CacheService {
     }
 
     if (cleanedCount > 0) {
-      logger.debug(`🧹 Cache cleanup: ${cleanedCount} entradas eliminadas`);
+      logger.debug(`Cache cleanup: ${cleanedCount} entradas eliminadas`);
     }
 
     return cleanedCount;
@@ -103,7 +103,7 @@ class CacheService {
   clear() {
     const size = this.cache.size;
     this.cache.clear();
-    logger.debug(`🗑️ Cache cleared: ${size} entradas eliminadas`);
+    logger.debug(`Cache cleared: ${size} entradas eliminadas`);
   }
 
   // Obtener estadísticas del cache (tamaño, límite, TTL y claves)
@@ -128,7 +128,7 @@ class CacheService {
     }
 
     if (invalidatedCount > 0) {
-      logger.debug(`🗑️ Cache invalidated for barber ${barberId}: ${invalidatedCount} entradas`);
+      logger.debug(`Cache invalidated for barber ${barberId}: ${invalidatedCount} entradas`);
     }
 
     return invalidatedCount;
@@ -146,7 +146,7 @@ class CacheService {
     }
 
     if (invalidatedCount > 0) {
-      logger.debug(`🗑️ Cache invalidated for filter ${filterType}: ${invalidatedCount} entradas`);
+      logger.debug(`Cache invalidated for filter ${filterType}: ${invalidatedCount} entradas`);
     }
 
     return invalidatedCount;
@@ -165,7 +165,7 @@ class CacheService {
       this.set(key, data);
       return data;
     }).catch(error => {
-      console.error(`❌ Error en precarga de cache ${key}:`, error);
+      console.error(`Error en precarga de cache ${key}:`, error);
       throw error;
     });
   }
@@ -177,7 +177,7 @@ const cacheService = new CacheService();
 // Exponer en window para debugging en desarrollo
 if (typeof window !== 'undefined' && process.env.NODE_ENV === 'development') {
   window.cacheService = cacheService;
-  logger.debug('🐛 cacheService expuesto en window.cacheService para debugging');
+  logger.debug('cacheService expuesto en window.cacheService para debugging');
 }
 
 export default cacheService;

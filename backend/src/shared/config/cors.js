@@ -1,4 +1,4 @@
-﻿import cors from 'cors';
+import cors from 'cors';
 import { logger } from '../utils/logger.js';
 
 // Lista de dominios permitidos

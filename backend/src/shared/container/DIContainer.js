@@ -1,4 +1,4 @@
-﻿import { logger } from '../utils/logger.js';
+import { logger } from '../utils/logger.js';
 import UserRepositoryImpl from '../../infrastructure/database/repositories/UserRepositoryImpl.js';
 import InventoryRepositoryImpl from '../../infrastructure/database/repositories/InventoryRepositoryImpl.js';
 import BarberRepositoryImpl from '../../infrastructure/database/repositories/BarberRepositoryImpl.js';

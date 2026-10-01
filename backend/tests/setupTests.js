@@ -1,4 +1,4 @@
-﻿// setupTests.js - Simple test setup
+// setupTests.js - Simple test setup
 /**
  * Configuración Global de Tests
  * Variables de entorno y helpers para pruebas

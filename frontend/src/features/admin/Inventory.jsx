@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Plus, Edit, Trash2, Search, Package2, AlertTriangle, CheckCircle, 
   Calculator, RotateCcw, 
@@ -97,23 +97,23 @@ const Inventory = () => {
 
   // Auto-recarga cuando hay ventas nuevas
   useEffect(() => {
-    logger.debug('🔄 InventoryAdmin: useEffect trigger -', { 
+    logger.debug('InventoryAdmin: useEffect trigger -', { 
       refreshTrigger, 
       lastRefreshTime, 
       needsRefresh: needsRefresh(lastRefreshTime) 
     });
     
     if (needsRefresh(lastRefreshTime)) {
-      logger.debug('🔄 InventoryAdmin: Detectada venta nueva, recargando...');
+      logger.debug('InventoryAdmin: Detectada venta nueva, recargando...');
       loadInventory();
     }
   }, [refreshTrigger, lastRefreshTime, needsRefresh]);
 
   // También agregar un useEffect que se ejecute al montar el componente
   useEffect(() => {
-    logger.debug('🔄 InventoryAdmin: Componente montado, verificando si necesita recarga...');
+    logger.debug('InventoryAdmin: Componente montado, verificando si necesita recarga...');
     if (needsRefresh(lastRefreshTime)) {
-      logger.debug('🔄 InventoryAdmin: Necesita recarga al montar, ejecutando...');
+      logger.debug('InventoryAdmin: Necesita recarga al montar, ejecutando...');
       loadInventory();
     }
   }, []);
@@ -122,7 +122,7 @@ const Inventory = () => {
   const loadInventory = async () => {
     try {
       setLoading(true);
-      logger.debug('🔄 InventoryAdmin: Cargando inventario...');
+      logger.debug('InventoryAdmin: Cargando inventario...');
       
       const response = await inventoryService.getInventory();
       
@@ -138,9 +138,9 @@ const Inventory = () => {
       
       setInventory(inventoryData);
       setLastRefreshTime(markRefreshed());
-      logger.debug('✅ InventoryAdmin: Inventario cargado, productos:', inventoryData.length);
+      logger.debug('InventoryAdmin: Inventario cargado, productos:', inventoryData.length);
     } catch (error) {
-      console.error('❌ InventoryAdmin: Error al cargar inventario:', error);
+      console.error('InventoryAdmin: Error al cargar inventario:', error);
       setError('Error al cargar el inventario');
       setInventory([]);
     } finally {

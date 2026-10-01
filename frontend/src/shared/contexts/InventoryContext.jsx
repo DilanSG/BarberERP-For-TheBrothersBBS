@@ -1,4 +1,4 @@
-﻿// Contexto ligero de inventario: avisa a los componentes cuando se registra una
+// Contexto ligero de inventario: avisa a los componentes cuando se registra una
 // venta para que recarguen stock (patrón trigger + timestamp, sin fetch aquí).
 import { createContext, useContext, useState, useCallback } from 'react';
 
@@ -26,7 +26,7 @@ export const InventoryProvider = ({ children }) => {
     const now = Date.now();
     setLastSaleTime(now);
     setRefreshTrigger(prev => prev + 1);
-    logger.debug('🔄 InventoryContext: Notificando venta, trigger:', refreshTrigger + 1);
+    logger.debug('InventoryContext: Notificando venta, trigger:', refreshTrigger + 1);
   }, [refreshTrigger]);
 
   // Devuelve true si hubo una venta después del último refresco del componente

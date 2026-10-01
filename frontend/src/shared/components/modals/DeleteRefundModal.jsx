@@ -99,7 +99,7 @@ const DeleteRefundModal = ({
       
       // Usar diferentes formas de obtener el ID
       const refundId = refund._id || refund.saleId || refund.id;
-      console.log('🗑️ Eliminando reembolso con ID:', refundId, 'Objeto completo:', refund);
+      console.log('Eliminando reembolso con ID:', refundId, 'Objeto completo:', refund);
       
       if (onDelete) {
         await onDelete(refundId);
@@ -127,7 +127,7 @@ const DeleteRefundModal = ({
       
       // Usar diferentes formas de obtener el ID
       const refundId = refund._id || refund.saleId || refund.id;
-      console.log('🔄 Revirtiendo reembolso con ID:', refundId, 'Objeto completo:', refund);
+      console.log('Revirtiendo reembolso con ID:', refundId, 'Objeto completo:', refund);
       
       if (onRevert) {
         await onRevert(refundId);

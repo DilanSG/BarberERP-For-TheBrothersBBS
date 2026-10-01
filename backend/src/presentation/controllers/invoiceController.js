@@ -362,7 +362,7 @@ export const generateConsolidatedInvoice = asyncHandler(async (req, res) => {
     dateFilter.createdAt = { $gte: start, $lte: end };
   }
 
-  logger.info('🔍 Fechas recibidas y procesadas:', {
+  logger.info('Fechas recibidas y procesadas:', {
     startDateOriginal: startDate,
     endDateOriginal: endDate,
     startDateParsed: dateFilter.createdAt?.$gte,

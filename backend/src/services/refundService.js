@@ -9,7 +9,7 @@ class RefundService {
   
   // Procesar reembolso de una venta
   static async processRefund(saleId, reason, adminCode, userId, userRole) {
-    logger.info('🔄 Iniciando proceso de reembolso', {
+    logger.info('Iniciando proceso de reembolso', {
       saleId,
       reason,
       userId,
@@ -21,7 +21,7 @@ class RefundService {
     // Validar código de administrador solo si el usuario no es admin
     if (userRole !== 'admin') {
       if (!refundVerificationService.validateCode(adminCode)) {
-        logger.error('❌ Código de verificación inválido para reembolso', {
+        logger.error('Código de verificación inválido para reembolso', {
           saleId,
           userId,
           userRole,
@@ -30,7 +30,7 @@ class RefundService {
         throw new AppError('Código de verificación inválido', 400);
       }
     } else {
-      logger.info('✅ Usuario admin procesando reembolso - sin validación de código', {
+      logger.info('Usuario admin procesando reembolso - sin validación de código', {
         saleId,
         userId,
         userRole
@@ -79,7 +79,7 @@ class RefundService {
           }
         );
 
-        logger.info('📦 Stock devuelto por reembolso', {
+        logger.info('Stock devuelto por reembolso', {
           productId: sale.productId,
           productName: sale.productName,
           quantityReturned: sale.quantity,
@@ -102,11 +102,11 @@ class RefundService {
             }
           );
         } catch (logError) {
-          logger.error('❌ Error creando log de reembolso', logError);
+          logger.error('Error creando log de reembolso', logError);
         }
       }
 
-      logger.info('✅ Reembolso procesado exitosamente', {
+      logger.info('Reembolso procesado exitosamente', {
         saleId: sale._id,
         productId: sale.productId,
         amount: sale.totalAmount,
@@ -122,7 +122,7 @@ class RefundService {
       };
 
     } catch (error) {
-      logger.error('❌ Error procesando reembolso', {
+      logger.error('Error procesando reembolso', {
         saleId,
         error: error.message,
         userId
@@ -193,7 +193,7 @@ class RefundService {
       hasPrevPage: page > 1
     };
 
-    logger.info('📊 Consulta de ventas reembolsadas', {
+    logger.info('Consulta de ventas reembolsadas', {
       filters,
       resultsCount: refundedSales.length,
       totalAmount: stats.totalAmount
@@ -258,7 +258,7 @@ class RefundService {
 
   // Eliminar reembolso (reversar a venta normal)
   static async deleteRefund(saleId, adminUserId) {
-    logger.info('🗑️ Iniciando eliminación de reembolso', {
+    logger.info('Iniciando eliminación de reembolso', {
       saleId,
       adminUserId
     });
@@ -293,14 +293,14 @@ class RefundService {
           }
         );
 
-        logger.info('📦 Stock reducido por eliminación de reembolso', {
+        logger.info('Stock reducido por eliminación de reembolso', {
           productId: sale.productId,
           productName: sale.productName,
           quantityReduced: sale.quantity,
           updatedFields: ['stock', 'realStock', 'sales']
         });
       } catch (inventoryError) {
-        logger.error('❌ Error al reversar inventario en eliminación de reembolso', {
+        logger.error('Error al reversar inventario en eliminación de reembolso', {
           saleId,
           productId: sale.productId,
           error: inventoryError.message
@@ -310,7 +310,7 @@ class RefundService {
 
     await sale.save();
 
-    logger.info('✅ Reembolso eliminado exitosamente', {
+    logger.info('Reembolso eliminado exitosamente', {
       saleId,
       productName: sale.productName,
       totalAmount: sale.totalAmount,
@@ -325,7 +325,7 @@ class RefundService {
 
   // Eliminar reembolso permanentemente del sistema
   static async permanentDeleteRefund(saleId, adminUserId) {
-    logger.info('🗑️ Iniciando eliminación permanente de reembolso', {
+    logger.info('Iniciando eliminación permanente de reembolso', {
       saleId,
       adminUserId
     });
@@ -341,7 +341,7 @@ class RefundService {
     }
 
     // Crear log de auditoría antes de eliminar
-    logger.info('📋 Creando log de auditoría para eliminación permanente', {
+    logger.info('Creando log de auditoría para eliminación permanente', {
       saleId,
       productName: sale.productName,
       totalAmount: sale.totalAmount,
@@ -366,7 +366,7 @@ class RefundService {
     // Eliminar la venta permanentemente
     await Sale.findByIdAndDelete(saleId);
 
-    logger.info('✅ Reembolso eliminado permanentemente del sistema', {
+    logger.info('Reembolso eliminado permanentemente del sistema', {
       saleId,
       productName: refundData.productName,
       totalAmount: refundData.totalAmount,

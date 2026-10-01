@@ -1,4 +1,4 @@
-﻿// Página pública con el listado de barberos.
+// Página pública con el listado de barberos.
 // Obtiene los barberos desde /barbers, muestra solo los activos, calcula su
 // disponibilidad según horario y ordena por rating; refresca al volver a la pestaña.
 import React, { useEffect, useState } from 'react';
@@ -281,7 +281,7 @@ const PublicBarbers = () => {
           barber.isActive !== false
         );
         
-        logger.debug('🔍 [PublicBarbers] Barberos activos encontrados:', activeBarbers.length);
+        logger.debug('[PublicBarbers] Barberos activos encontrados:', activeBarbers.length);
         
         setBarbers(activeBarbers);
         setLoading(false);
@@ -296,7 +296,7 @@ const PublicBarbers = () => {
     // También refrescar cuando la página vuelve a ser visible
     const handleVisibilityChange = () => {
       if (!document.hidden) {
-        logger.debug('📱 Página visible de nuevo, refrescando barberos...');
+        logger.debug('Página visible de nuevo, refrescando barberos...');
         fetchBarbers();
       }
     };

@@ -49,7 +49,7 @@ const RecurringExpensesListModal = ({
   // Callback para cuando se guarden ajustes diarios
   // Tras guardar ajustes diarios refresca los datos y fuerza el recálculo.
   const handleDailySave = async (expenseId, adjustments, month) => {
-    console.log('🔄 RecurringExpensesListModal: Datos actualizados, refrescando...', {
+    console.log('RecurringExpensesListModal: Datos actualizados, refrescando...', {
       expenseId,
       adjustments,
       month
@@ -83,7 +83,7 @@ const RecurringExpensesListModal = ({
   // No renderiza si el modal está cerrado.
   if (!isOpen) return null;
 
-  // 🚨 Defensive Guard: Filter out invalid or nullish expense entries
+  // Defensive Guard: Filter out invalid or nullish expense entries
   // Descarta entradas nulas o inválidas antes de listar.
   const validExpenses = Array.isArray(recurringExpenses)
     ? recurringExpenses.filter(e => e && typeof e === 'object')
@@ -165,11 +165,11 @@ const RecurringExpensesListModal = ({
     const hasAdjustments = Math.abs(monthlyAmount - baseMonthlyAmount) > 0.01;
     
     // DEBUG: Log del ExpenseCard
-    // console.log(`💳 ExpenseCard para ${expense.description}:`, {
-    //   monthlyAmount,
-    //   baseMonthlyAmount,
-    //   hasAdjustments,
-    //   difference: monthlyAmount - baseMonthlyAmount
+    // console.log(`ExpenseCard para ${expense.description}:`, {
+    // monthlyAmount,
+    // baseMonthlyAmount,
+    // hasAdjustments,
+    // difference: monthlyAmount - baseMonthlyAmount
     // });
     
     return (

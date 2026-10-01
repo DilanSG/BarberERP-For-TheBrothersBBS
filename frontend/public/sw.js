@@ -26,11 +26,11 @@ const CACHE_STRATEGIES = {
 
 // Instalación del Service Worker
 self.addEventListener('install', (event) => {
-  console.log('🔧 SW: Installing Service Worker v1.2.0');
+  console.log('SW: Installing Service Worker v1.2.0');
   
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
-      console.log('📦 SW: Caching critical resources');
+      console.log('SW: Caching critical resources');
       
       // Cachear recursos críticos básicos
       const criticalResources = [
@@ -39,21 +39,21 @@ self.addEventListener('install', (event) => {
       ];
       
       return cache.addAll(criticalResources).catch(error => {
-        console.warn('⚠️ SW: Some resources failed to cache:', error);
+        console.warn('SW: Some resources failed to cache:', error);
         // Continuar aunque algunos recursos fallen
       });
     }).then(() => {
       // Forzar la activación inmediata
       self.skipWaiting();
     }).catch((error) => {
-      console.error('❌ SW: Installation failed:', error);
+      console.error('SW: Installation failed:', error);
     })
   );
 });
 
 // Activación del Service Worker
 self.addEventListener('activate', (event) => {
-  console.log('✅ SW: Activating Service Worker v1.2.0');
+  console.log('SW: Activating Service Worker v1.2.0');
   
   event.waitUntil(
     Promise.all([
@@ -62,7 +62,7 @@ self.addEventListener('activate', (event) => {
         return Promise.all(
           cacheNames.map((cacheName) => {
             if (cacheName !== CACHE_NAME) {
-              console.log('🗑️ SW: Deleting old cache:', cacheName);
+              console.log('SW: Deleting old cache:', cacheName);
               return caches.delete(cacheName);
             }
           })
@@ -137,7 +137,7 @@ async function handleRequest(request, strategy) {
         return await networkFirst(request);
     }
   } catch (error) {
-    console.error('❌ SW: Error handling request:', error);
+    console.error('SW: Error handling request:', error);
     return await handleFallback(request);
   }
 }
@@ -161,7 +161,7 @@ async function networkFirst(request) {
   } catch (error) {
     // Si falla la red, usar caché (solo para GET)
     if (request.method === 'GET') {
-      console.log('🔄 SW: Network failed, trying cache for:', request.url);
+      console.log('SW: Network failed, trying cache for:', request.url);
       const cachedResponse = await cache.match(request);
       
       if (cachedResponse) {
@@ -313,7 +313,7 @@ self.addEventListener('sync', (event) => {
   if (event.tag === 'background-sync') {
     event.waitUntil(
       // Aquí podrías sincronizar datos pendientes
-      console.log('🔄 SW: Background sync triggered')
+      console.log('SW: Background sync triggered')
     );
   }
 });
@@ -338,4 +338,4 @@ self.addEventListener('push', (event) => {
 });
 
 // Log de versión
-console.log('🚀 SW: Service Worker v1.2.0 loaded successfully');
+console.log('SW: Service Worker v1.2.0 loaded successfully');

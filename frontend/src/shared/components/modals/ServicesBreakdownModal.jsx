@@ -53,7 +53,7 @@ const ServicesBreakdownModal = ({ isOpen, onClose, revenueData, dashboardData, d
     if (isOpen) {
       loadServiceSales();
     }
-  }, [isOpen, dateRange, dashboardData]); // ✅ Agregar dashboardData como dependencia
+  }, [isOpen, dateRange, dashboardData]); // Agregar dashboardData como dependencia
 
   // Aplica el filtro por método de pago sobre las ventas cargadas.
   useEffect(() => {
@@ -76,11 +76,11 @@ const ServicesBreakdownModal = ({ isOpen, onClose, revenueData, dashboardData, d
       if (allSalesResult) {
         const allSales = allSalesResult.data || [];
         
-        // ✅ Filtrar usando EXACTAMENTE la misma lógica del backend
+        // Filtrar usando EXACTAMENTE la misma lógica del backend
         // Solo ventas de servicios (walkIn type) con status: 'completed'
         const serviceSalesFiltered = allSales.filter(sale => 
           sale.type === SALE_TYPES.SERVICE && 
-          sale.status === 'completed' && // ✅ MISMO FILTRO DEL BACKEND
+          sale.status === 'completed' && // MISMO FILTRO DEL BACKEND
           sale.paymentMethod
         );
         
@@ -90,7 +90,7 @@ const ServicesBreakdownModal = ({ isOpen, onClose, revenueData, dashboardData, d
         setServiceSales(serviceSalesFiltered);
       }
     } catch (error) {
-      console.error('❌ Error al cargar ventas de servicios:', error);
+      console.error('Error al cargar ventas de servicios:', error);
     } finally {
       setLoading(false);
     }

@@ -32,7 +32,7 @@ export const createAppointment = asyncHandler(async (req, res) => {
 
   const appointment = await AppointmentUseCases.createAppointment(appointmentData);
 
-  // 📧 ENVIAR NOTIFICACIONES POR EMAIL
+  // ENVIAR NOTIFICACIONES POR EMAIL
   try {
     // Obtener datos completos de usuario y barbero para los emails
     const user = await User.findById(appointment.user).select('name email phone');
@@ -100,7 +100,7 @@ export const getAppointments = asyncHandler(async (req, res) => {
     filters.date = new Date(req.query.date);
   }
   
-  // ✅ Agregar soporte para filtros de rango de fechas
+  // Agregar soporte para filtros de rango de fechas
   if (req.query.startDate || req.query.endDate) {
     filters.date = {};
     
@@ -272,7 +272,7 @@ export const cancelAppointment = asyncHandler(async (req, res) => {
 
   emitAppointmentStatusChanged(cancelledAppointment);
 
-  // 📧 ENVIAR NOTIFICACIÓN DE CANCELACIÓN
+  // ENVIAR NOTIFICACIÓN DE CANCELACIÓN
   try {
     // Obtener datos del usuario para el email
     const user = await User.findById(appointment.user).select('name email');
@@ -328,12 +328,12 @@ export const completeAppointment = asyncHandler(async (req, res) => {
   });
   
   if (!barber) {
-    logger.error('❌ Perfil de barbero no encontrado para usuario:', req.user._id);
+    logger.error('Perfil de barbero no encontrado para usuario:', req.user._id);
     throw new AppError('Perfil de barbero no encontrado', 404);
   }
   
   if (appointmentBarberId.toString() !== barber._id.toString()) {
-    logger.error('❌ IDs no coinciden:', {
+    logger.error('IDs no coinciden:', {
       appointmentBarber: appointmentBarberId.toString(),
       barberProfile: barber._id.toString(),
       match: appointmentBarberId.toString() === barber._id.toString()
@@ -341,13 +341,13 @@ export const completeAppointment = asyncHandler(async (req, res) => {
     throw new AppError('Solo el barbero asignado puede completar la cita', 403);
   }
   
-  logger.info('✅ Permisos verificados correctamente para completar cita');
+  logger.info('Permisos verificados correctamente para completar cita');
 
   const completedAppointment = await AppointmentUseCases.completeAppointment(id, req.user._id, req.user.role, paymentMethod);
 
   emitAppointmentStatusChanged(completedAppointment);
 
-  // 🌟 NUEVA FUNCIONALIDAD: Enviar email de solicitud de reseña
+  // NUEVA FUNCIONALIDAD: Enviar email de solicitud de reseña
   try {
     // Poblar datos necesarios para el email
     await completedAppointment.populate([
@@ -365,7 +365,7 @@ export const completeAppointment = asyncHandler(async (req, res) => {
       // No lanzar error para no afectar el flujo principal
     });
 
-    logger.info(`✅ Email de solicitud de reseña programado para ${completedAppointment.user.email}`);
+    logger.info(`Email de solicitud de reseña programado para ${completedAppointment.user.email}`);
   } catch (emailError) {
     logger.error('Error preparando email de reseña:', emailError);
     // Continuar aunque falle el email

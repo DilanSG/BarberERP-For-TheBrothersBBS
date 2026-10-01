@@ -100,7 +100,7 @@ const RefundSaleModal = ({ isOpen, onClose, selectedBarberId = null }) => {
         if (response.success && response.data) {
           // Filtrar explícitamente las ventas ya reembolsadas
           const activeSales = response.data.filter(sale => sale.status !== 'refunded');
-          logger.info('📊 Ventas cargadas para admin', {
+          logger.info('Ventas cargadas para admin', {
             totalFetched: response.data.length,
             refundedFiltered: response.data.length - activeSales.length,
             activeSales: activeSales.length,
@@ -120,7 +120,7 @@ const RefundSaleModal = ({ isOpen, onClose, selectedBarberId = null }) => {
         // Filtrar explícitamente las ventas ya reembolsadas como medida de seguridad
         const salesData = response.data || [];
         const activeSales = salesData.filter(sale => sale.status !== 'refunded');
-        logger.info('📊 Ventas cargadas para barbero', {
+        logger.info('Ventas cargadas para barbero', {
           totalFetched: salesData.length,
           refundedFiltered: salesData.length - activeSales.length,
           activeSales: activeSales.length

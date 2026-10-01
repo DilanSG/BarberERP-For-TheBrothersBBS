@@ -1,4 +1,4 @@
-﻿import { useEffect, useCallback, useRef } from 'react';
+import { useEffect, useCallback, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 
@@ -86,7 +86,7 @@ class NavigationAnalytics {
     // Añadir a sesión actual
     this.currentSession.routes.push(routeData);
 
-    // logger.debug(`📊 Analytics: Route visited - ${path} (${userRole || 'anonymous'})`);
+    // logger.debug(`Analytics: Route visited - ${path} (${userRole || 'anonymous'})`);
     return routeData;
   }
 
@@ -105,7 +105,7 @@ class NavigationAnalytics {
       }
     }
 
-    // logger.debug(`⚡ Analytics: Load time - ${path}: ${loadTime}ms`);
+    // logger.debug(`Analytics: Load time - ${path}: ${loadTime}ms`);
   }
 
   // Trackear tiempo que el usuario pasó en una ruta
@@ -122,7 +122,7 @@ class NavigationAnalytics {
       lastRoute.timeSpent = timeSpent;
     }
 
-    // logger.debug(`⏱️ Analytics: Time spent - ${path}: ${(timeSpent / 1000).toFixed(1)}s`);
+    // logger.debug(`Analytics: Time spent - ${path}: ${(timeSpent / 1000).toFixed(1)}s`);
   }
 
   // Trackear interacciones en una página
@@ -144,7 +144,7 @@ class NavigationAnalytics {
       lastRoute.interactions++;
     }
 
-    // logger.debug(`👆 Analytics: Interaction - ${path}: ${interactionType} ${target || ''}`);
+    // logger.debug(`Analytics: Interaction - ${path}: ${interactionType} ${target || ''}`);
   }
 
   // Trackear conversión (acción importante completada)
@@ -163,7 +163,7 @@ class NavigationAnalytics {
       journey: this.currentSession.routes.map(r => r.path)
     });
 
-    // logger.debug(`🎯 Analytics: Conversion - ${path}: ${conversionType} (${value || 'no value'})`);
+    // logger.debug(`Analytics: Conversion - ${path}: ${conversionType} (${value || 'no value'})`);
   }
 
   // Obtener estadísticas completas (overview, top rutas, rutas lentas, journeys)
@@ -267,7 +267,7 @@ class NavigationAnalytics {
     // Limpiar journeys antiguos
     this.userJourneys = this.userJourneys.filter(journey => journey.timestamp > cutoff);
 
-    // logger.debug('🧹 Analytics: Cleanup completed');
+    // logger.debug('Analytics: Cleanup completed');
   }
 }
 

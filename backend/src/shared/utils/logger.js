@@ -73,7 +73,7 @@ const formats = {
 
       const symbolMaps = {
         ascii:   { error: '[ERR]', warn: '[WARN]', info: '[INFO]', http: '[HTTP]', debug: '[DBG]' },
-        unicode: { error: '✖',     warn: '⚠',      info: 'ℹ',      http: '⇄',       debug: '🔎'    },
+        unicode: { error: 'ERROR', warn: 'WARN',  info: 'INFO',   http: 'HTTP',    debug: ''    },
         initials:{ error: 'E',     warn: 'W',      info: 'I',      http: 'H',       debug: 'D'      },
         arrows:  { error: '>>',    warn: '!!',     info: '->',     http: '<>',      debug: '??'     },
         none:    { error: '',      warn: '',       info: '',       http: '',        debug: ''       }

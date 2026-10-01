@@ -49,7 +49,7 @@ const run = async () => {
   const db = mongoose.connection.db;
   const methodsCol = db.collection('paymentmethods');
 
-  console.log('🔧 Migrando métodos de pago...\n');
+  console.log('Migrando métodos de pago...\n');
 
   // 1) Quitar emoji de todos los documentos
   const unset = await methodsCol.updateMany({}, { $unset: { emoji: '' } });
@@ -116,10 +116,10 @@ const run = async () => {
   final.forEach((m) => console.log(`   - ${m.backendId} (${m.name}) ${m.color} ${m.isSystem ? '[SISTEMA]' : ''}`));
 
   await mongoose.disconnect();
-  console.log('\n✅ Migración completada');
+  console.log('\nMigración completada');
 };
 
 run().catch((e) => {
-  console.error('❌ Error en migración:', e);
+  console.error('Error en migración:', e);
   process.exit(1);
 });

@@ -1,4 +1,4 @@
-﻿// Contexto global de notificaciones (toasts).
+// Contexto global de notificaciones (toasts).
 // Evita duplicados combinando notificaciones activas y un registro de recientes
 // (15 s), y auto-cierra cada toast según su duración.
 import React, { createContext, useContext, useState, useEffect } from 'react';

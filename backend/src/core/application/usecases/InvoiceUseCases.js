@@ -14,13 +14,13 @@ class InvoiceUseCases {
   // Efecto secundario: guarda invoiceId en la Sale (no en la Appointment).
   static async generateInvoiceFromSale(saleId, options = {}) {
     try {
-      logger.info(`🔍 Generando factura para ID: ${saleId}`);
-      logger.info(`🔍 Tipo de saleId: ${typeof saleId}, Longitud: ${saleId.length}`);
+      logger.info(`Generando factura para ID: ${saleId}`);
+      logger.info(`Tipo de saleId: ${typeof saleId}, Longitud: ${saleId.length}`);
 
       // Validar ObjectId
       const mongoose = await import('mongoose');
       if (!mongoose.default.Types.ObjectId.isValid(saleId)) {
-        logger.error(`❌ ObjectId inválido: ${saleId}`);
+        logger.error(`ObjectId inválido: ${saleId}`);
         throw new AppError('ID inválido', 400);
       }
 
@@ -33,7 +33,7 @@ class InvoiceUseCases {
 
       // Si no se encuentra en Sales, buscar en Appointments
       if (!sale) {
-        logger.info(`⚠️ No encontrado en Sales, buscando en Appointments...`);
+        logger.info(`No encontrado en Sales, buscando en Appointments...`);
         const appointment = await Appointment.findById(saleId)
           .populate({
             path: 'barber',
@@ -45,7 +45,7 @@ class InvoiceUseCases {
           .populate('service', 'name price');
 
         if (appointment && appointment.status === 'completed' && appointment.paymentMethod) {
-          logger.info(`✅ Encontrado en Appointments - Convirtiendo a formato de venta`);
+          logger.info(`Encontrado en Appointments - Convirtiendo a formato de venta`);
           isAppointment = true;
           
           // Convertir Appointment a formato compatible con Sale
@@ -77,7 +77,7 @@ class InvoiceUseCases {
             toObject: function() { return this; }
           };
           
-          logger.info(`✅ Barbero de la cita:`, {
+          logger.info(`Barbero de la cita:`, {
             barberId: sale.barberId._id,
             barberName: sale.barberId.name,
             appointmentBarberId: appointment.barber?._id,
@@ -90,11 +90,11 @@ class InvoiceUseCases {
       }
 
       if (!sale) {
-        logger.warn(`❌ No encontrado ni en Sales ni en Appointments: ${saleId}`);
+        logger.warn(`No encontrado ni en Sales ni en Appointments: ${saleId}`);
         throw new AppError('Venta o cita no encontrada en la base de datos', 404);
       }
 
-      logger.info(`✅ Registro encontrado:`, {
+      logger.info(`Registro encontrado:`, {
         id: sale._id,
         type: isAppointment ? 'appointment' : sale.type,
         status: sale.status,
@@ -186,12 +186,12 @@ class InvoiceUseCases {
       if (!sale._isAppointment) {
         sale.invoiceId = invoice._id;
         await sale.save();
-        logger.info(`✅ Sale actualizada con invoiceId`);
+        logger.info(`Sale actualizada con invoiceId`);
       } else {
-        logger.info(`ℹ️  No se actualiza Appointment con invoiceId (no tiene ese campo)`);
+        logger.info(` No se actualiza Appointment con invoiceId (no tiene ese campo)`);
       }
 
-      logger.info(`✅ Factura generada exitosamente: ${invoiceNumber}`, {
+      logger.info(`Factura generada exitosamente: ${invoiceNumber}`, {
         invoiceId: invoice._id.toString(),
         recordId: saleId,
         isAppointment: !!sale._isAppointment

@@ -34,7 +34,7 @@ const log = (message, color = colors.reset) => {
 
 async function cleanTransactions() {
   try {
-    log('🧹 Iniciando limpieza de transacciones...', colors.cyan);
+    log('Iniciando limpieza de transacciones...', colors.cyan);
     
     if (!process.env.MONGODB_URI) {
       throw new Error('MONGODB_URI no encontrado en variables de entorno');
@@ -42,7 +42,7 @@ async function cleanTransactions() {
     
     await mongoose.connect(process.env.MONGODB_URI);
     
-    log('✅ Conectado a la base de datos', colors.green);
+    log('Conectado a la base de datos', colors.green);
     
     // Eliminar todas las transacciones
     const results = await Promise.all([
@@ -52,18 +52,18 @@ async function cleanTransactions() {
       Review.deleteMany({})
     ]);
     
-    log(`✅ Citas eliminadas: ${results[0].deletedCount}`, colors.green);
-    log(`✅ Ventas eliminadas: ${results[1].deletedCount}`, colors.green);
-    log(`✅ Gastos eliminados: ${results[2].deletedCount}`, colors.green);
-    log(`✅ Reviews eliminadas: ${results[3].deletedCount}`, colors.green);
+    log(`Citas eliminadas: ${results[0].deletedCount}`, colors.green);
+    log(`Ventas eliminadas: ${results[1].deletedCount}`, colors.green);
+    log(`Gastos eliminados: ${results[2].deletedCount}`, colors.green);
+    log(`Reviews eliminadas: ${results[3].deletedCount}`, colors.green);
     
-    log('🎉 Limpieza completada exitosamente', colors.green);
+    log('Limpieza completada exitosamente', colors.green);
     
   } catch (error) {
-    log(`❌ Error: ${error.message}`, colors.red);
+    log(`Error: ${error.message}`, colors.red);
   } finally {
     await mongoose.connection.close();
-    log('ℹ️  Conexión cerrada', colors.cyan);
+    log(' Conexión cerrada', colors.cyan);
   }
 }
 

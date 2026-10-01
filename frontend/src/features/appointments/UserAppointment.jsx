@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { PageContainer } from '@components/layout/PageContainer';
 import { useAuth } from '@contexts/AuthContext';
@@ -89,11 +89,11 @@ const UserAppointment = () => {
 
   // Efecto para monitorear cambios en services y barbers
   useEffect(() => {
-    logger.debug('🔄 Services state changed:', services);
+    logger.debug('Services state changed:', services);
   }, [services]);
 
   useEffect(() => {
-    logger.debug('🔄 Barbers state changed:', barbers);
+    logger.debug('Barbers state changed:', barbers);
   }, [barbers]);
 
   // Si la URL trae ?barberId=, preselecciona ese barbero y abre el formulario.
@@ -114,10 +114,10 @@ const UserAppointment = () => {
   // Cargar horarios cuando se selecciona fecha y barbero
   useEffect(() => {
     if (selectedDate && selectedBarber) {
-      logger.debug('🔄 Date or barber changed, fetching available times');
+      logger.debug('Date or barber changed, fetching available times');
       fetchAvailableTimes();
     } else {
-      logger.debug('🔄 Clearing available times - missing date or barber');
+      logger.debug('Clearing available times - missing date or barber');
       setAvailableTimes([]);
       setSelectedTime('');
     }
@@ -130,7 +130,7 @@ const UserAppointment = () => {
         typeof timeSlot === 'object' ? timeSlot.datetime === selectedTime : timeSlot === selectedTime
       );
       if (!isTimeStillAvailable) {
-        logger.debug('🔄 Selected time no longer available, clearing selection');
+        logger.debug('Selected time no longer available, clearing selection');
         setSelectedTime('');
       }
     }
@@ -139,7 +139,7 @@ const UserAppointment = () => {
   // Monitorear estado del botón de envío
   useEffect(() => {
     const isButtonDisabled = submitting || !selectedService || !selectedBarber || !selectedDate || !selectedTime;
-    logger.debug('🎯 Button state check:', {
+    logger.debug('Button state check:', {
       submitting,
       selectedService: !!selectedService,
       selectedBarber: !!selectedBarber, 
@@ -234,20 +234,20 @@ const UserAppointment = () => {
     try {
       setLoadingTimes(true);
       setAvailabilityReason('');
-      logger.debug('🕐 Fetching available times for:', { selectedBarber, selectedDate });
+      logger.debug('Fetching available times for:', { selectedBarber, selectedDate });
       const response = await appointmentService.getAvailableTimes(selectedBarber, selectedDate);
-      logger.debug('🕐 Available times response:', response);
+      logger.debug('Available times response:', response);
       
       let timesArray = [];
       
       if (response.success && response.data && Array.isArray(response.data.slots)) {
         timesArray = response.data.slots;
         setAvailabilityReason(response.data.reason || '');
-        logger.debug('🕐 Available times loaded (slots):', response.data.slots);
-        logger.debug('🕐 Barber name:', response.data.barber);
-        logger.debug('🕐 Date:', response.data.date);
+        logger.debug('Available times loaded (slots):', response.data.slots);
+        logger.debug('Barber name:', response.data.barber);
+        logger.debug('Date:', response.data.date);
         if (response.data.reason) {
-          logger.debug('🕐 Reason:', response.data.reason);
+          logger.debug('Reason:', response.data.reason);
         }
       } else if (response.data && response.data.success && Array.isArray(response.data.data)) {
         timesArray = response.data.data;
@@ -264,9 +264,9 @@ const UserAppointment = () => {
       }
       
       setAvailableTimes(timesArray);
-      logger.debug('🕐 Final available times set:', timesArray);
+      logger.debug('Final available times set:', timesArray);
     } catch (error) {
-      console.error('❌ Error fetching available times:', error);
+      console.error('Error fetching available times:', error);
       setAvailableTimes([]);
     } finally {
       setLoadingTimes(false);
@@ -278,7 +278,7 @@ const UserAppointment = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     
-    logger.debug('🚀 Submit button clicked! Form state:', {
+    logger.debug('Submit button clicked! Form state:', {
       selectedService,
       selectedBarber,
       selectedDate,
@@ -287,7 +287,7 @@ const UserAppointment = () => {
     });
     
     if (!selectedService || !selectedBarber || !selectedDate || !selectedTime) {
-      logger.debug('❌ Missing required fields');
+      logger.debug('Missing required fields');
       setError('Por favor completa todos los campos');
       return;
     }
@@ -297,7 +297,7 @@ const UserAppointment = () => {
       typeof timeSlot === 'object' ? timeSlot.datetime === selectedTime : timeSlot === selectedTime
     );
     
-    logger.debug('🔍 Validating time availability:', {
+    logger.debug('Validating time availability:', {
       selectedTime,
       availableTimes,
       isTimeAvailable
@@ -325,10 +325,10 @@ const UserAppointment = () => {
         date: selectedTime  // selectedTime contiene el datetime completo (fecha + hora)
       };
 
-      logger.debug('📤 Sending appointment data:', appointmentData);
-      logger.debug('📤 Selected date from input:', selectedDate);
-      logger.debug('📤 Selected time (datetime):', selectedTime);
-      logger.debug('📤 Date object from selectedTime:', new Date(selectedTime));
+      logger.debug('Sending appointment data:', appointmentData);
+      logger.debug('Selected date from input:', selectedDate);
+      logger.debug('Selected time (datetime):', selectedTime);
+      logger.debug('Date object from selectedTime:', new Date(selectedTime));
 
       const response = await appointmentService.createAppointment(appointmentData);
       
@@ -506,9 +506,9 @@ const UserAppointment = () => {
   const colombiaDate = new Date(today.toLocaleString("en-US", {timeZone: "America/Bogota"}));
   const minDate = format(colombiaDate, 'yyyy-MM-dd');
 
-  logger.debug('📅 Hora actual UTC:', today.toISOString());
-  logger.debug('📅 Hora actual en Colombia (calculada):', colombiaDate.toLocaleString("es-ES", {timeZone: "America/Bogota"}));
-  logger.debug('📅 MinDate para input:', minDate);
+  logger.debug('Hora actual UTC:', today.toISOString());
+  logger.debug('Hora actual en Colombia (calculada):', colombiaDate.toLocaleString("es-ES", {timeZone: "America/Bogota"}));
+  logger.debug('MinDate para input:', minDate);
 
   // Objetos y nombre del servicio/barbero seleccionados para los resúmenes del formulario.
   const selectedServiceObj = services.find((item) => item._id === selectedService);
@@ -720,7 +720,7 @@ const UserAppointment = () => {
                         key={`${timeSlot.time}-${index}`}
                         type="button"
                         onClick={() => {
-                          logger.debug('🕐 Time slot selected:', timeSlot);
+                          logger.debug('Time slot selected:', timeSlot);
                           setSelectedTime(timeSlot.datetime);
                         }}
                         className={`min-h-11 rounded-lg border text-sm font-medium transition-colors duration-200 ${
@@ -760,7 +760,7 @@ const UserAppointment = () => {
                   size="lg"
                   className="w-full shadow-xl shadow-soft"
                   onClick={(e) => {
-                    logger.debug('🔘 Button clicked!', e);
+                    logger.debug('Button clicked!', e);
                   // El handleSubmit se ejecutará automáticamente por el type="submit"
                   }}
                 >

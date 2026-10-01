@@ -123,7 +123,7 @@ class RealisticDataGenerator {
   async generate() {
     try {
       await mongoose.connect(process.env.MONGODB_URI);
-      log('✅ Conectado a MongoDB para generación de datos', colors.green);
+      log('Conectado a MongoDB para generación de datos', colors.green);
 
       await this.loadData();
       await this.generateAppointments();
@@ -133,17 +133,17 @@ class RealisticDataGenerator {
       await this.displaySummary();
 
       await mongoose.disconnect();
-      log('\n🎉 Generación de datos completada exitosamente', colors.green);
+      log('\nGeneración de datos completada exitosamente', colors.green);
 
     } catch (error) {
-      log(`❌ Error durante la generación: ${error.message}`, colors.red);
+      log(`Error durante la generación: ${error.message}`, colors.red);
       console.error(error);
       process.exit(1);
     }
   }
 
   async loadData() {
-    log('\n📊 Cargando datos base...', colors.cyan);
+    log('\nCargando datos base...', colors.cyan);
     
     this.users = await User.find({ role: 'user', isActive: true }).lean();
     this.barbers = await Barber.find({ isActive: true }).populate('user services').lean();
@@ -204,7 +204,7 @@ class RealisticDataGenerator {
   }
 
   async generateAppointments() {
-    log('\n📅 Generando citas realistas...', colors.cyan);
+    log('\nGenerando citas realistas...', colors.cyan);
     
     const appointmentsPerDay = Math.ceil(this.barbers.length * 4); // 4 citas por barbero por día
     const totalDays = Math.ceil((this.endDate - this.startDate) / (1000 * 60 * 60 * 24));
@@ -278,7 +278,7 @@ class RealisticDataGenerator {
   }
 
   async generateSales() {
-    log('\n💰 Generando ventas de productos...', colors.cyan);
+    log('\nGenerando ventas de productos...', colors.cyan);
     
     const salesPerDay = Math.ceil(this.barbers.length * 2); // 2 ventas por barbero por día
     const totalDays = Math.ceil((this.endDate - this.startDate) / (1000 * 60 * 60 * 24));
@@ -369,7 +369,7 @@ class RealisticDataGenerator {
   }
 
   async generateReviews() {
-    log('\n⭐ Generando reseñas realistas...', colors.cyan);
+    log('\nGenerando reseñas realistas...', colors.cyan);
     
     // Solo generar reseñas para citas completadas (30% de probabilidad)
     const completedAppointments = this.appointments.filter(a => a.status === 'completed');
@@ -424,18 +424,18 @@ class RealisticDataGenerator {
   }
 
   async saveData() {
-    log('\n💾 Guardando datos en la base de datos...', colors.cyan);
+    log('\nGuardando datos en la base de datos...', colors.cyan);
     
     try {
       // Guardar citas
-      log('   📅 Guardando citas...');
+      log('   Guardando citas...');
       const savedAppointments = await Appointment.insertMany(this.appointments);
-      log(`   ✅ ${savedAppointments.length} citas guardadas`);
+      log(`   ${savedAppointments.length} citas guardadas`);
       
       // Guardar ventas
-      log('   💰 Guardando ventas...');
+      log('   Guardando ventas...');
       const savedSales = await Sale.insertMany(this.sales);
-      log(`   ✅ ${savedSales.length} ventas guardadas`);
+      log(`   ${savedSales.length} ventas guardadas`);
       
       // Actualizar IDs de citas en reseñas antes de guardar
       for (let i = 0; i < this.reviews.length; i++) {
@@ -450,18 +450,18 @@ class RealisticDataGenerator {
       }
       
       // Guardar reseñas
-      log('   ⭐ Guardando reseñas...');
+      log('   Guardando reseñas...');
       const savedReviews = await Review.insertMany(this.reviews);
-      log(`   ✅ ${savedReviews.length} reseñas guardadas`);
+      log(`   ${savedReviews.length} reseñas guardadas`);
       
     } catch (error) {
-      log(`❌ Error guardando datos: ${error.message}`, colors.red);
+      log(`Error guardando datos: ${error.message}`, colors.red);
       throw error;
     }
   }
 
   async displaySummary() {
-    log('\n📊 RESUMEN DE DATOS GENERADOS', colors.magenta);
+    log('\nRESUMEN DE DATOS GENERADOS', colors.magenta);
     log('═'.repeat(50), colors.magenta);
     
     const totalRevenue = this.appointments
@@ -469,13 +469,13 @@ class RealisticDataGenerator {
       .reduce((sum, a) => sum + (a.totalRevenue || 0), 0) +
       this.sales.reduce((sum, s) => sum + s.totalAmount, 0);
     
-    log(`📅 Período: ${this.startDate.toLocaleDateString()} - ${this.endDate.toLocaleDateString()}`, colors.blue);
-    log(`📋 Citas totales: ${this.appointments.length}`, colors.green);
-    log(`💰 Ventas totales: ${this.sales.length}`, colors.green);
-    log(`⭐ Reseñas totales: ${this.reviews.length}`, colors.green);
-    log(`💵 Ingresos totales: $${totalRevenue.toLocaleString()}`, colors.yellow);
+    log(`Período: ${this.startDate.toLocaleDateString()} - ${this.endDate.toLocaleDateString()}`, colors.blue);
+    log(`Citas totales: ${this.appointments.length}`, colors.green);
+    log(`Ventas totales: ${this.sales.length}`, colors.green);
+    log(`Reseñas totales: ${this.reviews.length}`, colors.green);
+    log(`Ingresos totales: $${totalRevenue.toLocaleString()}`, colors.yellow);
     
-    log('\n📈 DISTRIBUCIÓN POR BARBERO:', colors.cyan);
+    log('\nDISTRIBUCIÓN POR BARBERO:', colors.cyan);
     this.barbers.forEach(barber => {
       const barberAppointments = this.appointments.filter(a => a.barber.toString() === barber._id.toString());
       const barberSales = this.sales.filter(s => s.barberId.toString() === barber._id.toString());
@@ -491,8 +491,8 @@ class RealisticDataGenerator {
       log(`     • Ingresos: $${barberRevenue.toLocaleString()}`);
     });
     
-    log('\n🎯 Los datos están listos para análisis de reportes', colors.green);
-    log('📊 Ejecuta el siguiente script: node scripts/3-validate-reports.js', colors.cyan);
+    log('\nLos datos están listos para análisis de reportes', colors.green);
+    log('Ejecuta el siguiente script: node scripts/3-validate-reports.js', colors.cyan);
   }
 }
 

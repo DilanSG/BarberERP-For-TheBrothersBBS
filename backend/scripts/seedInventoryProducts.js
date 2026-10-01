@@ -140,12 +140,12 @@ async function poblarInventario() {
       logger.info(`Producto creado: ${producto.name}`);
     }
 
-    logger.info(`✅ Inventario poblado exitosamente con ${productos.length} productos`);
-    console.log(`✅ Inventario poblado exitosamente con ${productos.length} productos`);
+    logger.info(`Inventario poblado exitosamente con ${productos.length} productos`);
+    console.log(`Inventario poblado exitosamente con ${productos.length} productos`);
 
   } catch (error) {
     logger.error('Error al poblar inventario:', error);
-    console.error('❌ Error al poblar inventario:', error.message);
+    console.error('Error al poblar inventario:', error.message);
   } finally {
     await mongoose.disconnect();
     logger.info('Desconectado de MongoDB');

@@ -1,4 +1,4 @@
-﻿// Hooks de precarga y performance de navegación: importa en segundo plano los
+// Hooks de precarga y performance de navegación: importa en segundo plano los
 // chunks de las rutas probables según el rol y la ruta actual, y expone helpers
 // de navegación optimizada.
 import { useEffect, useCallback } from 'react';
@@ -70,17 +70,17 @@ export const useRoutePreloader = () => {
         if (window.requestIdleCallback) {
           window.requestIdleCallback(async () => {
             await importFunction();
-            // logger.debug(`📦 Preloaded route: ${route}`);
+            // logger.debug(`Preloaded route: ${route}`);
           });
         } else {
           setTimeout(async () => {
             await importFunction();
-            // logger.debug(`📦 Preloaded route: ${route}`);
+            // logger.debug(`Preloaded route: ${route}`);
           }, 100);
         }
       }
     } catch (error) {
-      console.warn(`⚠️ Failed to preload route ${route}:`, error);
+      console.warn(`Failed to preload route ${route}:`, error);
     }
   }, []);
 
@@ -157,7 +157,7 @@ export const useNavigationPerformance = () => {
       
       // Log para desarrollo (remover en producción)
       if (process.env.NODE_ENV === 'development') {
-        // logger.debug(`📊 Navigation to ${location.pathname}: ${duration.toFixed(2)}ms`);
+        // logger.debug(`Navigation to ${location.pathname}: ${duration.toFixed(2)}ms`);
       }
 
       // Opcional: Enviar métricas a analytics

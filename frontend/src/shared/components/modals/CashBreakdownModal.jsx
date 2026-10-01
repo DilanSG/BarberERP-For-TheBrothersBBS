@@ -60,7 +60,7 @@ const CashBreakdownModal = ({ isOpen, onClose, revenueData, dashboardData, dateR
     if (isOpen) {
       loadCashSales();
     }
-  }, [isOpen, dateRange, dashboardData]); // ✅ Agregar dashboardData como dependencia
+  }, [isOpen, dateRange, dashboardData]); // Agregar dashboardData como dependencia
 
   // Solo detectar elementos problemáticos sin spam
   useEffect(() => {
@@ -99,7 +99,7 @@ const CashBreakdownModal = ({ isOpen, onClose, revenueData, dashboardData, dateR
         const allSales = allSalesResult.data || [];
         const completedAppointments = appointmentsResult.data || [];
         
-        console.log('🐛 DEBUG - Respuestas de APIs:');
+        console.log('DEBUG - Respuestas de APIs:');
         console.log(`   API Sales response: ${allSales.length} records`);
         console.log(`   API Appointments response: ${completedAppointments.length} records`);
         
@@ -109,21 +109,21 @@ const CashBreakdownModal = ({ isOpen, onClose, revenueData, dashboardData, dateR
           console.log(`     • ${apt._id}: ${apt.paymentMethod} - $${apt.price} - ${apt.status}`);
         });
         
-        // ✅ Filtrar usando EXACTAMENTE la misma lógica del backend
+        // Filtrar usando EXACTAMENTE la misma lógica del backend
         // Sales: status: 'completed' + métodos de efectivo
         const cashMethods = ['cash', 'efectivo', 'contado'];
         const cashSalesFiltered = allSales.filter(sale => 
-          sale.status === 'completed' && // ✅ MISMO FILTRO DEL BACKEND
+          sale.status === 'completed' && // MISMO FILTRO DEL BACKEND
           cashMethods.includes(sale.paymentMethod?.toLowerCase())
         );
         
         // Appointments: status: 'completed' + métodos de efectivo
         const cashAppointments = completedAppointments.filter(apt => 
-          apt.status === 'completed' && // ✅ MISMO FILTRO DEL BACKEND
+          apt.status === 'completed' && // MISMO FILTRO DEL BACKEND
           cashMethods.includes(apt.paymentMethod?.toLowerCase())
         );
         
-        console.log('🐛 DEBUG - Transacciones encontradas:');
+        console.log('DEBUG - Transacciones encontradas:');
         console.log(`   Sales efectivo filtradas: ${cashSalesFiltered.length}`);
         console.log(`   Appointments efectivo filtradas: ${cashAppointments.length}`);
         
@@ -138,7 +138,7 @@ const CashBreakdownModal = ({ isOpen, onClose, revenueData, dashboardData, dateR
           .map(apt => {
             const convertedSale = {
               _id: apt._id,
-              type: 'appointment', // ✅ Usar tipo específico para citas
+              type: 'appointment', // Usar tipo específico para citas
               paymentMethod: apt.paymentMethod,
               totalAmount: apt.price,
               total: apt.price,
@@ -146,7 +146,7 @@ const CashBreakdownModal = ({ isOpen, onClose, revenueData, dashboardData, dateR
               serviceId: apt.service?._id,
               barberId: apt.barber?._id,
               createdAt: apt.date || apt.createdAt,
-              // ✅ Campos para identificación (PRINCIPAL)
+              // Campos para identificación (PRINCIPAL)
               isFromAppointment: true,
               originalAppointment: apt
             };
@@ -155,11 +155,11 @@ const CashBreakdownModal = ({ isOpen, onClose, revenueData, dashboardData, dateR
           });
         
         // Evita duplicados: las citas convertidas tienen prioridad sobre las ventas.
-        // ✅ ELIMINAR DUPLICADOS - Priorizar citas convertidas sobre ventas originales
+        // ELIMINAR DUPLICADOS - Priorizar citas convertidas sobre ventas originales
         const uniqueTransactions = [];
         const seenIds = new Set();
         
-        console.log('🐛 DEBUG - Eliminando duplicados...');
+        console.log('DEBUG - Eliminando duplicados...');
         
         // Primero agregar las citas convertidas (tienen isFromAppointment: true)
         appointmentsAsSales.forEach(transaction => {
@@ -190,7 +190,7 @@ const CashBreakdownModal = ({ isOpen, onClose, revenueData, dashboardData, dateR
         setCashSales(uniqueTransactions);
       }
     } catch (error) {
-      console.error('❌ Error al cargar transacciones:', error);
+      console.error('Error al cargar transacciones:', error);
     } finally {
       setLoading(false);
     }
@@ -209,7 +209,7 @@ const CashBreakdownModal = ({ isOpen, onClose, revenueData, dashboardData, dateR
 
   // Determina el tipo de una transacción (cita, producto o servicio).
   const getSaleTypeInfo = (sale) => {
-    // ✅ PRIMERO verificar si es cita (tiene prioridad absoluta)
+    // PRIMERO verificar si es cita (tiene prioridad absoluta)
     if (sale.isFromAppointment || sale.type === SALE_TYPES.APPOINTMENT) {
       return saleTypes.find(t => t.id === SALE_TYPES.APPOINTMENT);
     } 

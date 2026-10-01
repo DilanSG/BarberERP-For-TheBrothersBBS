@@ -1,50 +1,33 @@
-# render.yaml - Render.com Infrastructure as Code Configuration
-# Complete deployment configuration for The Brothers Barber Shop
+# Render Blueprint - The Brothers Barber Shop
+# Servicio web del backend (API REST) desplegado desde este repositorio.
+# El frontend se despliega en Vercel.
 
 services:
-  # Backend API Service
   - type: web
     name: barbershop-backend
-    env: node
+    runtime: node
     region: oregon
     plan: starter
-    buildCommand: cd backend && npm ci && npm run build
+    buildCommand: cd backend && npm ci
     startCommand: cd backend && npm start
-    healthCheckPath: /api/health
-    
-    # Auto-scaling configuration
-    scaling:
-      minInstances: 1
-      maxInstances: 3
-      targetMemoryPercent: 80
-      targetCPUPercent: 80
-    
-    # Environment variables
+    healthCheckPath: /health
+    autoDeploy: false
+
     envVars:
       - key: NODE_ENV
         value: production
-      - key: PORT
-        value: 5000
       - key: MONGODB_URI
-        fromDatabase:
-          name: barbershop-db
-          property: connectionString
+        sync: false
       - key: JWT_SECRET
         generateValue: true
-      - key: JWT_EXPIRES_IN
-        value: 6h
+      - key: JWT_ACCESS_EXPIRES_IN
+        value: 4h
       - key: JWT_REFRESH_EXPIRES_IN
         value: 30d
       - key: FRONTEND_URL
-        fromService:
-          type: web
-          name: barbershop-frontend
-          property: url
+        value: https://the-bro-barbers.vercel.app
       - key: ALLOWED_ORIGINS
-        fromService:
-          type: web
-          name: barbershop-frontend
-          property: url
+        value: https://the-bro-barbers.vercel.app
       - key: CLOUDINARY_CLOUD_NAME
         sync: false
       - key: CLOUDINARY_API_KEY
@@ -55,8 +38,6 @@ services:
         sync: false
       - key: EMAIL_PASSWORD
         sync: false
-      - key: EMAIL_FROM
-        value: noreply@barbershop.com
       - key: LOG_LEVEL
         value: info
       - key: FORCE_HTTPS
@@ -65,62 +46,3 @@ services:
         value: true
       - key: TRUST_PROXY
         value: true
-
-  # Redis Cache Service
-  - type: redis
-    name: barbershop-redis
-    region: oregon
-    plan: starter
-    maxmemoryPolicy: allkeys-lru
-    
-  # Static Site (Frontend) - Deployed separately on Vercel
-  # This section is for reference only
-  # - type: web
-  #   name: barbershop-frontend
-  #   env: static
-  #   buildCommand: cd frontend && npm ci && npm run build
-  #   staticPublishPath: frontend/dist
-  #   routes:
-  #     - type: rewrite
-  #       source: /api/*
-  #       destination: https://barbershop-backend.onrender.com/api/*
-  #     - type: rewrite
-  #       source: /*
-  #       destination: /index.html
-
-# Database configuration
-databases:
-  - name: barbershop-db
-    databaseName: barbershop_production
-    user: barbershop_user
-    region: oregon
-    plan: starter
-    
-    # Backup configuration
-    backup:
-      enabled: true
-      schedule: "0 2 * * *"  # Daily at 2 AM UTC
-      retentionDays: 30
-
-# Cron Jobs
-cronjobs:
-  # Daily backup job
-  - type: cron
-    name: daily-backup
-    schedule: "0 2 * * *"
-    buildCommand: cd backend && npm ci
-    startCommand: node scripts/backup-automated.js
-    
-  # Weekly cleanup job  
-  - type: cron
-    name: weekly-cleanup
-    schedule: "0 3 * * 0"
-    buildCommand: cd backend && npm ci
-    startCommand: node scripts/cleanup-old-files.js
-    
-  # Monthly reports
-  - type: cron
-    name: monthly-reports
-    schedule: "0 4 1 * *"
-    buildCommand: cd backend && npm ci
-    startCommand: node scripts/generate-monthly-report.js

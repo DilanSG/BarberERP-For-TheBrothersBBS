@@ -36,7 +36,7 @@ export const SimpleDateFilter = ({
   const formatDateRange = () => {
     if (!dateRange?.startDate || !dateRange?.endDate) return null;
     
-    // ✅ Evitar problemas de zona horaria parseando directamente la string de fecha
+    // Evitar problemas de zona horaria parseando directamente la string de fecha
     // Parsea la fecha como string para evitar corrimientos por zona horaria.
     const formatDate = (dateString) => {
       // Si ya es una string en formato YYYY-MM-DD, parsearla directamente

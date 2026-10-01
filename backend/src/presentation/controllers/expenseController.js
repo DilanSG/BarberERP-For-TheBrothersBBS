@@ -1,4 +1,4 @@
-﻿import ExpenseService from '../../core/application/services/ExpenseService.js';
+import ExpenseService from '../../core/application/services/ExpenseService.js';
 import { validationResult } from 'express-validator';
 import { asyncHandler } from '../middleware/index.js';
 import { AppError, logger } from '../../barrel.js';
@@ -45,7 +45,7 @@ class ExpenseController {
     const migratedInlineCount = templates?._migratedInlineCount || 0;
     // Serializar removiendo propiedad ad-hoc
     const plain = Array.isArray(templates) ? templates.map(t => t) : templates;
-    // 🔍 DEBUG: Log diagnóstico de retorno de plantillas
+    // DEBUG: Log diagnóstico de retorno de plantillas
     try {
       const sampleIds = Array.isArray(plain) ? plain.slice(0, 5).map(p => p._id?.toString()) : [];
       logger.debug('[ExpenseController.getRecurringExpenses] count:', Array.isArray(plain) ? plain.length : 'n/a', 'migratedInlineCount:', migratedInlineCount, 'sampleIds:', sampleIds);
@@ -87,7 +87,7 @@ class ExpenseController {
       throw new AppError('Datos de entrada inválidos', 400, errors.array());
     }
 
-    // 🔍 DEBUG: log entrada bruta para creación de recurrente
+    // DEBUG: log entrada bruta para creación de recurrente
     logger.debug('[ExpenseController.createRecurringExpense] payload recibido', {
       keys: Object.keys(req.body || {}),
       hasRecurrence: !!req.body?.recurrence,

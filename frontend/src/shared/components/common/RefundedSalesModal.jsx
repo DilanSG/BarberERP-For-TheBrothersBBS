@@ -183,7 +183,7 @@ const RefundedSalesModal = ({ isOpen, onClose, isAdmin = false }) => {
   // Abre el modal de confirmación en modo eliminación permanente.
   // Abre el modal de confirmación con la acción indicada (eliminar o revertir).
   const handleDeleteRefund = (refund) => {
-    console.log('🗑️ Preparando eliminación permanente de reembolso:', refund);
+    console.log('Preparando eliminación permanente de reembolso:', refund);
     setRefundToDelete(refund);
     setModalActionType('delete');
     setDeleteModalOpen(true);
@@ -191,7 +191,7 @@ const RefundedSalesModal = ({ isOpen, onClose, isAdmin = false }) => {
 
   // Abre el modal de confirmación en modo reversión del reembolso.
   const handleRevertRefund = (refund) => {
-    console.log('🔄 Preparando reversión de reembolso:', refund);
+    console.log('Preparando reversión de reembolso:', refund);
     setRefundToDelete(refund);
     setModalActionType('revert');
     setDeleteModalOpen(true);
@@ -213,7 +213,7 @@ const RefundedSalesModal = ({ isOpen, onClose, isAdmin = false }) => {
       
       showSuccess('Reembolso eliminado permanentemente');
     } catch (error) {
-      console.error('❌ Error eliminando reembolso:', error);
+      console.error('Error eliminando reembolso:', error);
       showError(error.message || 'Error al eliminar permanentemente el reembolso');
     } finally {
       setDeletingRefund(false);
@@ -236,7 +236,7 @@ const RefundedSalesModal = ({ isOpen, onClose, isAdmin = false }) => {
       
       showSuccess('Reembolso revertido exitosamente');
     } catch (error) {
-      console.error('❌ Error revirtiendo reembolso:', error);
+      console.error('Error revirtiendo reembolso:', error);
       showError(error.message || 'Error al revertir el reembolso');
     } finally {
       setRevertingRefund(false);

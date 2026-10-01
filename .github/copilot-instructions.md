@@ -1,8 +1,8 @@
 # Copilot Instructions - The Brothers Barber Shop
 
-## � **INSTRUCCIONES CRÍTICAS DE DESARROLLO**
+## **INSTRUCCIONES CRÍTICAS DE DESARROLLO**
 
-**⚠️ SIEMPRE ASUMIR:**
+**SIEMPRE ASUMIR:**
 - El **frontend** (React + Vite) SIEMPRE está ejecutándose en `http://localhost:5173`
 - El **backend** (Node.js + Express) SIEMPRE está ejecutándose en `http://localhost:5000`
 - **NUNCA** intentar iniciar, reiniciar o detener los servidores con comandos como `npm run dev`, `npm start`, etc.
@@ -10,72 +10,70 @@
 - El usuario mantiene ambos servidores activos durante toda la sesión de desarrollo
 - Si hay errores de conexión, asumir que es un problema de código, NO de servidores
 
-**🚀 ARQUITECTURA DE DESPLIEGUE (Vercel + Render):**
+**ARQUITECTURA DE DESPLIEGUE (Vercel + Render):**
 
 **IMPORTANTE:** La aplicación usa arquitectura **separada** con dos servicios independientes:
 
-- **Frontend (Vercel):** https://vercel.com
-  - Build: `npm run build` genera carpeta `dist/`
-  - Deploy automático desde GitHub rama `main`
-  - Preview deployments automáticos en cada PR
+- **Frontend (Vercel):** https://the-bro-barbers.vercel.app
+  - Directorio raíz del proyecto: `frontend`
+  - Build: `npm run build` genera la carpeta `dist/`
+  - Deploy controlado por CI (job `deploy-frontend`) y previews en pull requests
   - Variables de entorno: Configurar en Vercel Dashboard
-    - `VITE_API_URL` → URL del backend en Render
+    - `VITE_API_URL` -> URL del backend en Render
     - `VITE_SENTRY_DSN_FRONTEND` (opcional)
   - CDN global (Edge Network)
-  - Configuración: `vercel.json` en raíz
-  - Logs: Vercel Dashboard → Deployments
-  
-- **Backend (Render):** https://render.com
+  - Configuración: `frontend/vercel.json`
+  - Logs: Vercel Dashboard -> Deployments
+
+- **Backend (Render):** https://thebrothersbarbershop.onrender.com
   - Tipo: Web Service (Node.js)
-  - Build: `npm install` (automático)
-  - Start: `npm start` → `node src/index.js`
-  - Deploy automático desde GitHub rama `main`
-  - Health checks: `/health` y `/api/v1/health`
+  - Build: `cd backend && npm ci`
+  - Start: `cd backend && npm start` -> `node src/index.js`
+  - Deploy controlado por CI (job `deploy-backend`) mediante deploy hook
+  - Health check: `/health`
   - Variables de entorno: Configurar en Render Dashboard
-    - `MONGODB_URI` → MongoDB Atlas connection string
-    - `JWT_SECRET`, `JWT_REFRESH_SECRET`
+    - `MONGODB_URI` -> MongoDB Atlas connection string
+    - `JWT_SECRET`
     - `CLOUDINARY_*` (cloud_name, api_key, api_secret)
-    - `FRONTEND_URL` → URL del frontend en Vercel
+    - `FRONTEND_URL` -> URL del frontend en Vercel
     - `NODE_ENV=production`
     - `SENTRY_DSN_BACKEND` (opcional)
   - Configuración: `render.yaml` en raíz
-  - Logs: Render Dashboard → Logs (persistentes)
-  
+  - Logs: Render Dashboard -> Logs (persistentes)
+
 - **Base de Datos (MongoDB Atlas):**
   - Cluster cloud compartido (dev + prod databases separadas)
   - Connection string diferente por ambiente
   - IP Whitelist: 0.0.0.0/0 (permitir Render IPs)
   - Backups automáticos diarios
-  
-- **CI/CD (GitHub Actions):**
-  - Workflow: `.github/workflows/ci-cd.yml`
-  - Pipeline: Lint → Test → Build Frontend → Build Backend → Deploy
-  - Deploy a Vercel: Automático via webhook
-  - Deploy a Render: Automático via GitHub integration
-  - Secrets necesarios en GitHub:
-    - `VERCEL_TOKEN`, `VERCEL_ORG_ID`, `VERCEL_PROJECT_ID`
-    - Render no necesita secrets (usa GitHub App)
 
-**⚠️ REGLAS IMPORTANTES:**
+- **CI/CD (GitHub Actions):**
+  - Workflows: `.github/workflows/ci-cd.yml` y `.github/workflows/lighthouse.yml`
+  - Pipeline: Lint backend -> Test backend -> Build frontend -> Deploy
+  - Deploy a Vercel: Vercel CLI con los secrets `VERCEL_TOKEN`, `VERCEL_ORG_ID` y `VERCEL_PROJECT_ID`
+  - Deploy a Render: deploy hook con el secret `RENDER_DEPLOY_HOOK_URL`
+  - Guía completa: `.github/CI_CD_GUIDE.md`
+
+**REGLAS IMPORTANTES:**
 - **Backend optimizado para Render:** Scripts de MongoDB, rate limiting, health checks
 - **Frontend optimizado para Vercel:** Vite build, variables VITE_*, Edge ready
 - **CORS configurado:** Backend acepta requests desde URL de Vercel
 - **Variables de entorno:** NUNCA hardcodear URLs, siempre usar process.env / import.meta.env
 
-**�🗑️ MANTENIMIENTO DEL CÓDIGO:**
+**MANTENIMIENTO DEL CÓDIGO:**
 - **NUNCA** crear archivos .backup, .old, .temp - usar git para el control de versiones
 - **SIEMPRE** usar el logger centralizado (`logger.info/error/warn`) en lugar de `console.log`
 - Los logs se rotan automáticamente (30 días), no acumular archivos de logs manualmente
 - **Plan de mejoras activo** en `PLAN_MEJORAS.md` - consultar antes de cambios importantes
 
-## �📋 Contexto del Proyecto
+## Contexto del Proyecto
 
 **The Brothers Barber Shop** es un sistema de gestión integral para barbería desarrollado con arquitectura moderna full-stack.
 
 ### Stack Tecnológico
 
 #### Backend
-- **Runtime:** Node.js (18+) con ES Modules
+- **Runtime:** Node.js (20+) con ES Modules
 - **Framework:** Express.js
 - **Arquitectura:** Clean Architecture (Domain-Driven Design)
 - **Base de datos:** MongoDB con Mongoose ODM
@@ -83,7 +81,7 @@
 - **Validación:** Express-validator
 - **Documentación:** Swagger/OpenAPI
 - **Logging:** Winston con rotación diaria
-- **Cache:** Redis + Node-cache
+- **Cache:** Node-cache (Redis eliminado del proyecto)
 - **Uploads:** Cloudinary integration
 - **Seguridad:** Helmet, Rate limiting, XSS protection, MongoDB sanitize
 
@@ -98,31 +96,29 @@
 - **Gestión de Estado:** Context API + Local State
 
 #### Deployment & Infraestructura
-- **Frontend Hosting:** Vercel
-  - Deploy automático desde GitHub (rama `main`)
-  - Preview deployments en PRs
+- **Frontend Hosting:** Vercel (directorio raíz `frontend`)
+  - Deploy de producción y previews controlados por GitHub Actions
   - Edge Network global (CDN)
-  - Serverless Functions (si se necesitan)
   - Analytics integrado (Vercel Analytics)
-  
+
 - **Backend Hosting:** Render
   - Web Service (Node.js runtime)
-  - Auto-deploy desde GitHub (rama `main`)
+  - Deploy controlado por GitHub Actions mediante deploy hook
   - Health checks automáticos
   - Environment variables seguras
   - Logs persistentes
-  
+
 - **Base de Datos:** MongoDB Atlas
   - Cluster cloud (M0 Sandbox o superior)
   - Backups automáticos diarios
   - Monitoring integrado
   - IP Whitelisting para seguridad
-  
+
 - **CI/CD:** GitHub Actions
   - Workflow principal: `.github/workflows/ci-cd.yml`
-  - Tests automáticos: `.github/workflows/test.yml`
+  - Workflow de rendimiento: `.github/workflows/lighthouse.yml`
   - Dependabot: `.github/dependabot.yml`
-  - Deploy automático a Vercel + Render
+  - Deploy a Vercel + Render desde `main`
   
 - **Monitoreo & Logs:**
   - Sentry (error tracking - por configurar)
@@ -194,7 +190,7 @@ frontend/
 - `react-toastify` - Sistema de notificaciones
 - `date-fns` - Manejo de fechas
 
-## 🎨 Reglas de Estilo y Convenciones
+## Reglas de Estilo y Convenciones
 
 ### Nomenclatura
 
@@ -274,7 +270,7 @@ export default ComponentName;
 - **Componentes:** Uso de componentes reutilizables en `shared/components/ui/`
 - **Responsividad:** Mobile-first approach
 
-## ✅ Buenas Prácticas Implementadas
+## Buenas Prácticas Implementadas
 
 ### Backend
 
@@ -298,31 +294,31 @@ export default ComponentName;
 7. **Responsive Design:** Mobile-first con Tailwind
 8. **Performance:** Optimización con Vite y chunking inteligente
 
-## ❌ Errores Comunes a Evitar
+## Errores Comunes a Evitar
 
 ### Backend
 
 1. **No usar asyncHandler:** Siempre envolver controllers asíncronos
    ```javascript
-   // ❌ Incorrecto
+   // Incorrecto
    export const getUser = async (req, res) => { ... }
    
-   // ✅ Correcto (asyncHandler importado desde shared/utils/errors.js)
+   // Correcto (asyncHandler importado desde shared/utils/errors.js)
    export const getUser = asyncHandler(async (req, res) => { ... });
    ```
 
 2. **Logs inconsistentes:** Usar siempre el logger de Winston
    ```javascript
-   // ❌ Incorrecto
+   // Incorrecto
    console.log('User created');
    
-   // ✅ Correcto
+   // Correcto
    logger.info(`Usuario creado: ${user.email}`);
    ```
 
 3. **Imports incorrectos:** El asyncHandler se exporta desde middleware/index.js
    ```javascript
-   // ✅ Correcto
+   // Correcto
    import { asyncHandler } from "../middleware/index.js";
    ```
 
@@ -344,7 +340,7 @@ export default ComponentName;
 8. **Console.log directos:** Usar `logger` del sistema centralizado en `shared/utils/logger`
 9. **Imports profundos:** Evitar `../../../shared/` - usar barrel exports cuando estén disponibles
 
-## 📝 Ejemplos de Tareas Comunes
+## Ejemplos de Tareas Comunes
 
 ### Crear Nueva Entidad (Backend)
 
@@ -447,7 +443,7 @@ export const useEntityData = (entityId) => {
 };
 ```
 
-## 🔄 Patrones de Desarrollo Específicos
+## Patrones de Desarrollo Específicos
 
 ### Gestión de Datos con Scripts
 - Usar `master-population.js` para población completa de datos de prueba
@@ -467,33 +463,33 @@ export const useEntityData = (entityId) => {
 - Hooks compartidos como `useAuth`, `useLocalStorage` en `shared/hooks/`
 - Routing específico por feature (ej: `AppointmentRouter.jsx`)
 
-## 🚀 MEJORAS EN PROGRESO (Octubre 2025)
+## MEJORAS EN PROGRESO (Octubre 2025)
 
-### ✅ Completadas
+### Completadas
 - **Eliminación de archivos obsoletos:** `Expense.backup.js`, `package-old.json`, `vite.config.simple.js`
 - **Configuración de logs mejorada:** Rotación automática de 30 días
 - **Migración de logging:** Scripts críticos migrados de `console.log` a `logger`
 
-### ✅ Completadas en Octubre 2025
+### Completadas en Octubre 2025
 - **Consolidación de utilidades de gastos recurrentes:** Módulo unificado en `shared/recurring-expenses/`
 - **Eliminación de código duplicado:** 1,353 líneas removidas (RecurringExpenseCalculator, RecurrenceCalculator, RecurringExpenseHelper)
 - **Barrel exports:** Implementados en `backend/src/barrel.js` y `frontend/src/barrel.js` para imports optimizados
 - **Optimización de imports:** 13 archivos refactorizados para usar rutas centralizadas
 
-### 🎯 Plan Completo
+### Plan Completo
 - Consultar `PLAN_MEJORAS.md` en la raíz del proyecto para detalles completos
 - **Fase 1:** Limpieza crítica (completada)
 - **Fase 2:** Refactoring de duplicación (en progreso)
 - **Fase 3:** Optimización de arquitectura (planificada)
 
-### 🚨 REGLAS TRAS LAS MEJORAS (Octubre 2025)
+### REGLAS TRAS LAS MEJORAS (Octubre 2025)
 - **USAR el módulo unificado de gastos recurrentes** - `shared/recurring-expenses/` en lugar de implementaciones duplicadas
 - **USAR barrel exports** - `import { logger, AppError } from '../barrel.js'` en lugar de rutas profundas
 - **NO recrear RecurringExpenseCalculator** - usar `calculator` del módulo unificado
 - **USAR aliases de Vite** - `@shared`, `@utils`, `@components` configurados
 - **Seguir el patrón de asyncHandler** - importar desde `middleware/index.js`
 
-## 🔧 Scripts y Comandos
+## Scripts y Comandos
 
 ### Desarrollo
 ```bash
@@ -526,7 +522,7 @@ npm run test:coverage      # Coverage report
 npm run lint               # Linting backend y frontend
 ```
 
-## 🛡️ Seguridad y Configuración
+## Seguridad y Configuración
 
 ### Variables de Entorno Requeridas
 ```env
@@ -560,18 +556,18 @@ ALLOWED_ORIGINS=http://localhost:5173,http://localhost:3000
 
 ---
 
-## 🎯 DECISIONES ARQUITECTÓNICAS IMPORTANTES (Octubre 2025)
+## DECISIONES ARQUITECTÓNICAS IMPORTANTES (Octubre 2025)
 
-### ✅ Cache Strategy - SOLO node-cache (Redis ELIMINADO)
+### Cache Strategy - SOLO node-cache (Redis ELIMINADO)
 **Decisión**: El sistema usa **exclusivamente node-cache** (in-memory)
-- ❌ **NO usar Redis** - Completamente removido del proyecto
-- ✅ **reportsCacheService.js** - Smart TTL (300s-14400s según antigüedad datos)
-- ✅ **Cache hits/misses** - Tracking automático de estadísticas
-- ✅ **Invalidación granular** - Por barbero, tipo de reporte o completa
+- **NO usar Redis** - Completamente removido del proyecto
+- **reportsCacheService.js** - Smart TTL (300s-14400s según antigüedad datos)
+- **Cache hits/misses** - Tracking automático de estadísticas
+- **Invalidación granular** - Por barbero, tipo de reporte o completa
 
 **Razón**: Simplificar arquitectura, eliminar dependencias externas, performance suficiente para escala actual.
 
-### ✅ Patrón Services vs UseCases - DEFINIDO
+### Patrón Services vs UseCases - DEFINIDO
 **Estructura establecida tras consolidación de 15 archivos duplicados**:
 
 ```javascript
@@ -593,7 +589,7 @@ backend/src/core/application/usecases/
 - `services/` → Integraciones externas, infraestructura, NO lógica de negocio
 - `usecases/` → Reglas de negocio, orquestación de entidades, dominio
 
-### ✅ Barrel Exports Pattern
+### Barrel Exports Pattern
 **Implementado en backend y frontend para imports limpios**:
 
 ```javascript
@@ -602,24 +598,24 @@ export { logger, AppError, asyncHandler } from './shared/utils/...'
 export { User, Barber, Sale } from './core/domain/entities/...'
 
 // Uso correcto
-import { logger, User, AppError } from '../../../barrel.js'  // ✅ CORRECTO
+import { logger, User, AppError } from '../../../barrel.js'  // CORRECTO
 
 // Evitar
-import { logger } from '../../../shared/utils/logger.js'     // ❌ EVITAR (profundo)
+import { logger } from '../../../shared/utils/logger.js'     // EVITAR (profundo)
 ```
 
 **Excepción**: NO usar barrel en módulos que el barrel exporta (evita circulares)
 - `reportsCacheService.js` → Import directo de logger (no desde barrel)
 
-### ✅ Logging Strategy
+### Logging Strategy
 **SIEMPRE usar el logger centralizado de Winston**:
 
 ```javascript
-// ❌ NUNCA
+// NUNCA
 console.log('User created')
 console.error('Error:', error)
 
-// ✅ SIEMPRE
+// SIEMPRE
 logger.info('Usuario creado', { userId, email })
 logger.error('Error en operación', { error: error.message, stack: error.stack })
 logger.warn('Stock bajo', { productId, quantity })
@@ -627,52 +623,52 @@ logger.warn('Stock bajo', { productId, quantity })
 
 **Rotación automática**: 30 días, no acumular logs manualmente
 
-### ✅ Índices de Mongoose - Evitar Duplicados
+### Índices de Mongoose - Evitar Duplicados
 **Regla establecida tras eliminar 3 índices duplicados**:
 
 ```javascript
-// ❌ INCORRECTO - Duplicado
+// INCORRECTO - Duplicado
 const schema = new Schema({
   email: { type: String, unique: true }  // Crea índice automáticamente
 })
-schema.index({ email: 1 })  // ❌ DUPLICADO - No necesario
+schema.index({ email: 1 })  // DUPLICADO - No necesario
 
-// ✅ CORRECTO
+// CORRECTO
 const schema = new Schema({
   email: { type: String, unique: true }  // Suficiente
 })
 // NO agregar schema.index({ email: 1 })
 
-// ✅ CORRECTO - Índice compuesto cubre prefijo
+// CORRECTO - Índice compuesto cubre prefijo
 schema.index({ user: 1, date: 1 })  // Sirve para queries por 'user' solo
 // NO necesitas: schema.index({ user: 1 })
 ```
 
 **Comentar cuando NO se agrega índice**: Explicar por qué no hay índice adicional
 
-### ✅ Seguridad - Actualizado Octubre 2025
+### Seguridad - Actualizado Octubre 2025
 **Estado actual: 100% seguro - 0 vulnerabilidades críticas**
 
-- ✅ **ExcelJS 4.x** (reemplazó xlsx - vulnerabilidad HIGH resuelta)
-- ✅ **Mongoose 8.19.1** (última versión segura)
-- ✅ **Nodemailer 7.0.9** (vulnerabilidad resuelta)
-- ✅ **npm overrides** configurado para validator
-- ✅ **12 paquetes actualizados** en total
+- **ExcelJS 4.x** (reemplazó xlsx - vulnerabilidad HIGH resuelta)
+- **Mongoose 8.19.1** (última versión segura)
+- **Nodemailer 7.0.9** (vulnerabilidad resuelta)
+- **npm overrides** configurado para validator
+- **12 paquetes actualizados** en total
 
 **Auditar periódicamente**: `npm audit` cada sprint
 
-### ✅ Error Handling Pattern
+### Error Handling Pattern
 **Usar asyncHandler para TODOS los controllers**:
 
 ```javascript
-import { asyncHandler } from "../middleware/index.js";  // ✅ Import correcto
+import { asyncHandler } from "../middleware/index.js";  // Import correcto
 
-// ✅ CORRECTO
+// CORRECTO
 export const createUser = asyncHandler(async (req, res) => {
   // Lógica async - errores capturados automáticamente
 })
 
-// ❌ INCORRECTO
+// INCORRECTO
 export const createUser = async (req, res) => {
   // Sin asyncHandler - errores no capturados
 }
@@ -680,14 +676,14 @@ export const createUser = async (req, res) => {
 
 **logger.system() NO EXISTE**: Usar `logger.info()` en su lugar
 
-### ✅ Estructura de Gastos Recurrentes
+### Estructura de Gastos Recurrentes
 **Módulo unificado consolidado**:
 
 ```javascript
-// ✅ USAR
+// USAR
 import { calculator } from 'backend/src/shared/recurring-expenses/'
 
-// ❌ NO RECREAR
+// NO RECREAR
 // RecurringExpenseCalculator (eliminado - 450 líneas)
 // RecurrenceCalculator (eliminado - 380 líneas)
 // RecurringExpenseHelper (eliminado - 523 líneas)
@@ -695,16 +691,16 @@ import { calculator } from 'backend/src/shared/recurring-expenses/'
 
 **Total consolidado**: 1,353 líneas eliminadas
 
-### ✅ Frontend Path Aliases (Octubre 14, 2025)
+### Frontend Path Aliases (Octubre 14, 2025)
 **SIEMPRE usar aliases en lugar de imports profundos**:
 
 ```javascript
-// ❌ INCORRECTO - Rutas profundas
+// INCORRECTO - Rutas profundas
 import { useAuth } from '../../shared/contexts/AuthContext';
 import { api } from '../../../shared/services/api';
 import Button from '../../shared/components/ui/button';
 
-// ✅ CORRECTO - Aliases configurados
+// CORRECTO - Aliases configurados
 import { useAuth } from '@contexts/AuthContext';
 import { api } from '@services/api';
 import Button from '@components/ui/button';
@@ -729,7 +725,7 @@ import Button from '@components/ui/button';
 
 ---
 
-## 📊 MÉTRICAS DE CALIDAD (Actualizado Octubre 14, 2025)
+## MÉTRICAS DE CALIDAD (Actualizado Octubre 14, 2025)
 
 ### Código Eliminado/Consolidado
 - **Archivos duplicados**: 15 archivos (4,182 líneas)
@@ -741,17 +737,17 @@ import Button from '@components/ui/button';
 - **Total limpiado**: ~6,828 líneas
 
 ### Seguridad
-- ✅ **Vulnerabilidades críticas**: 0 (100% seguro)
-- ✅ **Warnings Mongoose**: 0
-- ✅ **Índices duplicados**: 0 (3 eliminados)
-- ✅ **Dependencies**: 12 actualizadas
+- **Vulnerabilidades críticas**: 0 (100% seguro)
+- **Warnings Mongoose**: 0
+- **Índices duplicados**: 0 (3 eliminados)
+- **Dependencies**: 12 actualizadas
 
 ### Arquitectura
-- ✅ **Clean Architecture**: Implementada completamente
-- ✅ **Barrel exports**: Backend + Frontend
-- ✅ **Path Aliases**: Frontend (Vite) - 7 aliases configurados
-- ✅ **Repository Pattern**: 100% de entities
-- ✅ **Logging centralizado**: Winston (44 + 104 + 22 = 170 migrados)
+- **Clean Architecture**: Implementada completamente
+- **Barrel exports**: Backend + Frontend
+- **Path Aliases**: Frontend (Vite) - 7 aliases configurados
+- **Repository Pattern**: 100% de entities
+- **Logging centralizado**: Winston (44 + 104 + 22 = 170 migrados)
 
 ---
 

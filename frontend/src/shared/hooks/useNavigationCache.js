@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useCallback, useRef } from 'react';
+import React, { useEffect, useCallback, useRef } from 'react';
 import { useLocation } from 'react-router-dom';
 
 import logger from '../utils/logger';
@@ -30,7 +30,7 @@ class NavigationCache {
     };
 
     this.cache.set(key, item);
-    logger.debug(`🗄️ Cached navigation data for: ${key}`);
+    logger.debug(`Cached navigation data for: ${key}`);
   }
 
   // Devuelve los datos si la entrada sigue vigente; null si no existe o expiró.
@@ -44,7 +44,7 @@ class NavigationCache {
     const now = Date.now();
     if (now - item.timestamp > item.ttl) {
       this.cache.delete(key);
-      logger.debug(`🗑️ Cache expired for: ${key}`);
+      logger.debug(`Cache expired for: ${key}`);
       return null;
     }
 
@@ -52,7 +52,7 @@ class NavigationCache {
     item.accessCount++;
     item.lastAccessed = now;
     
-    // logger.debug(`📦 Retrieved cached data for: ${key} (accessed ${item.accessCount} times)`);
+    // logger.debug(`Retrieved cached data for: ${key} (accessed ${item.accessCount} times)`);
     return item.data;
   }
 
@@ -73,7 +73,7 @@ class NavigationCache {
   invalidate(key) {
     const deleted = this.cache.delete(key);
     if (deleted) {
-      logger.debug(`🗑️ Invalidated cache for: ${key}`);
+      logger.debug(`Invalidated cache for: ${key}`);
     }
     return deleted;
   }
@@ -90,7 +90,7 @@ class NavigationCache {
     }
     
     if (deletedCount > 0) {
-      logger.debug(`🗑️ Invalidated ${deletedCount} cache entries matching pattern: ${pattern}`);
+      logger.debug(`Invalidated ${deletedCount} cache entries matching pattern: ${pattern}`);
     }
     return deletedCount;
   }
@@ -98,7 +98,7 @@ class NavigationCache {
   clear() {
     const size = this.cache.size;
     this.cache.clear();
-    logger.debug(`🗑️ Cleared entire navigation cache (${size} items)`);
+    logger.debug(`Cleared entire navigation cache (${size} items)`);
   }
 
   getStats() {
@@ -174,11 +174,11 @@ export const useNavigationCache = () => {
       // Invalidar caché relacionado cuando cambien datos importantes
       if (e.key === 'userRole') {
         invalidatePattern('/admin/*');
-        logger.debug('🗑️ Admin cache invalidated due to role change');
+        logger.debug('Admin cache invalidated due to role change');
       }
       if (e.key === 'appointmentUpdate') {
         invalidatePattern('/appointment/*');
-        logger.debug('🗑️ Appointment cache invalidated due to data update');
+        logger.debug('Appointment cache invalidated due to data update');
       }
     };
 
@@ -264,9 +264,9 @@ export const cacheUtils = {
     try {
       const data = await dataLoader();
       navigationCache.set(path, data, ttl);
-      // logger.debug(`🚀 Preloaded data for route: ${path}`);
+      // logger.debug(`Preloaded data for route: ${path}`);
     } catch (error) {
-      console.warn(`⚠️ Failed to preload data for ${path}:`, error);
+      console.warn(`Failed to preload data for ${path}:`, error);
     }
   },
 
@@ -274,13 +274,13 @@ export const cacheUtils = {
   invalidateUserData: () => {
     navigationCache.invalidatePattern('/profile');
     navigationCache.invalidatePattern('/appointment');
-    logger.debug('🗑️ User-related cache cleared');
+    logger.debug('User-related cache cleared');
   },
 
   // Invalidar caché de administración
   invalidateAdminData: () => {
     navigationCache.invalidatePattern('/admin/*');
-    logger.debug('🗑️ Admin cache cleared');
+    logger.debug('Admin cache cleared');
   },
 
   // Obtener información de debug del caché

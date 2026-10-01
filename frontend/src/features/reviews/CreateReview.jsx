@@ -139,11 +139,11 @@ const CreateReview = () => {
                     ))}
                   </div>
                   <p className="text-gray-400 mt-4">
-                    {rating === 5 && '★ ★ ★ ★ ★ ¡Excelente!'}
-                    {rating === 4 && '★ ★ ★ ★ Muy bueno'}
-                    {rating === 3 && '★ ★ ★ Bueno'}
-                    {rating === 2 && '★ ★ Regular'}
-                    {rating === 1 && '★ Necesita mejorar'}
+                    {rating === 5 && '¡Excelente!'}
+                    {rating === 4 && 'Muy bueno'}
+                    {rating === 3 && 'Bueno'}
+                    {rating === 2 && 'Regular'}
+                    {rating === 1 && 'Necesita mejorar'}
                   </p>
                 </div>
 
@@ -184,11 +184,11 @@ const CreateReview = () => {
 
                   {rating > 0 && (
                     <p className="text-gray-400 text-sm animate-fade-in">
-                      {rating === 5 && '★ ★ ★ ★ ★ ¡Excelente!'}
-                      {rating === 4 && '★ ★ ★ ★ Muy bueno'}
-                      {rating === 3 && '★ ★ ★ Bueno'}
-                      {rating === 2 && '★ ★ Regular'}
-                      {rating === 1 && '★ Necesita mejorar'}
+                      {rating === 5 && '¡Excelente!'}
+                      {rating === 4 && 'Muy bueno'}
+                      {rating === 3 && 'Bueno'}
+                      {rating === 2 && 'Regular'}
+                      {rating === 1 && 'Necesita mejorar'}
                     </p>
                   )}
                 </div>

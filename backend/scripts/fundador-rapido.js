@@ -21,24 +21,24 @@ import Socio from '../src/core/domain/entities/Socio.js';
 
 async function inicializarFundadorRapido() {
   try {
-    console.log('🚀 Inicializando socio fundador...');
+    console.log('Inicializando socio fundador...');
 
     // Conectar a la base de datos
     await mongoose.connect(process.env.MONGODB_URI);
-    console.log('✅ Conectado a MongoDB');
+    console.log('Conectado a MongoDB');
 
     // Buscar primer admin
     const admin = await User.findOne({ role: 'admin', isActive: true }).sort({ createdAt: 1 });
     
     if (!admin) {
-      console.log('❌ No hay admins disponibles');
+      console.log('No hay admins disponibles');
       return;
     }
 
     // Verificar si ya existe fundador
     const fundadorExistente = await Socio.findOne({ tipoSocio: 'fundador', isActive: true });
     if (fundadorExistente) {
-      console.log('⚠️  Ya existe un socio fundador');
+      console.log(' Ya existe un socio fundador');
       return;
     }
 
@@ -53,16 +53,16 @@ async function inicializarFundadorRapido() {
       isActive: true
     });
 
-    console.log('🎉 Socio fundador creado:');
+    console.log('Socio fundador creado:');
     console.log(`   Nombre: ${socio.nombre}`);
     console.log(`   Email: ${socio.email}`);
     console.log(`   Porcentaje: ${socio.porcentaje}%`);
 
   } catch (error) {
-    console.error('❌ Error:', error.message);
+    console.error('Error:', error.message);
   } finally {
     await mongoose.connection.close();
-    console.log('👋 Conexión cerrada');
+    console.log('Conexión cerrada');
   }
 }
 

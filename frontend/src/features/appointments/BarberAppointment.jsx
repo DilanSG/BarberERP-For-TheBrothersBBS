@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { PageContainer } from '@components/layout/PageContainer';
 import { useAuth } from '@contexts/AuthContext';
 import { api } from '@services/api';
@@ -137,7 +137,7 @@ const BarberAppointment = () => {
     try {
       setProcessingAppointments(prev => new Set(prev).add(appointmentId));
       
-      logger.debug(`🔄 Changing appointment ${appointmentId} status to ${newStatus}`);
+      logger.debug(`Changing appointment ${appointmentId} status to ${newStatus}`);
       
       let response;
       switch (newStatus) {
@@ -201,7 +201,7 @@ const BarberAppointment = () => {
     try {
       setProcessingAppointments(prev => new Set(prev).add(appointmentId));
       
-      logger.debug(`🔄 Completing appointment ${appointmentId} with payment method ${paymentMethod}`);
+      logger.debug(`Completing appointment ${appointmentId} with payment method ${paymentMethod}`);
       
       const response = await appointmentService.completeAppointment(appointmentId, paymentMethod);
       
@@ -212,7 +212,7 @@ const BarberAppointment = () => {
         setAppointmentToComplete(null);
       }
     } catch (error) {
-      logger.error('❌ Error completing appointment:', error);
+      logger.error('Error completing appointment:', error);
       showError(error.message || 'Error al completar la cita');
     } finally {
       setProcessingAppointments(prev => {

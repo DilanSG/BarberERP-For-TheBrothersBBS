@@ -58,18 +58,18 @@ const CartInvoices = () => {
   const loadCartInvoices = async () => {
     try {
       setLoading(true);
-      logger.info('📋 Cargando facturas de carrito...');
+      logger.info('Cargando facturas de carrito...');
 
       // Llamar al endpoint específico de facturas de carrito
       const response = await salesService.getCartInvoices();
 
-      logger.info('✅ Respuesta del servidor:', response);
+      logger.info('Respuesta del servidor:', response);
       
       if (response.success && response.data) {
-        logger.info(`📊 Total facturas recibidas: ${response.data.length}`);
+        logger.info(`Total facturas recibidas: ${response.data.length}`);
         
         if (response.data.length > 0) {
-          logger.info('🔍 Primera factura:', response.data[0]);
+          logger.info('Primera factura:', response.data[0]);
         }
 
         // Agrupar por fecha y cliente para crear facturas consolidadas

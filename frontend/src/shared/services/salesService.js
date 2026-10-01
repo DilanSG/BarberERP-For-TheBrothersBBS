@@ -7,7 +7,7 @@ export const salesService = {
   getBarberSalesStats: (barberId, params = {}) => {
     const queryString = new URLSearchParams(params).toString();
     const url = `/sales/barber/${barberId}/stats${queryString ? `?${queryString}` : ''}`;
-    console.log('🔍 [salesService] getBarberSalesStats:', { barberId, params, queryString, url });
+    console.log('[salesService] getBarberSalesStats:', { barberId, params, queryString, url });
     return api.get(url, true, 300000);
   },
   // Estadísticas de ventas para varios barberos en una sola petición (batch)

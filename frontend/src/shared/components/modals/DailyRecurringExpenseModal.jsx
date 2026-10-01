@@ -30,7 +30,7 @@ export const DailyRecurringExpenseModal = ({
   // Validación temprana - si no hay expense válido, no renderizar
   // Validación temprana: sin gasto válido no se renderiza nada.
   if (isOpen && !expense) {
-    console.error('🚨 DailyRecurringExpenseModal: expense es requerido pero está vacío');
+    console.error('DailyRecurringExpenseModal: expense es requerido pero está vacío');
     return null;
   }
   
@@ -54,24 +54,24 @@ export const DailyRecurringExpenseModal = ({
         // No recargar si acabamos de guardar cambios para el mismo mes
         if (justSaved && expense.recurringConfig?.adjustmentsMonth === monthStr && 
             expense.recurringConfig?.dailyAdjustments) {
-          console.log('📥 DailyModal: Usando ajustes del estado local (recién guardados)');
+          console.log('DailyModal: Usando ajustes del estado local (recién guardados)');
           setDailyAdjustments(expense.recurringConfig.dailyAdjustments);
           setJustSaved(false); // Reset del flag
           return;
         }
         
-        console.log('📥 DailyModal: Cargando ajustes desde backend para mes:', monthStr);
+        console.log('DailyModal: Cargando ajustes desde backend para mes:', monthStr);
         const result = await getDailyAdjustments(expense._id, monthStr);
         
         if (result?.adjustments) {
-          console.log('📥 DailyModal: Cargando ajustes desde backend:', {
+          console.log('DailyModal: Cargando ajustes desde backend:', {
             result,
             adjustments: result.adjustments,
             adjustmentsKeys: Object.keys(result.adjustments)
           });
           setDailyAdjustments(result.adjustments);
         } else {
-          console.log('📥 DailyModal: No hay ajustes para cargar');
+          console.log('DailyModal: No hay ajustes para cargar');
           setDailyAdjustments({});
         }
       } catch (error) {
@@ -148,7 +148,7 @@ export const DailyRecurringExpenseModal = ({
           const hasAdjust = dailyAdjustments[dayOfMonth] !== undefined;
           // Solo debug para días con ajuste real (no spam del día actual)
           if (hasAdjust) {
-            console.log(`📅 Día ${day} (${dayOfMonth}): hasAdjustment=${hasAdjust}, adjustment=`, dailyAdjustments[dayOfMonth]);
+            console.log(`Día ${day} (${dayOfMonth}): hasAdjustment=${hasAdjust}, adjustment=`, dailyAdjustments[dayOfMonth]);
           }
           return hasAdjust;
         })()
@@ -186,7 +186,7 @@ export const DailyRecurringExpenseModal = ({
       // editingDay formato: '2025-09-05' -> día = '05'
       const dayOfMonth = editingDay.split('-')[2]; // Extraer directamente el día
       
-      console.log('💾 saveDayChange: Guardando cambio:', {
+      console.log('saveDayChange: Guardando cambio:', {
         editingDay,
         dayOfMonth,
         tempAmount,
@@ -231,7 +231,7 @@ export const DailyRecurringExpenseModal = ({
     try {
       const monthStr = currentMonth.getFullYear() + '-' + String(currentMonth.getMonth() + 1).padStart(2, '0');
       
-      console.log('💾 DailyModal: Guardando ajustes:', {
+      console.log('DailyModal: Guardando ajustes:', {
         expenseId: expense._id,
         monthStr,
         dailyAdjustments,
@@ -243,12 +243,12 @@ export const DailyRecurringExpenseModal = ({
       
       await updateDailyAdjustments(expense._id, dailyAdjustments, monthStr);
       
-      console.log('✅ DailyModal: Ajustes guardados exitosamente');
+      console.log('DailyModal: Ajustes guardados exitosamente');
       setJustSaved(true); // Marcar que acabamos de guardar
       
       // Llamar callback opcional con datos actualizados
       if (onSave) {
-        console.log('🔄 DailyModal: Ejecutando callback onSave con datos actualizados');
+        console.log('DailyModal: Ejecutando callback onSave con datos actualizados');
         await onSave(expense._id, dailyAdjustments, monthStr);
       // El callback del padre se encargará de cerrar el modal
       } else {
@@ -257,7 +257,7 @@ export const DailyRecurringExpenseModal = ({
         onClose();
       }
     } catch (error) {
-      console.error('❌ DailyModal: Error saving daily adjustments:', error);
+      console.error('DailyModal: Error saving daily adjustments:', error);
     // Aquí podrías mostrar una notificación de error
     } finally {
       setSaving(false);

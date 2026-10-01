@@ -23,9 +23,9 @@ export const useRecurringExpenses = () => {
   // Forzar sin caché para evitar respuestas estancadas mientras diagnosticamos
   const response = await api.get('/expenses/recurring');
       const payload = response.data;
-      // 🔍 DEBUG: log crudo de la respuesta antes de normalizar
+      // DEBUG: log crudo de la respuesta antes de normalizar
       try {
-        console.log('🔍 useRecurringExpenses: payload bruto /expenses/recurring', {
+        console.log('useRecurringExpenses: payload bruto /expenses/recurring', {
           type: typeof payload,
           isArray: Array.isArray(payload),
           keys: payload && !Array.isArray(payload) ? Object.keys(payload) : undefined,
@@ -49,7 +49,7 @@ export const useRecurringExpenses = () => {
       if (list.length === 0) {
         // Lista recurrente vacía tras normalización
         if (migratedInline > 0) {
-          console.log('🔁 Detectada migración inline de', migratedInline, 'registros. Reintentando fetch inmediato...');
+          console.log('Detectada migración inline de', migratedInline, 'registros. Reintentando fetch inmediato...');
           try {
             const second = await api.get('/expenses/recurring');
             const secondPayload = second.data;
@@ -61,7 +61,7 @@ export const useRecurringExpenses = () => {
               _isActive: (item.recurrence?.isActive !== undefined) ? item.recurrence.isActive : (item.recurringConfig?.isActive ?? item.isActive ?? true)
             }));
             if (secondList.length > 0) {
-              console.log('✅ Segundo intento cargó', secondList.length, 'gastos recurrentes tras migración inline');
+              console.log('Segundo intento cargó', secondList.length, 'gastos recurrentes tras migración inline');
               setRecurringExpenses(secondList);
               setInferredRecurringTotal(0);
               return; // Salir temprano, ya cargamos reales
@@ -71,12 +71,12 @@ export const useRecurringExpenses = () => {
           }
         }
       } else {
-        console.log('✅ useRecurringExpenses: cargados', list.length, 'gastos recurrentes');
+        console.log('useRecurringExpenses: cargados', list.length, 'gastos recurrentes');
       }
       // Saneamos lista final eliminando elementos nulos/undefined accidentalmente introducidos
       const cleaned = list.filter(Boolean);
       if (cleaned.length !== list.length) {
-        console.warn(`🧹 useRecurringExpenses: eliminados ${list.length - cleaned.length} elementos inválidos antes de setState`);
+        console.warn(`useRecurringExpenses: eliminados ${list.length - cleaned.length} elementos inválidos antes de setState`);
       }
       setRecurringExpenses(cleaned);
 
@@ -140,8 +140,8 @@ export const useRecurringExpenses = () => {
       if (expenseData.recurringConfig && !expenseData.recurrence) {
         expenseData.recurrence = RecurringExpenseHelper.convertLegacyFormat(expenseData.recurringConfig);
       }
-      // 🔍 DEBUG creación
-      console.log('🛰️ createRecurringExpense -> payload final a enviar', {
+      // DEBUG creación
+      console.log('createRecurringExpense -> payload final a enviar', {
         keys: Object.keys(expenseData || {}),
         type: expenseData.type,
         hasRecurrence: !!expenseData.recurrence,
@@ -152,7 +152,7 @@ export const useRecurringExpenses = () => {
       expenseData.isRecurring = true;
       
       const response = await api.post('/expenses/recurring', expenseData);
-      console.log('✅ createRecurringExpense respuesta', response?.data);
+      console.log('createRecurringExpense respuesta', response?.data);
       
       toast.success('Gasto recurrente creado con éxito');
       await loadRecurringExpenses();
