@@ -27,8 +27,9 @@
 
 - **Backend (Render):** https://thebrothersbarbershop.onrender.com
   - Tipo: Web Service (Node.js)
-  - Build: `cd backend && npm ci`
-  - Start: `cd backend && npm start` -> `node src/index.js`
+  - Directorio raíz: `backend`
+  - Build: `npm ci`
+  - Start: `npm start` -> `node src/index.js`
   - Deploy controlado por CI (job `deploy-backend`) mediante deploy hook
   - Health check: `/health`
   - Variables de entorno: Configurar en Render Dashboard

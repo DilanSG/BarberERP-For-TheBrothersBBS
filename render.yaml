@@ -8,8 +8,9 @@ services:
     runtime: node
     region: oregon
     plan: starter
-    buildCommand: cd backend && npm ci
-    startCommand: cd backend && npm start
+    rootDir: backend
+    buildCommand: npm ci
+    startCommand: npm start
     healthCheckPath: /health
     autoDeploy: false
 

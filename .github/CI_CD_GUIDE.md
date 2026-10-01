@@ -96,13 +96,17 @@ Copia la URL generada y guárdala como `RENDER_DEPLOY_HOOK_URL`.
 ### Backend (Render)
 
 - La infraestructura está declarada en `render.yaml`.
+- El directorio raíz del servicio es `backend` (`rootDir`).
 - `autoDeploy` está deshabilitado para que el despliegue lo controle el
   pipeline de GitHub Actions.
-- El comando de build es `cd backend && npm ci` y el de arranque
-  `cd backend && npm start`.
-- El health check es `/health`.
+- Build Command: `npm ci`.
+- Start Command: `npm start` (ejecuta `node src/index.js` dentro de `backend`).
+- Health Check Path: `/health`.
 - Las variables de entorno se configuran en el panel de Render (las marcadas
   con `sync: false` en `render.yaml`).
+- Si el servicio no está gestionado por Blueprint, aplica estos mismos valores
+  en `Settings -> Build & Deploy` del dashboard. Un Start Command como
+  `node backend/src/index.js` falla cuando el Root Directory ya es `backend`.
 
 ## Validación local
 
@@ -166,6 +170,21 @@ Los jobs de despliegue solo se ejecutan después de que estos checks pasan.
 1. Confirma que `RENDER_DEPLOY_HOOK_URL` está configurado.
 2. Verifica que el hook siga activo en el panel de Render.
 3. Consulta los logs del servicio en Render para errores de build o arranque.
+
+### El backend no inicia en Render (MODULE_NOT_FOUND)
+
+Si el log muestra un error como
+`Cannot find module '/opt/render/project/src/backend/backend/src/index.js'`,
+el Start Command del servicio está duplicando el directorio raíz. Verifica en
+el dashboard, en `Settings -> Build & Deploy`:
+
+- Root Directory: `backend`
+- Build Command: `npm ci`
+- Start Command: `npm start`
+- Health Check Path: `/health`
+
+El comando `node backend/src/index.js` es incorrecto cuando el Root Directory
+ya es `backend`, porque la ruta se resuelve dos veces.
 
 ### El workflow de Lighthouse falla por presupuesto
 
