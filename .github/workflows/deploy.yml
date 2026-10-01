@@ -29,7 +29,7 @@ jobs:
         node-version: '18'
         
     - name: Cache dependencies backend (SmartCache)
-      uses: actions/cache@v4
+      uses: actions/cache@v6
       with:
         path: |
           backend/node_modules
@@ -41,7 +41,7 @@ jobs:
           ${{ runner.os }}-backend-
           
     - name: Cache dependencias frontend
-      uses: actions/cache@v4
+      uses: actions/cache@v6
       with:
         path: |
           frontend/node_modules
